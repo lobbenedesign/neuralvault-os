@@ -52,6 +52,13 @@ class SpeculativePreloader:
         async with self._lock:
             return self._prefetch_buffer.pop(node_id, None)
 
+    async def get_all_prefetched(self) -> dict[str, VaultNode]:
+        """Restituisce tutti i nodi nel buffer e lo svuota."""
+        async with self._lock:
+            data = self._prefetch_buffer.copy()
+            self._prefetch_buffer.clear()
+            return data
+
     async def clear_buffer(self):
         async with self._lock:
             self._prefetch_buffer.clear()

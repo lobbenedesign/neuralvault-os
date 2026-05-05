@@ -23,7 +23,14 @@ class Agent007Intelligence:
             try:
                 self.con = duckdb.connect(db_path)
             except Exception as e:
+                error_str = str(e).lower()
                 print(f"⚠️ [Agent007] Errore critico DB (WAL corruption?): {e}")
+
+                # [v4.3.1] Lock Awareness: Do NOT delete DB if it's just a lock conflict
+                if "lock" in error_str or "process" in error_str:
+                    print(f"🛑 [Agent007] CRITICAL: Hard Memory is LOCKED by another process.")
+                    raise e
+
                 # Tentativo di recupero: Rimozione WAL
                 wal_path = f"{db_path}.wal"
                 if os.path.exists(wal_path):
@@ -42,28 +49,43 @@ class Agent007Intelligence:
             self.con = duckdb.connect(":memory:")
         
         # Inizializzazione Hard Memory Tables (v2.1.0)
-        self.con.execute("""
-            CREATE TABLE IF NOT EXISTS agent007_entities (
-                id VARCHAR PRIMARY KEY,
-                name VARCHAR,
-                type VARCHAR,
-                attributes JSON,
-                extracted_at TIMESTAMP DEFAULT now(),
-                source_node_id VARCHAR
-            )
-        """)
+        import threading
+        self._lock = threading.Lock()
         
-        self.con.execute("""
-            CREATE TABLE IF NOT EXISTS agent007_relations (
-                source_id VARCHAR,
-                target_id VARCHAR,
-                type VARCHAR,
-                fact VARCHAR,
-                extracted_at TIMESTAMP DEFAULT now(),
-                source_node_id VARCHAR,
-                PRIMARY KEY (source_id, target_id, type)
-            )
-        """)
+        with self._lock:
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS agent007_entities (
+                    id VARCHAR PRIMARY KEY,
+                    name VARCHAR,
+                    type VARCHAR,
+                    attributes JSON,
+                    extracted_at TIMESTAMP DEFAULT now(),
+                    source_node_id VARCHAR
+                )
+            """)
+            
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS agent007_relations (
+                    source_id VARCHAR,
+                    target_id VARCHAR,
+                    type VARCHAR,
+                    fact VARCHAR,
+                    extracted_at TIMESTAMP DEFAULT now(),
+                    source_node_id VARCHAR,
+                    PRIMARY KEY (source_id, target_id, type)
+                )
+            """)
+
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS query_history (
+                    id VARCHAR PRIMARY KEY,
+                    query VARCHAR,
+                    answer VARCHAR,
+                    timestamp TIMESTAMP DEFAULT now(),
+                    metadata JSON,
+                    strategy VARCHAR
+                )
+            """)
         print("🕵️ Agent007-march: Intelligence Extension ACTIVE.")
 
     def extract_entities(self, text: str, node_id: str = "unknown", fast_mode: bool = False):
@@ -239,11 +261,12 @@ class Agent007Intelligence:
                 e_type = ent.get('type', ent.get('category', 'Entity'))
                 if not name: continue
 
-                self.con.execute("""
-                    INSERT OR REPLACE INTO agent007_entities 
-                    (id, name, type, attributes, source_node_id)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (str(name), str(name), str(e_type), json.dumps(ent.get('attributes', {})), str(source_node_id)))
+                with self._lock:
+                    self.con.execute("""
+                        INSERT OR REPLACE INTO agent007_entities 
+                        (id, name, type, attributes, source_node_id)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (str(name), str(name), str(e_type), json.dumps(ent.get('attributes', {})), str(source_node_id)))
             except Exception as e:
                 if "closed" in str(e).lower(): pass
                 else: print(f"⚠️ Error adding entity: {e}")
@@ -259,22 +282,85 @@ class Agent007Intelligence:
                 
                 if not r_source or not r_target: continue
 
-                self.con.execute("""
-                    INSERT OR REPLACE INTO agent007_relations 
-                    (source_id, target_id, type, fact, source_node_id)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (str(r_source), str(r_target), str(r_type), str(r_fact), str(source_node_id)))
+                with self._lock:
+                    self.con.execute("""
+                        INSERT OR REPLACE INTO agent007_relations 
+                        (source_id, target_id, type, fact, source_node_id)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (str(r_source), str(r_target), str(r_type), str(r_fact), str(source_node_id)))
             except Exception as e:
                 if "closed" in str(e).lower(): pass
                 else: print(f"⚠️ Error adding relation: {e}")
 
     def get_entity_context(self, entity_name: str) -> Dict[str, Any]:
         """Recupera il contesto 'Hard' di un'entità (Relazioni dirette)."""
-        res = self.con.execute("""
-            SELECT fact FROM agent007_relations 
-            WHERE source_id = ? OR target_id = ?
-        """, (entity_name, entity_name)).fetchall()
+        with self._lock:
+            res = self.con.execute("""
+                SELECT fact FROM agent007_relations 
+                WHERE source_id = ? OR target_id = ?
+            """, (entity_name, entity_name)).fetchall()
         return {"entity": entity_name, "facts": [r[0] for r in res]}
+
+    def execute(self, query: str, params: tuple = ()):
+        """Esegue una query SQL in modo thread-safe."""
+        with self._lock:
+            return self.con.execute(query, params)
+
+    def get_stats(self) -> Dict[str, int]:
+        """Recupera il numero di entità e relazioni in modo thread-safe."""
+        try:
+            with self._lock:
+                ent_res = self.con.execute("SELECT count(*) FROM agent007_entities").fetchone()
+                rel_res = self.con.execute("SELECT count(*) FROM agent007_relations").fetchone()
+                ent = ent_res[0] if ent_res else 0
+                rel = rel_res[0] if rel_res else 0
+                return {"entities_count": ent, "relations_count": rel}
+        except:
+            return {"entities_count": 0, "relations_count": 0}
+
+    def log_query(self, query: str, answer: str, metadata: Dict = None, strategy: str = "hybrid"):
+        """Salva una query e la sua risposta nella memoria persistente."""
+        with self._lock:
+            try:
+                qid = str(uuid.uuid4())
+                meta_json = json.dumps(metadata or {})
+                self.con.execute(
+                    "INSERT INTO query_history (id, query, answer, metadata, strategy) VALUES (?, ?, ?, ?, ?)",
+                    (qid, query, answer, meta_json, strategy)
+                )
+            except Exception as e:
+                print(f"⚠️ [Agent007] Errore salvataggio cronologia: {e}")
+
+    def get_query_history(self, limit: int = 50) -> List[Dict]:
+        """Recupera la cronologia delle query ordinate per data decrescente."""
+        with self._lock:
+            try:
+                res = self.con.execute(
+                    "SELECT id, query, answer, timestamp, metadata, strategy FROM query_history ORDER BY timestamp DESC LIMIT ?",
+                    (limit,)
+                ).fetchall()
+                return [
+                    {
+                        "id": r[0],
+                        "query": r[1],
+                        "answer": r[2],
+                        "timestamp": r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3]),
+                        "metadata": json.loads(r[4]) if isinstance(r[4], str) else r[4],
+                        "strategy": r[5]
+                    }
+                    for r in res
+                ]
+            except Exception as e:
+                print(f"⚠️ [Agent007] Errore recupero cronologia: {e}")
+                return []
+                
+    def delete_query(self, query_id: str):
+        """Elimina una query dalla cronologia."""
+        with self._lock:
+            try:
+                self.con.execute("DELETE FROM query_history WHERE id = ?", (query_id,))
+            except Exception as e:
+                print(f"⚠️ [Agent007] Errore eliminazione query: {e}")
 
     def close(self):
         """Chiude la connessione al database."""

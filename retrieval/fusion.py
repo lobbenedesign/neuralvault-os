@@ -58,6 +58,8 @@ class FusionRanker:
         query_text:     str | None = None,
         top_k:          int = 10,
         rerank_n:       int = 50,
+        alpha_override: float | None = None,
+        reranker_override: bool | None = None
     ) -> list[QueryResult]:
         
         if not dense_results and not sparse_results and not graph_results:
@@ -71,8 +73,8 @@ class FusionRanker:
         graph_ranked = [nid for nid, _ in sorted(graph_results, key=lambda x: x[1], reverse=True)]
         
         # [v4.1.0] Adaptive Alpha Calculation
-        dynamic_alpha = self.alpha
-        if query_text:
+        dynamic_alpha = alpha_override if alpha_override is not None else self.alpha
+        if query_text and alpha_override is None:
             sparse_scores = [s for _, s in sorted(sparse_results, key=lambda x: x[1], reverse=True)]
             metrics = self.alpha_computer.compute(query_text, sparse_scores)
             dynamic_alpha = metrics.final_alpha
@@ -102,6 +104,7 @@ class FusionRanker:
                 final_score=rrf,
                 dense_score=1.0 - next((d for n, d in dense_results if n == nid), 1.0),
                 sparse_score=next((s for n, s in sparse_results if n == nid), 0.0),
+                temporal_confidence=1.0, # Placeholder, aggiornato dopo se engine disponibile
                 path="fused"
             ))
 
@@ -110,7 +113,8 @@ class FusionRanker:
         top_pool = candidates[:rerank_n]
 
         # 3. Cross-Encoder Reranking (Gap #4 — Precision Factor)
-        if self.use_reranker and query_text and top_pool:
+        effective_rerank = reranker_override if reranker_override is not None else self.use_reranker
+        if effective_rerank and query_text and top_pool:
             if self._ce_model:
                 # Batch Reranking
                 pairs = [[query_text, res.node.text] for res in top_pool]

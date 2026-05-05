@@ -44,6 +44,7 @@ class AegisGeneration:
         self.index: Dict[str, int] = {}
         self.size = 0
         self._fd = None
+        self._lock = threading.Lock() # 🛡️ Lock per operazione atomica su file
         
         if self.path.exists():
             self._load_and_index()
@@ -71,20 +72,24 @@ class AegisGeneration:
         self.size = self.path.stat().st_size
 
     def append(self, node_data: bytes, node_id: str) -> int:
-        self._fd.seek(0, 2)
-        offset = self._fd.tell()
-        self._fd.write(struct.pack("<I", len(node_data)))
-        self._fd.write(node_data)
-        self.index[node_id] = offset
-        self.bloom.add(node_id)
-        self.size += len(node_data) + 4
-        return offset
+        with self._lock:
+            self._fd.seek(0, 2)
+            offset = self._fd.tell()
+            self._fd.write(struct.pack("<I", len(node_data)))
+            self._fd.write(node_data)
+            self.index[node_id] = offset
+            self.bloom.add(node_id)
+            self.size += len(node_data) + 4
+            return offset
 
     def read_node(self, offset: int) -> Optional[VaultNode]:
-        self._fd.seek(offset)
-        header = self._fd.read(4)
-        p_len = struct.unpack("<I", header)[0]
-        payload = self._fd.read(p_len)
+        with self._lock:
+            self._fd.seek(offset)
+            header = self._fd.read(4)
+            if not header or len(header) < 4: return None
+            p_len = struct.unpack("<I", header)[0]
+            payload = self._fd.read(p_len)
+            
         data = msgpack.unpackb(payload, raw=False)
         
         if data.get("tombstone"): return None
@@ -116,10 +121,12 @@ class AegisGeneration:
         )
 
     def flush(self):
-        if self._fd: self._fd.flush()
+        if self._fd:
+            with self._lock: self._fd.flush()
 
     def close(self):
-        if self._fd: self._fd.close()
+        if self._fd:
+            with self._lock: self._fd.close()
 
 class GenerationalAegisStore:
     def __init__(self, data_dir: str | Path, dim: int = 1024):
@@ -223,11 +230,13 @@ class GenerationalAegisStore:
         active_gen.append(payload, node.id)
 
     def get(self, node_id: str) -> Optional[VaultNode]:
-        for gen in reversed(self.generations):
-            if gen.bloom.maybe_contains(node_id):
-                offset = gen.index.get(node_id)
-                if offset is not None:
-                    return gen.read_node(offset)
+        # 🛡️ Lock per evitare race conditions durante la compattazione o accessi paralleli
+        with self._lock:
+            for gen in reversed(self.generations):
+                if gen.bloom.maybe_contains(node_id):
+                    offset = gen.index.get(node_id)
+                    if offset is not None:
+                        return gen.read_node(offset)
         return None
 
     def delete(self, node_id: str) -> bool:
@@ -251,11 +260,88 @@ class GenerationalAegisStore:
             if len(nodes) >= limit: break
         return nodes
 
+    def compact(self):
+        """
+        [AEGIS REAPER] Compattazione fisica del database.
+        Elimina le tombstone e consolida le generazioni in un unico file atomico.
+        Protocollo: Double-Buffered Atomic Swap (Non-Blocking Read).
+        """
+        print("💀 [Aegis Reaper] Preparazione compattazione...")
+        t0 = time.time()
+        initial_size = sum(gen.path.stat().st_size for gen in self.generations if gen.path.exists())
+        
+        # 1. Copia dei riferimenti (Snapshot logico) per lavorare fuori dal lock
+        with self._lock:
+            current_generations = list(self.generations)
+            latest_nodes_offsets = {}
+            for i, gen in enumerate(current_generations):
+                for nid, offset in gen.index.items():
+                    latest_nodes_offsets[nid] = (i, offset)
+
+        # 2. Creazione Nuova Generazione Temporanea (FUORI dal lock globale)
+        temp_path = self.data_dir / f"gen_compact_{int(time.time())}.ael.tmp"
+        new_gen = AegisGeneration(temp_path, 9999, self.dim)
+        
+        compacted_count = 0
+        for nid, (gen_idx, offset) in latest_nodes_offsets.items():
+            node = current_generations[gen_idx].read_node(offset)
+            if node:
+                edges = [{"target_id": e.target_id, "relation": e.relation.value, "weight": e.weight, "source": e.source} for e in node.edges]
+                vec_bytes = node.vector.tobytes() if node.vector is not None else b""
+                data = {
+                    "id": node.id, "text": node.text, "vector": vec_bytes,
+                    "metadata": node.metadata, "collection": node.collection,
+                    "edges": edges, "tombstone": False
+                }
+                payload = msgpack.packb(data, use_bin_type=True)
+                new_gen.append(payload, node.id)
+                compacted_count += 1
+
+        new_gen.flush()
+        new_gen.close()
+
+        # 3. ATOMIC SWAP (Lock minimo)
+        with self._lock:
+            print("💀 [Aegis Reaper] Atomic Swap in corso...")
+            # Chiudiamo e rimuoviamo solo le generazioni che abbiamo processato
+            for gen in current_generations:
+                try:
+                    gen.close()
+                    if gen.path.exists(): gen.path.unlink()
+                except Exception as e:
+                    print(f"⚠️ [Aegis Reaper] Warning during cleanup of {gen.path}: {e}")
+            
+            # Togliamo le vecchie generazioni dalla lista
+            self.generations = [g for g in self.generations if g not in current_generations]
+            
+            # Inseriamo la nuova generazione compatta in testa (gen_0)
+            final_path = self.data_dir / "gen_0.ael"
+            # Se esiste già un gen_0 (perché non era nel nostro snapshot), dobbiamo gestire il nome
+            if final_path.exists():
+                final_path = self.data_dir / f"gen_0_{int(time.time())}.ael"
+            
+            try:
+                temp_path.rename(final_path)
+            except Exception as e:
+                print(f"🚨 [Aegis Reaper] CRITICAL: Rename failed! {e}")
+                # Tentativo di recupero: non inseriamo nulla e lasciamo le nuove gen fluire
+                return 0
+
+            self.generations.insert(0, AegisGeneration(final_path, 0, self.dim))
+            
+            final_size = sum(gen.path.stat().st_size for gen in self.generations if gen.path.exists())
+            reclaimed_mb = max(0, (initial_size - final_size) / (1024 * 1024))
+            
+            t1 = time.time()
+            print(f"💀 [Aegis Reaper] Compattazione completata: {compacted_count} nodi in {t1-t0:.2f}s. Recuperati {reclaimed_mb:.2f} MB.")
+            return reclaimed_mb
+
     def flush(self):
         with self._lock:
             for gen in self.generations:
                 gen.flush()
 
     def close(self):
-        for gen in self.generations:
-            gen.close()
+        with self._lock:
+            for gen in self.generations:
+                gen.close()

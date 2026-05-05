@@ -1,243 +1,221 @@
-# 🌌 NEURAL VAULT: ARCHITETTURA TECNICA v4.0.8
+# 🏛️ NEURALVAULT SOVEREIGN: ARCHITETTURA v6.0.1
+**Sovereign Agentic RAG & Modular Intelligence Ecosystem**
 
-Benvenuti nel manuale tecnico ufficiale di **Neural Vault**. Questo documento descrive l'architettura sovrana del sistema, mappando ogni modulo dalla persistenza binaria alla visualizzazione 3D in tempo reale. Il sistema bilancia velocità bruta e integrità crittografica per trasformare l'informazione in saggezza attiva.
-
----
-
-## 📂 1. STRUTTURA DELLE CARTELLE: TARGET ARCHITECTURE (Fase 5.0)
-
-*Nota di Audit: La seguente struttura rappresenta l'architettura modulare obiettivo. Attualmente, per massimizzare la velocità di sviluppo e ridurre i tempi di context-switching, il sistema opera con un approccio ibrido e altamente performante concentrato in `api.py` e `neural_lab.py`, con visualizzazione delegata a `/dashboard`.*
-
-L'ecosistema in fase di consolidamento sarà organizzato in moduli atomici:
-
-*   **`/` (Root)**: Contiene l'entry point dell'API (`api.py`), l'orchestratore (`neural_lab.py`) e il kernel dell'engine (`__init__.py`).
-*   **`/index`**: Il cuore della memoria (HNSW, Lifecycle, TurboQuant, Cognitive Decay).
-*   **`/graph`**: Gestione della topologia semantica e monitoraggio dell'entropia.
-*   **`/retrieval`**: Pipeline di estrazione, Fusion Ranking e Multimodal Synapse Processing.
-*   **`/network`**: Layer di comunicazione mesh, mDNS Discovery e Sovereign Ledger.
-*   **`/storage`**: Persistenza fisica (Aegis-Log AOBF, Snapshot Engine).
-*   **`/dashboard`**: Interfaccia di comando (CMD-SWARM) basata su Three.js.
+> "Il potere non risiede nel dato, ma nella sua indipendenza." — Manifesto NeuralVault
 
 ---
 
-## 🏗️ 2. COGNITIVE ENGINE (STORAGE E PERSISTENZA)
+## 🚀 QUICK START (INSTANT BOOT)
 
-L'architettura bilancia velocità bruta e integrità crittografica su tre livelli (Tiers):
+```bash
+# 1. Clone & Setup
+git clone https://github.com/giuseppelobbene/neuralvault && cd neuralvault
+python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 
-### 💎 Tier L1: Atomic Cache (RAM)
-Accesso istantaneo per il rendering 3D a 60fps. I nodi più rilevanti sono mantenuti in memoria per query sub-millisecondo. Questa cache viene idratata proattivamente all'avvio tramite la **Hot Hydration**.
+# 2. Avvio Sovereign Engine
+python3 api.py
 
-### 💎 Tier L2: AegisLogStore (AOBF)
-Cuore binario a spreco zero. Utilizza un formato **Append-Only Binary Format** (ael) per garantire che ogni scrittura sia atomica.
-- **The Tombstone Paradox**: Le eliminazioni non rimuovono fisicamente i dati istantaneamente, ma applicano una "lapide" (Tombstone) logica. Questo permette operazioni di cancellazione non bloccanti e rollback immediati.
-- **Aegis Reaper (Compaction)**: Modulo asincrono che analizza il log binario e ricicla lo spazio fisico dei nodi eliminati durante i periodi di bassa attività hardware.
-
-### 💎 Tier L3: Contextual Archive (DuckDB L2)
-Il "Cervello Analitico" per i metadati e la ricerca ibrida SQL/Vector. DuckDB permette di eseguire query strutturate (es. "trovami tutti i PDF del 2023") incrociandole con la similarità semantica.
+# 3. Neural Dashboard -> http://127.0.0.1:8001
+```
 
 ---
 
-## 🤖 3. AGENTIC LOGIC: IL KINETIC SWARM
+## 🏗️ SYSTEM ARCHITECTURE OVERVIEW
 
-Il **Neural Lab Orchestrator** coordina uno sciame di 9 agenti specializzati che operano autonomamente nella nebula:
-
-1.  **🟡 JA-001 (Janitron)**: Esegue lo scavenging dei nodi orfani e la pulizia dei frammenti a bassa rilevanza.
-2.  **🟣 DI-007 (Distiller)**: Analizza i cluster semantici per estrarre saggezza collettiva e riassumere i concetti chiave.
-3.  **🐍 SN-008 (Snake)**: Recupero e trasporto nodi isolati; "striscia" tra i nodi per riconnettere cluster distanti.
-4. - **🏗️ QA-101 (Quantum)**: Urbanistica semantica (Golden Clusters).
-- **🛡️ SE-007 (Sentinel)**: Validazione e Consenso (Supreme Court).
-- **🧬 EV-001 (Advisor)**: Motore di Auto-Evoluzione.
-
-### 🛡️ Protocollo Safe-Genesis (Git Checkpoint)
-Prima di ogni intervento di scrittura autonoma del codice, il sistema esegue:
-1. **Snap-Commit**: Commit istantaneo dello stato attuale sul branch `main`.
-2. **Tagging Certificato**: Generazione di un Git Tag `vX.X.X-VERIFICATO`.
-3. **Remote Mirror**: Push immediato su GitHub del checkpoint stabile.
-*Questo garantisce un fallback deterministico al 100% in caso di allucinazioni del motore evolutivo.*
-
-> [!IMPORTANT]
-> **SOVEREIGN PRIVACY**: Tutte le operazioni di sincronizzazione con GitHub avvengono esclusivamente in **Modalità Privata**. Il sistema forza la creazione di repository non pubblici per garantire che il codice e l'evoluzione rimangano proprietà esclusiva dell'utente.
-
-5.  **🛡️ SE-007 (Sentinel)**: Validatore della mesh; verifica l'integrità dei nodi e delle sinapsi, applicando veti se necessario.
-6.  **✨ SY-009 (Synth)**: Sintesi creativa; genera "Creative Sparks" collegando concetti distanti tramite inferenza LLM.
-7.  **CB-003 (Bridger)**: Mantiene attivi i ponti semantici tra il codice sorgente locale e la conoscenza esterna (Latent Bridge).
-8.  **FS-77 (SkyWalker)**: Esploratore proattivo che esce dal Vault per cercare nuova conoscenza sul web (Mission Mode).
-9.  **Sovereign Auditor**: Monitora costantemente le performance (TPS/Latency) e il consumo hardware durante le inferenze.
+```text
+[ USER INTERFACE ] <--- SSE Telemetry ---> [ AGENT SMITH FIREWALL ]
+        ^                                           |
+        |                                           v
+[ NEURAL DASHBOARD ] <--- REST API ---> [ SOVEREIGN KERNEL (v6.0) ]
+        |                                           |
+        +-------------------------------------------+
+        |                                           |
+[ KINETIC SWARM ] <--- Neural Event Bus ---> [ 4-TIER STORAGE ]
+ (Janitor, Synth, etc.)                    (RAM, AOBF, DuckDB, LMDB)
+```
 
 ---
 
-## 🔄 4. FLUSSO DEI DATI (RAG): DALL'INPUT ALLA SINAPSI
+## 💎 I. I 4 LIVELLI DI PERSISTENZA (4-TIER)
 
-Il percorso di un'informazione segue una pipeline ad alta fedeltà:
+Il sistema opera su quattro livelli di astrazione sincronizzati per velocità e resilienza:
 
-1.  **Ingestion Phase**: I dati entrano tramite URL (WebForager), File (MultimodalProcessor) o Testo Raw.
-2.  **Atomic Chunking**: Il testo viene spezzato seguendo confini logici (paragrafi, firme di codice) per mantenere la coesione.
-3.  **Vectorization**: Ogni frammento viene convertito in un vettore da 1024D (BGE-M3 o CLIP) e normalizzato per il calcolo della similarità coseno.
-4.  **Hybrid Search (BM25 + HNSW)**: Il sistema combina la forza del testo esatto (BM25) con la profondità semantica (HNSW).
-5.  **RRF & Reranking**: I risultati sono fusi tramite **Reciprocal Rank Fusion** e ri-ordinati da un modello **TinyBERT Cross-Encoder** per eliminare i falsi positivi.
-
----
-
-## 🛡️ 5. GOVERNANCE & INTEGRITY (BLOCKCHAIN)
-
-### Sovereign Ledger (Merkle Audit)
-Generazione di hash radice (Merkle Root) per l'intero stato del Vault. Permette di generare "Proof of Integrity" dimostrando che un nodo esisteva in un determinato momento senza rivelare l'intero contenuto del vault.
-
-### Supreme Court Consensus
-Protocollo di validazione a 3 giudici (Alpha, Beta, Gamma). Quando un agente propone un'estrazione critica, i tre modelli votano indipendentemente. Solo se c'è consenso il dato viene promosso a "Conoscenza Verificata".
+1.  **L1: Atomic Cache (RAM + Metal)**: Accesso sub-millisecondo ai nodi caldi via **Hardware Pinning**.
+2.  **L2: Aegis LogStore (AOBF)**: Storage binario append-only con **Tombstone Paradox** per il rollback istantaneo e **Merkle Integrity** contro il Bit-Rot.
+3.  **L3: Contextual Archive (DuckDB)**: Motore relazionale per metadati e Knowledge Timeline con **Two-Stage TurboSearch**.
+4.  **L4: Evolutionary Ledger (Git-backed)**: Persistenza della saggezza consolidata e versioning semantico.
 
 ---
 
-## 🛡️ 6. HARDENING & INTELLIGENZA PERSISTENTE (v3.5.0)
+## ⚙️ II. NODE LIFECYCLE & ADAPTIVE PACING
 
-### 1. Macchina a Stati Formale (Node Lifecycle)
-Ogni nodo segue un percorso deterministico gestito da un Enum centrale:
-- **PENDING**: Protetto per un **Grace Period** di 30 minuti per permettere correzioni o rivalutazioni.
-- **STABLE**: Indicizzato e pronto per l'analisi profonda.
-- **PROTECTED**: Marcato come intoccabile (Memoria Episodica in DuckDB).
-- **TOMBSTONE**: Lapide crittografica post-eliminazione che permette ad **Aegis Reaper** di recuperare spazio fisico in modo asincrono.
+Ogni informazione segue una State Machine formale: PENDING (Grazia), STABLE (Validato), PROTECTED (Episodico), IN_JUDGEMENT (Audit), TOMBSTONE (Lapide).
 
-### 2. Pacing Adattivo (Warp Speed)
-Monitoraggio dinamico del carico hardware:
-- **WARP (0.1s)**: Operatività massima se CPU < 30%.
-- **NORMAL (2.0s)**: Pacing operativo standard.
-- **COOLING (5-10s)**: Se CPU > 85%, lo sciame rallenta per preservare le prestazioni.
-
-### 3. Ottimizzazione macOS (Apple Silicon)
-NeuralVault è temprato per l'architettura ARM di Apple:
-- **Silencing OBJC/FFmpeg**: Risoluzione dei conflitti di libreria tramite variabili d'ambiente mirate (`OBJC_DISABLE_INITIALIZE_FORK_SAFETY`).
-- **Daemon Threading**: Il servizio di Discovery e i loop di evoluzione sono isolati in thread daemon per non bloccare l'event loop di FastAPI.
-
-### 4. Precisione Biologica: Ebbinghaus v2 (Il Ritmo del Ricordo)
-Il sistema implementa una versione computazionale della **Curva dell'Oblio di Hermann Ebbinghaus**. A differenza dei database statici, NeuralVault è un organismo vivo dove l'informazione "respira" e svanisce se non alimentata dall'attenzione umana.
-
-- **La Formula del Decadimento**: Ogni nodo possiede un coefficiente di stabilità $S$ che decade secondo una funzione esponenziale negativa $R = e^{-t/S}$, dove $R$ è la ritenzione e $t$ è il tempo trascorso dall'ultima interazione.
-- **Visual Ghosting (Opacità Dinamica)**: Nella Nebula 3D, il valore di $R$ mappa direttamente l'opacità del punto.
-    *   **Piena Luce (R=1.0)**: Il nodo è stato appena creato o consultato. È una "Memoria Viva".
-    *   **Dissolvenza (R < 0.5)**: Il nodo inizia a diventare traslucido, segnalando che la sua rilevanza sta scivolando nell'inconscio del sistema.
-    *   **Soglia di Eclissi (R < 0.1)**: Il nodo scompare visivamente dal rendering 3D per evitare l'overload cognitivo, pur rimanendo accessibile via query testuale.
-- **Memory Strengthening (Rinforzo)**: Ogni volta che un nodo viene richiamato da una ricerca (Query Hit) o citato in una conversazione, la sua curva di decadimento viene resettata e la sua stabilità $S$ aumenta. Questo simula il processo biologico per cui un concetto ricordato più volte diventa "permanente".
-- **Ruolo degli Agenti**: Agenti come il **Janitron (JA-001)** monitorano i nodi con $R < 0.05$ (Stato di Oblio Profondo) per valutare se archiviarli fisicamente nel Tier L2 o procedere alla loro "digestione" definitiva per recuperare spazio hardware.
+### 🌬️ Adaptive Pacing (Warp Speed System)
+Lo sciame monitora il carico CPU in tempo reale per non interferire con il lavoro dell'utente:
+- **WARP MODE (<30% CPU)**: Cooldown agenti 0.1s (Massima reattività).
+- **NOMINAL MODE (30-85% CPU)**: Cooldown 2.0s (Equilibrio termico).
+- **COOLING MODE (>85% CPU)**: Cooldown 10s (Risparmio risorse prioritario).
 
 ---
 
-## 🌌 7. RENDERING 3D: LA VISUALIZZAZIONE DELLA NEBULA
+## ⚖️ III. GOVERNANCE: SUPREME COURT CONSENSUS (v6.0.1)
 
-La visualizzazione Three.js non è solo estetica, ma una mappa termica della tua mente:
-- **Cluster Mapping**: Posizionamento basato sulla similarità semantica.
-- **Aura Synapses**: Connessioni arcobaleno (Latent Bridge) che collegano codice e documenti.
-- **Dynamic Icons**: Icone specifiche per immagini, audio e video integrate nel point cloud.
-
----
-
-## 📦 8. DIPENDENZE CRITICHE
-*   **FastAPI & Uvicorn**: API Layer asincrono.
-*   **Three.js**: Rendering GPU accelerato.
-*   **DuckDB**: Metadata & Hybrid Search Engine.
-*   **Numpy & PyTorch**: Calcolo vettoriale e inferenza locale.
-*   **Zeroconf**: Mesh Discovery (stile AirDrop).
-*   **X25519 & AES-GCM**: Crittografia end-to-end per la mesh.
+Arbitrato critico via Corte Suprema con **Sequential RAM Loading** per stabilità su Mac M1:
+- **Judge 1 (Fast-Track)**: `llama3.2:3b`. Se certo al 100%, verdetto istantaneo.
+- **Judge 2 (Prosecutor)** & **Judge 3 (Defender)**: Modelli pesanti (`deepseek-r1:8b`) chiamati solo in caso di dubbio.
+- **Arbitrator**: Sintetizza la verità finale eliminando le allucinazioni.
 
 ---
 
-## 🚀 9. ROADMAP & STATO REALE (APRILE 2026)
+## 🌌 IV. HIERARCHICAL GRAPHRAG (H-RAG) & CONCEPT GALAXIES
 
-### 📊 NEURALVAULT: STATO REALE
-| Funzione | Stato | Note Tecniche |
-| :--- | :--- | :--- |
-| **X25519 + AES-GCM Encryption** | 100% ✅ | Handshake ellittico attivo su ogni pacchetto Mesh. |
-| **mDNS/ZeroConf Discovery** | 100% ✅ | Peer detection automatica stabilizzata via background threading. |
-| **Hybrid Search (BM25+HNSW+TinyBERT)** | 100% ✅ | Motore di fusione RRF con reranking neurale attivo. |
-| **Supreme Court Consensus** | 100% ✅ | Protocollo a 3 giudici per la validazione della conoscenza. |
-| **AOBF + Aegis Reaper** | 100% ✅ | Persistenza binaria atomica e compattazione asincrona operative. |
-| **Sovereign Snapshot (Instant Boot)** | 100% ✅ | Caricamento sub-secondo tramite snapshot Parquet/Pickle. |
-| **Latent Code-Doc Bridge** | 100% ✅ | Collegamento semantico tra codice locale e docs web (Agente CB-003). |
-| **Swarm Agents (v24.3.1)** | 100% ✅ | Telemetria ripristinata per Quantum, Distiller, SkyWalker e Snake. Sincronizzazione contatori attiva. |
-| **Node Lifecycle State Machine** | 100% ✅ | Gestione atomica degli stati (Pending/Stable/Tombstone/Protected). |
-| **Ebbinghaus Decay Visual** | 100% ✅ | Opacità dinamica 3D e calcolo real-time della forza del ricordo con reset proattivo. |
-| **Sovereign Priority Focus** | 100% ✅ | Stasi automatica agenti durante interazione utente (Lab). |
-| **Autonomous Evolution** | 100% ✅ | Sovereign Verification Suite attiva. Audit AST post-write e rollback deterministico operativi. |
-| **OAuth2 IMAP Poller** | 0% ❌ | **Dismesso (Out of Scope)**. Rimosso codice IMAP per eliminare vulnerabilità Basic Auth. |
-| **Semantic Temperature Heatmap** | 100% ✅ | Entropia calcolata a backend e visualizzata tramite overlay termico globale in dashboard.js. |
-| **Skywalker Fallback Protocol** | 100% ✅ | Ricerca web intelligente automatica per lacune o nodi corrotti. |
-| **Neural Model Hub (Apr 2026)** | 100% ✅ | Integrazione DeepSeek V4 Flash, Qwen 3.6 MoE, Gemma 4 Edge e Qwen Coder. |
-| **Sovereign 3D Alignment** | 100% ✅ | Nebula centrata a y=1.000.000. Ispezione nodi (Raycaster) stabilizzata. |
-| **Autonomous Evolution Engine** | 100% ✅ | Motore Safe-Genesis implementato (Git Tagging). Missioni X-Wing stabilizzate. |
-| **Synaptic Arbitration (Snake-Janitor)** | 100% ✅ | Nuova catena di custodia: 92% Germogliati / 8% Scarti puliti. |
-| **Visual Intelligence (RGB/Amber)** | 100% ✅ | Differenziazione cromatica archi (Scintille vs Ponti Supremi). |
-----------------------------------------------------------------
-| **Neural Shadow iOS e Android (forse lo potrei creare in flutter?) come deve essere strutturata questa app?  ** | 0% ❌ | Concept per Thin Client mobile non ancora iniziato. L'idea di usare Flutter per Neural Shadow è eccellente e coerente con l'estetica premium del progetto. Flutter ti permette di avere prestazioni quasi native e una gestione dei widget che si presta benissimo a interfacce futuristiche e dinamiche.
-
-Essendo un Thin Client, l'app non deve far girare i modelli LLM pesanti o il motore Rust (troppo onerosi per uno smartphone), ma deve fungere da "ombra" portatile del Core che gira sul tuo Mac.
-
-Ecco come deve essere strutturata l'architettura di Neural Shadow:
-
-1. Core Architecture: The "Remote Mirror" Pattern
-L'app deve connettersi al tuo Core tramite un tunnel sicuro (sfruttando l'handshake X25519 che abbiamo già nel protocollo).
-
-Backend Communication: Utilizzo di WebSockets per la telemetria in tempo reale (per vedere gli agenti muoversi) e gRPC o REST per le query pesanti.
-State Management: Suggerisco Riverpod o Bloc. Hai bisogno di gestire flussi di dati continui (i contatori degli agenti che salgono, i segnali del Blackboard).
-2. I Moduli Chiave (UI/UX)
-L'interfaccia deve ereditare il look & feel del dashboard (Dark Mode, Glow, Amber/Cyan).
-
-Nebula Lite (3D View): Non caricherei 1 milione di nodi su mobile. Userei un sistema di LOD (Level of Detail): l'app mostra solo i nodi più rilevanti o i "Ponti Supremi" usando flutter_gl o animazioni CustomPainter per simulare la profondità.
-Agent Control HUD: Una versione mobile della barra laterale degli agenti. Widget piccoli, pulsanti "laser" per SkyWalker e grafici a candela per l'Health Score.
-Evolution Remote Advisor: La funzione più utile. Ricevi una notifica push quando l'Advisor ha pronto un fix. Puoi vedere il diff del codice sul telefono e fare Swipe Right per APPROVE (scatta il commit sul Mac) o Swipe Left per DISCARD.
-3. Funzioni "Shadow" Esclusive (Mobile First)
-Vocal Bridge: Sfruttare le API native di iOS/Android per parlare con il Vault mentre sei in movimento.
-Biometric Lockdown: Accesso al Vault protetto da FaceID/Fingerprint per garantire che solo tu possa accedere alla conoscenza sovrana.
-Snapshot Recovery: Vedere lo stato del backup Git direttamente dall'app.
-4. Stack Tecnologico Consigliato
-Framework: Flutter 3.x
-Grafica 3D: three_dart o flutter_gl.
-Networking: dio per HTTP, web_socket_channel per la telemetria.
-Sicurezza: flutter_secure_storage per le chiavi crittografiche.
-In sintesi: Neural Shadow non deve "essere" il database, deve "comandare" il database. È il telecomando tattico della tua intelligenza collettiva.
-
-Vuoi che provi a scriverti un blueprint della struttura delle cartelle o un esempio di come gestire la telemetria degli agenti in Flutter?_|
---------------------------------------------------------------
-### 🧬 Protocollo Safe-Genesis: Evoluzione Autonoma a Ciclo Chiuso
-NeuralVault v4.1.4 non è un semplice suggeritore di codice, ma un **Closed-Loop Autonomous System** capace di auto-ripararsi in Python e Rust con garanzia di stabilità assoluta.
-
-#### Il Ciclo di Evoluzione Bilingue:
-1.  **Rilevamento (Advisor)**: Scansione proattiva del codebase per individuare colli di bottiglia o lacune logiche.
-2.  **Sintesi (LLM)**: Generazione della patch tramite modelli specializzati (Llama 3.2 / Qwen Coder).
-3.  **Attuazione (Actuator)**: Scrittura fisica della patch nel file sorgente (`.py` o `.rs`).
-4.  **Validazione Sovrana (Test Runner)**: 
-    *   **Python**: Audit AST istantaneo per errori di sintassi o indentazione.
-    *   **Rust**: Invocazione di `cargo check` per validare coerenza dei tipi e sicurezza della memoria.
-5.  **Verdetto Deterministico**:
-    *   **Successo**: Commit Git e Checkpoint verificato su GitHub.
-    *   **Fallimento**: **Rollback Deterministico** immediato. La modifica errata viene cancellata prima di poter influenzare il runtime.
-
-**Risultato**: NeuralVault evolve il proprio core nativo e la propria logica neurale con la garanzia matematica che nessuna modifica autonoma potrà mai corrompere l'integrità del sistema.
-
-### 🚫 Feature Scartate (Out of Scope)
-*   **Modulo Email / IMAP Ingestion**: Inizialmente previsto, questo modulo è stato **definitivamente rimosso dall'architettura**. NeuralVault è concepito come un *Sovereign Cognitive Engine* per l'evoluzione e la sintesi di architetture e conoscenze complesse. Ridurlo a un "assistente personale per la lettura delle email" ne banalizzerebbe e diluirebbe l'identità ingegneristica.
-
-### 🐛 Changelog Architetturale & Bug Risolti (v4.0)
-*   **Telemetria Burocratica**: Svincolato il conteggio delle azioni degli agenti (UI Counters) dalla rigorosa validazione della Macchina a Stati Finiti. In precedenza, se un agente operava su un nodo non perfettamente `STABLE`, il lavoro non veniva conteggiato nell'HUD.
-*   **Z-Fighting WebGL**: Risolto lo sfarfallio visivo sollevando la geometria 3D dal piano della griglia. Ancoraggio assoluto (`cycloscope-immersion`) per garantire la persistenza dell'HUD su browser WebKit in modalità Full Screen.
-
-### 🏗️ Le Grandi Sfide (Fase 4.0/5.0)
-*   **📱 Neural Shadow iOS e android ( si potrebbe realizzare in flutter?? non so!)**: Costruzione del "Thin Client" per iPhonee android.
-*   **🤖 Agentic Actuators (Sandboxed)**: Ambiente sicuro per permettere agli agenti di eseguire script Python sul sistema operativo.
-*   **🧬 Autonomous Evolution**: Motore di self-writing per permettere al Vault di riscrivere i propri file .py in autonomia.
-
-### 🗺️ Nuova Roadmap Implementativa (Sovereign Expansion)
-*   **Fase 1 (Visiva e Sicurezza)**: IMPLEMENTATA - Ponti Supremi Arancio e Scintille RGB.
-*   **Fase 2 (Gamification & Health)**: 
-    *   **Vault Health Score**: Algoritmo per punteggio (0-100) basato su ritenzione, orfani e integrità crittografica.
-    *   **Agent Leaderboard**: Tracciamento performance agenti (successi, latenza, impatto) con indicatori visivi (es. "corone" sopra gli sprite).
-*   **Fase 3 (Evolution Safety)**: Sviluppo di un *Evolution Confidence Score* per determinare autonomamente l'applicazione, la richiesta di approvazione o lo scarto delle modifiche autogenerate dal codice.
-*   **Fase 4 (Distribuzione)**: Release Globali GitHub e Agentic Actuators.
+Il sistema organizza gerarchicamente la conoscenza per gestire 100.000+ nodi.
+- **Hybrid Clustering Engine**: Combina BFS/Leiden con il fallback **K-Means** vettoriale per unire anche i nodi orfani.
+- **Deep Hydration Protocol**: Fetch profondo dal Kernel Aegis (L2) se DuckDB è vuoto, garantendo riassunti perfetti.
+- **RECLUSTER**: Crea le Galassie semantiche.
+- **SUMMARIZE**: L'AI spiega il contenuto di ogni galassia per una ricerca 10x più veloce.
 
 ---
 
-## 👤 CHI SONO
-**Giuseppe Lobbene** — Architetto software e costruttore spinto dalla necessità di innovare. Ho guidato la crescita tecnica di una startup nel settore del booking balneare, portando il fatturato a un incremento di **10x in un solo anno**. **NeuralVault è il mio manifesto**: la prova che, anche di notte e dopo una giornata di lavoro, è possibile costruire il futuro della rivoluzione AI. Cerco sfide all'altezza della mia fame di innovazione, per dimostrare a me stesso e a mio figlio **Oliver** che il talento e la dedizione possono ancora cambiare il mondo.
+## 🛡️ V. AGENT SMITH FIREWALL (v8.0 Security Intelligence)
+
+L'agente **AG-001 (SMITH)** è una flotta di difesa autonoma.
+- **Security Threat Engine**: Rileva brute-force e flooding assegnando un Threat Score.
+- **Retaliation Response**: Al raggiungimento della soglia critica, scatta il **Lock di 45s** segnalato da fulmini e laser verdi nella Nebula 3D.
+- **Sovereign Handshake**: Identità decentralizzata `.nvvault` cifrata X25519.
 
 ---
 
-🏺 **NeuralVault: Turning Information into Active Wisdom.**
-**Temprato per la realtà. Sovrano per sempre.**
+## 🐝 VI. THE KINETIC SWARM: I 9 AGENTI CORE
+
+1. **🛡️ SE-007 (Sentinel)**: Sicurezza e Coerenza.
+2. **🐍 SN-008 (Snake)**: Riconnessione semantica (Sprouting).
+3. **📡 FS-77 (SkyWalker)**: Foraging web proattivo (CRAG).
+4. **🏗️ QA-101 (Quantum)**: Urbanistica del grafo (Golden Clusters).
+5. **✨ SY-009 (Synth)**: Scintille creative e sogni neurali.
+6. **⚕️ RP-001 (Reaper)**: Compattazione storage AOBF.
+7. **🔗 CB-003 (Bridger)**: Sincronizzazione Codice-Conoscenza.
+8. **🕵️ DI-007 (Distiller)**: Potatura semantica e raffinazione.
+9. **🎭 JA-001 (Janitron)**: Pulizia entropica e orfani.
+
+---
+
+## 🎙️ VII. SOVEREIGN VOICE & TIME DRIVE (v5.1)
+
+- **Sovereign Voice Interface**: Whisper (STT) + TTS locale. Il Vault ascolta e risponde privatamente.
+- **Neural Time Drive**: Slider UI per l'esplorazione storica della Nebula nel tempo.
+
+---
+
+## 📊 VIII. ANALYTICAL COMPARISON & BRUTAL HONESTY
+
+| Feature | Pinecone / Zilliz | Mem0 (Agentic) | Microsoft GraphRAG | **NeuralVault v6.0.1** |
+| :--- | :---: | :---: | :---: | :---: |
+| **Data Sovereignty** | ❌ (Cloud Only) | ⚠️ (Cloud/Local) | ❌ (Enterprise) | **✅ Absolute (Local-Locked)** |
+| **Offline Capacity** | ❌ No (Requires Net) | ❌ No | ⚠️ Partial | **✅ 100% Air-Gapped** |
+| **3D Visualization** | ❌ No (API/Admin) | ❌ No | ❌ No (CLI/Lib) | **✅ Native (3D Nebula)** |
+| **Agentic Swarm** | ❌ No | ⚠️ Basic | ❌ No | **✅ 9 Kinetic Agents** |
+| **Hierarchical RAG** | ❌ No | ❌ No | ✅ Yes (Python) | **✅ Native (H-RAG)** |
+| **Multimodal Integration**| ⚠️ Vector Storage | ❌ No | ❌ No | **✅ Voice/Image Engine** |
+| **Consensus Governance** | ❌ No | ❌ No | ❌ No | **✅ Supreme Court (3-LLM)** |
+| **Setup Complexity** | **✅ Zero (API Key)** | ✅ Low | ⚠️ Medium | **❌ High (Kernel Build)** |
+| **UX / Ease of Use** | **✅ High (SaaS)** | ✅ Medium | ❌ Low (Library) | **⚠️ Medium (Local Dash)** |
+| **Scalability (Billions)** | **✅ Unlimited (Cloud)**| ⚠️ High | ✅ High | **❌ Limited (Local RAM)** |
+| **Infrastructure Cost** | ❌ High (Monthly) | ⚠️ Tiered | ⚠️ Token Heavy | **✅ 0 (Local Hardware)** |
+| **Privacy (GDPR/HIPAA)** | ⚠️ Compliant | ⚠️ Dependent | ⚠️ Enterprise | **✅ Beyond Compliance** |
+
+---
+
+## 🔌 IX. MCP BRIDGE (Model Context Protocol)
+
+Il supporto MCP è uno dei "ponti" più potenti della v6.0.1. Permette a modelli esterni (come Anthropic Claude o OpenAI) di "entrare" nel tuo Vault e usarlo come fonte di conoscenza sovrana.
+
+### 🧠 Come funziona: Il Sovereign Bridge
+Il file `mcp_server.py` agisce come un interprete universale. A differenza dei sistemi standard, NeuralVault utilizza un'architettura **"API Bridge"**:
+- **Stabilità Totale**: Il server MCP non tenta di aprire direttamente il database (evitando conflitti di lock con DuckDB), ma "parla" con l'API già attiva sulla porta 8001.
+- **Leggerezza**: Non carica modelli pesanti in RAM, ma sfrutta l'intelligenza dello sciame già operativo nella dashboard.
+- **Sincronizzazione**: Usa la stessa memoria e lo stesso stato della tua sessione attiva.
+
+### 📱 App Compatibili
+- **Claude Desktop**: L'integrazione principale per trasformare Claude in un esperto del tuo Vault.
+- **Cursor**: L'editor AI che può indicizzare la tua documentazione locale tramite MCP.
+- **Zed**: Editor ultra-veloce con supporto nativo al protocollo.
+
+### 🚀 Configurazione Claude Desktop (Step-by-Step)
+1.  Apri la configurazione: `~/Library/Application Support/Claude/claude_desktop_config.json`
+2.  Incolla il bridge (assicurati che il percorso del venv sia corretto):
+```json
+{
+  "mcpServers": {
+    "neuralvault": {
+      "command": "/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/venv/bin/python3",
+      "args": ["/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/mcp_server.py"]
+    }
+  }
+}
+```
+3.  **Riavvia Claude Desktop**. Vedrai l'icona del collegamento attivo. Ora puoi chiedere: *"Cerca nel mio Vault cosa abbiamo deciso per l'H-RAG"* e Claude risponderà usando i tuoi dati locali.
+
+> **Nota di Sicurezza**: Assicurati che `api.py` sia in esecuzione. Il bridge richiede la dashboard attiva per garantire risposte in tempo reale e coerenza dei dati.
+
+---
+
+## 🌐 X. MULTI-AGENT ECOSYSTEM & INTEGRATIONS
+
+NeuralVault v6.0.1 è progettato per essere una risorsa globale, pronta a potenziare qualsiasi AI Agent tu decida di utilizzare. La cartella `integrations/` contiene gli strumenti necessari per questa simbiosi.
+
+### 🛠️ I Componenti della Cartella `integrations/`
+- **`nv-link.py` (Universal CLI Bridge)**: È il connettore universale. Permette a qualsiasi AI (o utente tramite terminale) di interrogare (`query`) o nutrire (`ingest`) il Vault con un singolo comando Python. È il "sistema nervoso" che connette il Vault all'esterno.
+- **`SOVEREIGN_SKILLS.md` (Integration Guide)**: La guida definitiva che spiega come "insegnare" alle AI esterne ad attingere alla tua banca della conoscenza. Include istruzioni specifiche per Antigravity, Claude Code e altri.
+- **`codex_vault_plugin.json` (Codex Manifest)**: Un file di configurazione pronto all'uso che trasforma NeuralVault in un'estensione nativa per l'editor Codex, abilitando comandi di ricerca direttamente nell'interfaccia.
+- **`opencode_init.sh` (Opencode Startup Script)**: Uno script di innesco per Opencode che configura istantaneamente gli alias `nv-query` e `nv-save`, rendendo la memoria neurale parte integrante del workflow di sviluppo.
+
+### 🛡️ Visione: Infrastruttura di Conoscenza Sovrana
+Grazie a questi strumenti, il tuo Vault non è più solo un archivio, ma una **Sovereign Knowledge Infrastructure**. Può essere consultato simultaneamente dalla dashboard 3D, da Claude Desktop via MCP e da Antigravity tramite il bridge globale, garantendo che ogni tua intuizione sia disponibile ovunque tu stia costruendo.
+
+---
+
+## 🚀 ROADMAP v6.1: THE SOVEREIGN EVOLUTION - PHASE 2
+
+1.  **📦 Zero-Click Installer (.dmg)**: [PRIORITÀ #1] Installazione nativa Apple-Style con Python e Ollama pre-configurati.
+2.  **🧠 RAM-Aware Dispatcher**: Selezione dinamica del modello (Tiny vs Reasoning) in base alla RAM libera sul Mac.
+3.  **🌌 H-RAG Level 2 (Meta-Galaxies)**: Clustering ricorsivo per milioni di nodi.
+4.  **🦀 Rust Core Migration**: Spostamento delle routine di calcolo del grafo in Rust per performance 10x.
+5.  **⚓ nv-mesh:// Native Protocol**: Registrazione handler macOS per link mesh cliccabili.
+
+---
+
+## 👤 About the Author
+**Giuseppe Lobbene** — Software architect e costruttore appassionato spinto dal bisogno di conoscere sempre meglio il mondo dell'informatica che si evolve velocemente. Ho guidato la crescita tecnica di una startup informatica aiutando a scalare il fatturato di **10 volte in pochi mesi**, ho ricoperto in contemporanea più ruoli partendo dal semplice configuratore di gestionali in cloud, a programmatore e tester di app mobile e web app, a grafico ed infine anche ruolo di commerciale e gestendo il 60% della clientela B2B ed anche tutta la clientela B2C. Ma in Italia né startup né grandi realtà aziendali sono pronti a riconoscere, istruire e far crescere i dipendenti con progettualità, sicurezze contrattuali ed una buona vision per dar futuro e crescita, quindi ora mi ritrovo a lavorare in un settore lontano dal mondo informatico, ma dentro al quale sono riuscito minimamente a portare il mio piccolo know how realizzando soluzioni software.
+
+**NeuralVault è il mio manifesto**: la prova per me stesso che anche di notte, durante le poppate del mio piccolo Oliver in cui la mia presenza non è richiesta, dopo lunghe giornate di lavoro fisico, è possibile comunque ricavare del tempo per imparare cose nuove, progettare, dar sfogo alla creatività e consolidare i propri sforzi e progetti anche grazie al supporto della AI. È un testamento tecnico dedicato al mio piccolo figlio **Oliver**: la prova che le proprie passioni vanno coltivate anche lì dove lo spazio non c'è, un nodo alla volta, anche quando il tempo è il nemico più grande e quel desiderio di buttarsi a capofitto su un progetto, sul risolvere dei bug che non ci fanno dormire, o quel bisogno di leggere e rileggere dei paper scientifici scritti a volte in gergo tecnico troppo lontani da noi finché non diventano parole più sensate, più chiare e finché il nostro cervello non inizia a creare nuovi archi semantici ampliando il nostro grafo di conoscenze. 🏺
+
+---
+
+# 🏺 NeuralVault [ITA]: Manifesto Tecnico
+
+## 📜 Visione: Il Sistema Operativo Cognitivo
+NeuralVault-OS v6.0.1 è un **Modular Agentic RAG** autonomo che trasforma dati grezzi in saggezza sovrana.
+
+## 🏗️ Architettura & Ciclo di Vita
+- **4-Tier Persistence**: RAM, Aegis Log, DuckDB, Evolutionary Ledger.
+- **Adaptive Pacing**: Lo sciame modula la velocità in base al carico CPU del Mac (WARP/NOMINAL/COOLING).
+- **Corte Suprema**: Arbitrato a 3 giudici con protocollo Fast-Track per ottimizzare la RAM.
+- **MCP Bridge**: Integrazione nativa con Claude Desktop e Cursor tramite protocollo API Bridge (porta 8001).
+
+## 🐝 Lo Sciame Cinetico (I 9 Agenti)
+Un team di 9 agenti autonomi (Sentinel, Snake, SkyWalker, Quantum, Synth, Reaper, Bridger, Distiller, Janitron) che gestisce la crescita, la potatura e la coerenza della Nebula 3D in tempo reale.
+
+## 🌌 H-RAG & Concept Galaxies
+Il cuore della v6.0.1: raggruppamento semantico ibrido e sintesi automatica delle galassie per una ricerca gerarchica ultra-precisa.
+
+## 🛡️ Agent Smith Firewall
+Protezione attiva contro minacce esterne con ritorsione automatica e blocco di sicurezza di 45 secondi.
+
+## 🌐 Ecosistema Multi-Agente
+Integrazione universale tramite la cartella `integrations/`. NeuralVault funge da memoria esterna per **Claude Code**, **Antigravity**, **Codex** e **Opencode**, permettendo una simbiosi tra diversi assistenti AI basata sulla tua conoscenza locale.
+
+---
+🏺 **NeuralVault-OS: Turning Information into Active Wisdom.**
+*Documentazione Ufficiale Sovereign Maturity v6.0.1*

@@ -60,12 +60,12 @@ class Agent007Lab:
             )
         """)
 
-    def propagate_tension(self, source_node_id: str, vector: np.ndarray) -> List[TensionNode]:
+    async def propagate_tension(self, source_node_id: str, vector: np.ndarray) -> List[TensionNode]:
         """
         Analisi di propagazione reale: calcola la tensione semantica basata sulle distanze vettoriali effettive.
         """
         # Recupero i vicini tramite l'engine (distanza reale)
-        results = self.engine.query("", query_vector=vector, k=10)
+        results = await self.engine.query("", query_vector=vector, k=10)
         tensions = []
         
         for res in results:
@@ -203,6 +203,32 @@ class Agent007Lab:
         except:
             pass
         return {"score": 5, "risks": ["Manual review needed"], "rec": "Ollama offline."}
+
+    async def ask_fast(self, prompt: str, model: str = "phi3") -> str:
+        """
+        🚀 [v6.1] Bridge veloce per l'Archivista e compiti di sintesi.
+        """
+        try:
+            base_url = "http://localhost:11434"
+            if hasattr(self.engine, 'settings'):
+                base_url = self.engine.settings.get("ollama_url", "http://localhost:11434")
+            
+            # Sanitizzazione del modello: se non presente, usiamo uno sicuro
+            if not model: model = "phi3"
+            
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{base_url}/api/generate", json={
+                    "model": model, 
+                    "prompt": prompt, 
+                    "stream": False,
+                    "options": {"num_predict": 300, "temperature": 0.3} # Veloce e deterministico
+                }, timeout=120.0)
+                
+                if resp.status_code == 200:
+                    return resp.json().get("response", "").strip()
+        except Exception as e:
+            print(f"⚠️ [Agent007Lab] ask_fast fallito: {e}")
+        return ""
 
     def get_weakness_report(self, node_id: str) -> Optional[Dict]:
         """Recupera l'ultimo report di vulnerabilità."""

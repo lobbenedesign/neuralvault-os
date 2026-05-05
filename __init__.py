@@ -54,6 +54,17 @@ from utils.crdt import LWWMap, PNCounter
 from graph.entropy import EntropyMonitor
 from index.lod import LODManager
 from storage.time_lapse import TimeLapseManager
+from retrieval.router import AdaptiveQueryRouter, RetrievalStrategy
+from retrieval.speculative import SpeculativePreloader
+from retrieval.critique import SovereignCritiqueEngine
+from retrieval.wiki_generator import SovereignWikiGenerator
+from retrieval.temporal_decay import TemporalConfidenceEngine
+from retrieval.taxonomy import AutoTaxonomyBuilder
+from retrieval.timeline import KnowledgeTimeline
+from retrieval.reflective import ReflectiveMemoryLayer
+from retrieval.community_engine import CommunityEngine # [v6.0]
+from security.shadow_sandbox import SovereignShadowSandbox # [v6.0]
+from utils.event_bus import NeuralEventBus, NeuralEventType # [v6.0]
 
 class QueryIntent:
     SEMANTIC = "semantic"
@@ -84,7 +95,7 @@ class ComputeMode(str, Enum):
 
 class NeuralVaultEngine:
     """
-    CORE ENGINE v2.2.0 (Agent007-march High-Performance Edition)
+    CORE ENGINE v4.2.0 (Agent007-march High-Performance Edition)
     ────────────────────────────────────────────────────────
     Supporta calcolo eterogeneo (CPU/GPU) e ottimizzazione 
     per l'architettura NVIDIA Rubin (2026).
@@ -95,6 +106,7 @@ class NeuralVaultEngine:
         self.data_dir = Path(data_dir) if data_dir else Path("./data")
         self.compute_mode = ComputeMode.HYBRID # Default sicuro
         self._lock = threading.Lock()
+        self.priority_mode = False # [v4.1.9] Priority Shift support
         
         # Rilevazione Hardware Proattiva (v1.6.0: Granular Check)
         self.has_cuda = False
@@ -133,7 +145,13 @@ class NeuralVaultEngine:
         # In AdaptiveHNSW, se use_rust è False, usiamo il dtype desiderato
         if not use_rust:
             self._hnsw.vector_dtype = np.float16 if use_float16 else np.float32
-
+        self.cognitive = CognitiveDecayEngine()
+        self.bridge = LatentBridge()
+        self.shield = SovereignShield()
+        
+        # [v0.5.0] Knowledge Components
+        self.summarizer = WisdomSummarizer(self)
+        
         self._prefilter = DuckDBPrefilter(db_path=self.data_dir)
         self._sparse = BM25SEncoder()
         # Abilitiamo il Cross-Encoder (Gap #4)
@@ -143,11 +161,44 @@ class NeuralVaultEngine:
         
         # Self-Healing System (Auto-Guard)
         self._graph_ingester = AutoKnowledgeLinker()
+        
+        # Inizializzatori di stato
         self._graph = None
         self._tq_search = None
         if use_quantization:
             # v3.7.0: TurboQuant v2 - Auto-Detect Hardware
-            self._tq_search = TwoStageTurboSearch(dim=dim)
+            pass
+            
+        # [v4.3.0] Adaptive & Speculative Core (Sovereign LLM Wiki)
+        self._router = AdaptiveQueryRouter()
+        
+        # [v4.3.1] Semantic Evolution & Sovereignty
+        from retrieval.semantic_diff import SemanticDiffEngine
+        from retrieval.export_protocol import SovereignExportProtocol
+        from network.crdt_sync import NeuralCRDTSync
+        from security.self_healing import SovereignSelfHealer
+        
+        from retrieval.context_manager import ProjectContextManager
+        
+        self.diff_engine = SemanticDiffEngine(self)
+        self.export_protocol = SovereignExportProtocol(self)
+        self.crdt = NeuralCRDTSync(self, actor_id=uuid.uuid4().hex[:8])
+        self.self_healer = SovereignSelfHealer(self)
+        self.context_manager = ProjectContextManager(self)
+        self._critique = SovereignCritiqueEngine(self)
+        self.preloader = SpeculativePreloader(storage_get_fn=lambda nid: self._nodes.get(nid))
+        self.wiki = SovereignWikiGenerator(self)
+        self.temporal_engine = TemporalConfidenceEngine()
+        self.taxonomy = AutoTaxonomyBuilder(self)
+        self.timeline = KnowledgeTimeline(self)
+        self.reflective = ReflectiveMemoryLayer(self)
+        self.communities = CommunityEngine(self) # [v6.0]
+        self.sandbox = SovereignShadowSandbox(self) # [v6.0]
+        self.events = NeuralEventBus() # [v6.0]
+        self.last_routing = None
+        
+        print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v6.0.1 Sovereign Maturity...")
+        self._tq_search = TwoStageTurboSearch(dim=dim)
             
         # v0.4.0 Pillars
         # --- [Persistence STABILIZATION] ---
@@ -196,7 +247,7 @@ class NeuralVaultEngine:
         # Condividiamo la connessione DuckDB esistente per efficienza
         # Linea 141 rimossa per mantenere l'indipedenza e persistenza di agent007.db
         self.investigator = Agent007Investigator(self.agent007)
-        self.lab = Agent007Lab(self)
+        self.agent007_lab = Agent007Lab(self)
         self.active_learning = ActiveLearningModule(self)
         self.entropy_monitor = EntropyMonitor(self)
         self.crdt_metadata = LWWMap()
@@ -381,26 +432,35 @@ class NeuralVaultEngine:
                 import traceback
                 traceback.print_exc()
 
-    def run_compaction(self):
+    def run_compaction(self, on_complete=None):
         """Fase 27: Aegis Reaper (Async Compaction) & Snapshot Trigger."""
         def _compact_bg():
             print("💀 [Aegis Reaper] Avvio compattazione asincrona...")
             try:
+                reclaimed = 0
                 if hasattr(self._tiers, 'episodic') and hasattr(self._tiers.episodic, 'compact'):
-                    self._tiers.episodic.compact()
+                    reclaimed = self._tiers.episodic.compact()
                 self.snapshot_engine.take_snapshot()
-                print("💀 [Aegis Reaper] Compattazione e Snapshot completati.")
+                print(f"💀 [Aegis Reaper] Compattazione ({reclaimed:.2f} MB) e Snapshot completati.")
+                if on_complete: on_complete(reclaimed)
             except Exception as e:
                 print(f"⚠️ [Aegis Reaper] Errore: {e}")
-                
+        
         threading.Thread(target=_compact_bg, daemon=True).start()
 
-    def upsert(self, node: VaultNode):
+    async def upsert(self, node: VaultNode):
         """Inserisce un singolo nodo garantendo la persistenza atomica."""
         start_t = time.time()
-        self.upsert_batch([node])
+        await self.upsert_batch([node])
         dur = (time.time() - start_t) * 1000
         self.logger.log_ingestion(node.id, dur)
+
+    def storage_put(self, node: VaultNode, tier: MemoryTier = MemoryTier.WORKING):
+        """[v8.0 Compatibility Alias] Mappa il vecchio storage_put verso il nuovo sistema di tiering."""
+        if hasattr(self, '_tiers'):
+            self._tiers.put(node, tier=tier)
+            # Sincronizziamo anche in RAM per visibilità immediata
+            self._nodes[str(node.id)] = node
 
     def get_node(self, node_id: str) -> Optional[VaultNode]:
         """
@@ -485,6 +545,34 @@ class NeuralVaultEngine:
         print(f"🗑️ [Engine] Nodo {node_id[:8]} cancellato permanentemente.")
         return True
 
+    def restore_node_from_limbo(self, node_id: str) -> bool:
+        """
+        [v5.1] Recupera un nodo dallo stato WASTE_PENDING (Limbo).
+        Re-instaura il nodo nella Neural Grid attiva (L1).
+        """
+        node_id = str(node_id)
+        node = self._tiers.get(node_id)
+        if node and node.metadata.get("lifecycle_state") == "waste_pending":
+            node.metadata["lifecycle_state"] = "stable"
+            node.metadata.pop("decayed_at", None)
+            
+            with self._lock:
+                self._nodes[node_id] = node
+                self._tiers.put(node, tier=MemoryTier.WORKING)
+                self._prefilter.add_node(node)
+            
+            print(f"♻️ [Limbo] Nodo {node_id[:8]} ripristinato con successo nella memoria attiva.")
+            return True
+        return False
+
+    def get_similar_nodes(self, node_id: str, limit: int = 5) -> list[tuple[str, float]]:
+        """[v6.1] Trova i nodi più simili ad un nodo dato tramite ricerca HNSW."""
+        node = self.get_node(node_id)
+        if not node or node.vector is None: return []
+        results = self._hnsw.search(node.vector, k=limit + 1)
+        # Filtra se stesso dai risultati
+        return [res for res in results if res[0] != str(node_id)]
+
     def protect_node_persistent(self, node_id: str, reason: str = "User Override", rejected_by: str = "user"):
         """Sottomette un nodo alla protezione eterna (v1.1.0 Hardening)."""
         print(f"🧠 [Episodic Memory] Sigillando protezione persistente per {node_id[:8]}...")
@@ -497,6 +585,31 @@ class NeuralVaultEngine:
     def is_node_protected(self, node_id: str) -> bool:
         """Query pubblica per gli agenti: il nodo è protetto? (v1.1.0)."""
         return self._prefilter.is_node_protected(node_id)
+
+
+    def add_relation(self, source_id: str, target_id: str, relation: str, weight: float = 1.0, **kwargs):
+        """
+        [v6.1] Synaptic Forging: Crea un arco semantico tra due nodi.
+        Fondamentale per l'attività autonoma dello Swarm.
+        """
+        source_id = str(source_id)
+        target_id = str(target_id)
+        
+        node = self.get_node(source_id)
+        if node:
+            node.add_edge(target_id, relation, weight, **kwargs)
+            # Salvataggio persistente della nuova sinapsi
+            self.storage_put(node)
+            
+            # [Telemetry] Registra la creazione della sinapsi nel ledger
+            self._prefilter.log_event(
+                event_type="SYNAPSE_CREATED",
+                node_id=source_id,
+                topic=relation,
+                description=f"Sinapsi creata: {source_id[:8]} --({relation})--> {target_id[:8]}"
+            )
+            return True
+        return False
 
 
     def rollback_node(self, node_id: str) -> bool:
@@ -549,7 +662,7 @@ class NeuralVaultEngine:
                             broken_ids.add(edge.target_id)
         return list(broken_ids)
 
-    def upsert_text(self, text, metadata=None, node_id=None):
+    async def upsert_text(self, text: str, collection: str = "default", metadata: Dict = None, node_id: str = None) -> VaultNode:
         """
         v1.3.0: High-Fidelity Semantic Ingestion.
         """
@@ -571,7 +684,7 @@ class NeuralVaultEngine:
             for i in range(len(nodes) - 1):
                 nodes[i].edges.append(SemanticEdge(target_id=nodes[i+1].id, relation=RelationType.SEQUENTIAL))
             
-            self.upsert_batch(nodes)
+            await self.upsert_batch(nodes)
             
             print(f"🧠 [Kernel] Structural Ingest: Created {len(nodes)} logic nodes for {filename}.")
             return nodes[0]
@@ -586,16 +699,28 @@ class NeuralVaultEngine:
                     p_id = f"{node_id or 'doc'}_{int(time.time()) % 1000}_{i}"
                     v = self._embed_text(p)
                     nodes.append(VaultNode(id=p_id, collection=coll, text=p, vector=v, metadata=meta))
-                self.upsert_batch(nodes)
+                await self.upsert_batch(nodes)
                 return nodes[0]
         
         vector = self._embed_text(text)
         coll = meta.get("source", "default")
+        
+        # [v4.3.1] Semantic Evolution Check
+        diff_result = await self.diff_engine.analyze(text, vector)
+        if diff_result.action in ["UPDATE_METADATA", "EVOLVED"]:
+            await self.diff_engine.apply_diff(diff_result, text, meta)
+            return self._nodes.get(diff_result.existing_node_id)
+        
         node = VaultNode(id=node_id or f"node_{uuid.uuid4().hex[:6]}", collection=coll, text=text, vector=vector, metadata=meta)
-        self.upsert(node)
+        await self.upsert(node)
+        
+        # Se era SUPERSEDED, colleghiamo al predecessore
+        if diff_result.action == "SUPERSEDED":
+            self.add_relation(node.id, diff_result.existing_node_id, RelationType.SUPERSEDES)
+            
         return node
 
-    def add_node(self, node_id, text, metadata=None):
+    async def add_node(self, node_id, text, metadata=None):
         """Ingestione atomica con propagazione di tensione avversariale."""
         vector = self._embed_text(text)
         meta = metadata or {}
@@ -615,13 +740,16 @@ class NeuralVaultEngine:
             node.metadata["color"] = "#a855f7"
         
         # Ingestione core (HNSW + Persistenza + Mesh)
-        self.upsert(node)
+        await self.upsert(node)
             
         # 🧪 JANITRON LAB: Propagazione Tensione
-        try:
-            self.lab.propagate_tension(node_id, vector)
-        except Exception:
-            pass
+        if hasattr(self, 'agent007_lab'):
+            try:
+                import asyncio
+                # Background task per non bloccare l'ingestione
+                asyncio.create_task(self.agent007_lab.propagate_tension(node_id, vector))
+            except Exception:
+                pass
         return node
 
     async def upsert_multimodal(self, file_path: str, source_uri: str = None):
@@ -668,12 +796,12 @@ class NeuralVaultEngine:
         
         # 3. Iniezione nel Kernel (HNSW + Memory + Tiers)
         if nodes:
-            self.upsert_batch(nodes)
+            await self.upsert_batch(nodes)
             print(f"🎬 [Multimodal] Ingeriti {len(nodes)} segmenti da {file_path}")
             
         return nodes
 
-    def upsert_batch(self, nodes: list[VaultNode]):
+    async def upsert_batch(self, nodes: list[VaultNode]):
         print(f"🧠 [Kernel] Ingesting batch of {len(nodes)} nodes...")
         
         # --- BACKPRESSURE PROTOCOL (Gap #2) ---
@@ -682,6 +810,9 @@ class NeuralVaultEngine:
         for node in nodes:
             # v1.1.0: ID Fortification
             node.id = str(node.id)
+            if not hasattr(node, 'created_at') or not node.created_at:
+                node.created_at = time.time()
+                
             if node.vector is None:
                 node.vector = self._embed_text(node.text or "")
             
@@ -695,10 +826,43 @@ class NeuralVaultEngine:
             self.consensus.replicate_log(op_type=1, data_summary=node.id)
             self._tiers.put(node, tier=MemoryTier.WORKING)
             
+            # [v4.3.0] Gap #4 & #3: Automatic Classification & Event Logging
+            if "topic_type" not in node.metadata:
+                node.metadata["topic_type"] = self._classify_topic(node.text)
+                
+            self._prefilter.log_event(
+                event_type="NODE_INGESTED",
+                node_id=node.id,
+                topic=node.metadata.get("topic_type", "general"),
+                description=f"Nuova conoscenza acquisita: {node.text[:50]}..."
+            )
+            
+            # [v5.1] Peer-to-Peer Gossip Broadcast
+            if hasattr(self, 'gossip') and self.gossip:
+                # Usiamo create_task per non bloccare il kernel durante il broadcast
+                try:
+                    import asyncio
+                    asyncio.create_task(self.gossip.broadcast_upsert({
+                        "id": node.id,
+                        "text": node.text,
+                        "vector": node.vector.tolist() if hasattr(node.vector, 'tolist') else node.vector,
+                        "metadata": node.metadata,
+                        "collection": node.collection,
+                        "created_at": node.created_at
+                    }))
+                except: pass
+            
         # v14.3: Async Agent007 (Non-blocking ingestion)
         def run_agent007_tasks(node_list):
+            # [v4.1.9] Priority Shift: Wait if active
+            while self.priority_mode:
+                time.sleep(1.0)
+            
             for n in node_list:
                 try:
+                    # Riprova il check se il flag viene attivato durante il loop
+                    if self.priority_mode: break
+                    
                     is_foraging = getattr(n, 'metadata', {}).get('forage_job') is not None
                     use_fast_mode = len(node_list) > 10 or is_foraging
                     self.agent007.extract_entities(n.text, n.id, fast_mode=use_fast_mode)
@@ -717,7 +881,13 @@ class NeuralVaultEngine:
         self.discover_synapses()
 
         # v0.5.2: Batch Metadata Ingestion (Turbo Mode)
-        meta_batch = [(n.id, self.default_collection, n.metadata) for n in nodes]
+        # Assicuriamoci che il testo sia presente nei metadati per l'Archivista (H-RAG)
+        meta_batch = []
+        for n in nodes:
+            m = n.metadata.copy()
+            m['text'] = n.text # Fondamentale per i riassunti delle galassie
+            meta_batch.append((n.id, self.default_collection, m))
+            
         self._prefilter.add_nodes_batch(meta_batch)
 
         # 🏛️ LEDGER COMMIT: Firma il batch per l'integrità Merkle-Tree
@@ -768,12 +938,17 @@ class NeuralVaultEngine:
                         
         print(f"✨ [Dreaming] Evolution complete. {archi_creati} new synapses discovered.")
 
-    def query(self, query_text: str, **kwargs) -> list[QueryResult]:
+    async def query(self, query_text: str, **kwargs) -> list[QueryResult]:
+        print(f"DEBUG: Entering query method with text: {query_text[:30]}...")
         # [PHASE 3] Trigger Entropy Check: Il sistema "sente" se deve sognare
         if hasattr(self, 'entropy_monitor'):
             self.entropy_monitor.check_and_trigger()
             
         start_t = time.time()
+        
+        # [v4.2.0] SPECULATIVE PREFETCH (Latenza Zero)
+        # Avviamo il pre-caricamento asincrono basato sui pattern di accesso precedenti
+        await self.preloader.prefetch(query_text)
 
         
         # v0.5.0 Cross-Modal Logic
@@ -794,7 +969,36 @@ class NeuralVaultEngine:
             print("🛡️ [Security] Privacy Mode attivo: Cifratura query in corso...")
             q_v = self.shield.shield_vector(q_v)
             
-        intent = kwargs.pop('intent', None) or self._query_planner.plan(query_text)
+        # [v4.2.0] Adaptive Routing Decision
+        routing = self._router.route(query_text)
+        self.last_routing = routing
+        
+        # [v4.2.0] SPECULATIVE RAG (Hypothesis Generation)
+        # Se la query è complessa, generiamo un'ipotesi prima di cercare
+        if routing.strategy == RetrievalStrategy.HYBRID and "differenza" in query_text.lower() and hasattr(self, 'orchestrator'):
+            print("🕵️ [Speculative RAG] Generazione ipotesi speculativa per guidare il retrieval...")
+            try:
+                # Usiamo il modello più leggero per una speculazione veloce
+                speculation = await self.orchestrator.get_consensus_response(
+                    f"Genera una breve ipotesi tecnica (max 30 parole) su: {query_text}", 
+                    "Nessun contesto (Speculazione Pura)"
+                )
+                if speculation:
+                    print(f"🕵️ [Speculative RAG] Ipotesi: {speculation[:50]}...")
+                    # Arricchiamo la query con la speculazione per il secondo round
+                    query_text = f"{query_text} (Context Hint: {speculation})"
+                    # Ricalcoliamo il vettore per la query arricchita
+                    q_v = self._embed_text(query_text)
+            except Exception as e:
+                print(f"⚠️ [Speculative RAG] Fallimento speculazione: {e}")
+        intent = kwargs.pop('intent', None)
+        if intent is None:
+            if routing.strategy == RetrievalStrategy.RELATIONAL:
+                intent = QueryIntent.RELATIONAL
+            else:
+                intent = QueryIntent.HYBRID
+        
+        kwargs['routing'] = routing
 
         # [v3.6.0] Advanced Scalar Filtering & Logical Namespacing
         namespace = kwargs.pop('namespace', None)
@@ -821,7 +1025,36 @@ class NeuralVaultEngine:
             kwargs['filter_ids'] = allowed_ids
             print(f"🏰 [Namespace Filter] Found {len(allowed_ids)} nodes in '{namespace or 'any'}' matching filters.")
 
-        results = self._query_internal(query_text, q_v, intent, **kwargs)
+        # 1. Ricerca Interna iniziale
+        results = await self._query_internal(query_text, q_v, intent, **kwargs)
+        
+        # [v4.2.0] Corrective RAG (CRAG) Trigger
+        # Se il punteggio del miglior risultato è basso, proviamo ad arricchire dal Web via SkyWalker
+        if results and results[0].final_score < 0.35 and hasattr(self, 'orchestrator') and self.orchestrator:
+            print("🔍 [CRAG] Rilevato gap di conoscenza locale. Attivazione Skywalker per Intel Esterna...")
+            skywalker = self.orchestrator.agents.get("FS-77")
+            if skywalker:
+                try:
+                    # Eseguiamo la ricerca web via SkyWalker (Async)
+                    external_intel = await skywalker.targeted_search(query_text)
+                    if external_intel:
+                        print(f"🛰️ [CRAG] Ricevuta Intel Esterna ({len(external_intel)} bytes). Iniezione temporanea e re-ranking...")
+                        # Creiamo un nodo "virtuale" o temporaneo per la generazione
+                        from index.node import VaultNode
+                        temp_node = VaultNode(id=f"temp_crag_{uuid.uuid4().hex[:8]}", text=external_intel, collection="crag_cache")
+                        temp_res = QueryResult(node=temp_node, final_score=0.8, path="crag_external")
+                        results.append(temp_res)
+                        # Re-ranker con i nuovi dati
+                        results = self._ranker.fuse(
+                            dense_results=[(r.node.id, 1.0 - r.dense_score) for r in results if r.path != "crag_external"],
+                            sparse_results=[], 
+                            graph_results=[(r.node.id, r.graph_score) for r in results if r.path != "crag_external"],
+                            nodes={**self._nodes, temp_node.id: temp_node},
+                            query_text=query_text,
+                            top_k=kwargs.get('k', 10)
+                        )
+                except Exception as e:
+                    print(f"⚠️ [CRAG] Errore durante la ricerca correttiva: {e}")
         
         # v0.5.0 Cognitive Scoring (Ebbinghaus Decay)
         now = time.time()
@@ -852,8 +1085,48 @@ class NeuralVaultEngine:
             self._prefilter.hit_node(res.node.id)
             res.node.touch()
 
+            # [v4.3.0] Gap #4: Temporal Confidence
+            from datetime import datetime
+            source_ts = res.node.metadata.get("source_date") or res.node.created_at
+            if isinstance(source_ts, (int, float)):
+                source_date = datetime.fromtimestamp(source_ts)
+            else:
+                source_date = datetime.now()
+                
+            res.temporal_confidence = self.temporal_engine.compute_confidence(
+                source_date, 
+                res.node.metadata.get("topic_type", "general")
+            )
+
+        # [v4.2.0] CORRECTIVE RAG (CRAG)
+        # Se i risultati sono poveri (< 0.4 score) o assenti, attiviamo il recupero correttivo
+        is_context_poor = not results or results[0].final_score < 0.45
+        
+        if is_context_poor and hasattr(self, 'orchestrator'):
+            print(f"📡 [CRAG] Low confidence retrieval ({results[0].final_score if results else 0:.2f}). Triggering knowledge expansion...")
+            try:
+                # Incursione rapida via Skywalker Agent (FS-77)
+                await self.orchestrator.forage_web_topic(query_text)
+                # Rieseguiamo la query (una sola volta per evitare loop)
+                results = await self._query_internal(query_text, q_v, intent, **kwargs)
+                if results:
+                    print(f"✅ [CRAG] Knowledge gap filled. New best score: {results[0].final_score:.2f}")
+                else:
+                    print(f"⚠️ [CRAG] Expansion completed but no relevant nodes found for: {query_text[:50]}")
+            except Exception as e:
+                print(f"⚠️ [CRAG] Expansion failed: {e}")
+                # [v5.0] Graceful Fallback: Segnaliamo il fallimento nel logger dei risultati
+                if results:
+                    for r in results:
+                        r.node.metadata["expansion_warning"] = f"Web foraging failed: {str(e)}"
+
         dur_ms = (time.time() - start_t) * 1000
-        self.logger.log_query(intent, dur_ms, len(results))
+        self.logger.log_query(routing, dur_ms, len(results))
+        
+        # [v4.2.0] Train Speculative Preloader
+        if results:
+            self.preloader.record_access(query_text, results[0].node.id)
+            
         return sorted(results, key=lambda x: x.final_score, reverse=True)
 
     def get_synapse_count(self) -> int:
@@ -882,6 +1155,7 @@ class NeuralVaultEngine:
         all_edges = []
         node_positions = {}
         color_zones = {}
+        heat_zones_acc = {} # [v4.1.4] Accumulatore densità
         next_zone_idx = 0
 
         # ── Campionamento Sicuro ──────────────────────────────────────────
@@ -942,13 +1216,26 @@ class NeuralVaultEngine:
                     z_pos = 1 - ((next_zone_idx % 40) / 40.0) * 2 
                     radius = max(0.01, (1 - min(1.0, z_pos * z_pos)) ** 0.5)
                     
-                    # 450,000 scale (50% increase from 300,000)
+                    # 450,000 scale
                     color_zones[color1] = (
                         radius * np.cos(phi) * 450000,
                         z_pos * 450000,
                         radius * np.sin(phi) * 450000
                     )
                     next_zone_idx += 1
+
+                # ── HEATMAP DENSITY ENGINE ──────────────────────────────────────
+                # [v4.1.4] Grouping by color/zone to calculate cluster density
+                if color1 not in heat_zones_acc:
+                    heat_zones_acc[color1] = {"pos": np.array([0.0, 0.0, 0.0]), "count": 0, "intensity": 0.0}
+                
+                # Offset zone + local PCA projection
+                z_pos = color_zones[color1]
+                node_pos = np.array([z_pos[0] + p_vec[0]*120000, z_pos[1] + p_vec[1]*120000, z_pos[2] + p_vec[2]*120000])
+                
+                heat_zones_acc[color1]["pos"] += node_pos
+                heat_zones_acc[color1]["count"] += 1
+                heat_zones_acc[color1]["intensity"] += node_opacity
 
                 # v11.6: Dynamic Scaling (Safe Range: 50,000 - 150,000)
                 # Reduced from 450k to ensure the nodes don't fly past the camera far plane
@@ -981,6 +1268,7 @@ class NeuralVaultEngine:
                     "x": x, "y": y, "z": z,
                     "color": node_color,
                     "opacity": node_opacity,
+                    "confidence": float(node_opacity),
                     "theme": cluster_key,
                     "label": (n.text[:40] + "...") if n.text else "...",
                     "created_at": n.created_at,
@@ -1041,17 +1329,29 @@ class NeuralVaultEngine:
 
         # 🚀 [v14.5] PRIORITIZZAZIONE: Le Aura vanno sempre in testa e aumentiamo il sample totale
         all_edges = aura_edges + standard_edges
+
+        # ── Finalizzazione Heat Zones ─────────────────────────────────────
+        final_heat_zones = []
+        for color, data in heat_zones_acc.items():
+            if data["count"] > 0:
+                avg_pos = data["pos"] / data["count"]
+                final_heat_zones.append({
+                    "x": float(avg_pos[0]),
+                    "y": float(avg_pos[1] + 1000000), # Allineamento Nebula
+                    "z": float(avg_pos[2]),
+                    "intensity": float(data["intensity"] / data["count"]),
+                    "count": data["count"],
+                    "color": color
+                })
         
         res = {
             "nodes_count": len(self._nodes),
             "edges_count": len(all_edges),
             "point_cloud": point_cloud,
             "edge_sample": all_edges[:3000], # Incrementato da 1000 a 3000
-            "heatmap": self.lab._compute_semantic_heatmap(self._nodes) if hasattr(self, 'lab') else {}
+            "heatmap": final_heat_zones
         }
         self._stats_cache = {"time": now, "data": res}
-        # print(f"📡 [Stats v14.5] {len(point_cloud)} punti | {len(aura_edges)} Aura | {len(standard_edges)} Stnd")
-        pass
         return res
 
 
@@ -1069,9 +1369,15 @@ class NeuralVaultEngine:
         to_prune = all_ids[:(len(self._nodes) - max_nodes)]
         
         for nid in to_prune:
-            # Assicuriamoci che siano nel Tier persistente prima di rimuoverli dall'attivo
-            node = self._nodes.pop(nid)
-            self._tiers.put(node, tier=MemoryTier.EPISODIC)
+            # 🏺 [v5.1] Semantic Trash Bin Logic
+            # Invece di rimuoverli e basta, li marchiamo come WASTE_PENDING (Limbo)
+            node = self._nodes.pop(nid, None)
+            if node:
+                node.metadata["lifecycle_state"] = "waste_pending"
+                node.metadata["decayed_at"] = time.time()
+                # Lo spostiamo nel tier persistente (Episodic) ma rimane accessibile per il recupero
+                self._tiers.put(node, tier=MemoryTier.EPISODIC)
+                self._prefilter.add_node(node) # Aggiorna lo stato nel database metadati
             
         print(f"✅ [Decay] Memory optimized. Current active: {len(self._nodes)}")
 
@@ -1112,28 +1418,65 @@ class NeuralVaultEngine:
         if found_links > 0:
             print(f"🧬 [Global-Scan] Cursor: {start}/{total} | New Links: {found_links}")
 
-    def _query_internal(self, query_text, query_vector, intent, **kwargs):
-        k = kwargs.get('k', 10)
+    async def _query_internal(self, query_text, query_vector, intent, **kwargs):
+        k = kwargs.get('k', kwargs.get('top_k', 10))
         ef = kwargs.get('ef', 50)
         allowed_ids = kwargs.get('filter_ids')
+        routing = kwargs.get('routing')
+        
         if allowed_ids is not None and not isinstance(allowed_ids, set):
             allowed_ids = set(allowed_ids)
 
+        # 1. DENSE SEARCH (HNSW / TurboQuant)
+        dense_res = []
+        
+        # [v4.2.0] Check Speculative Preloader Buffer first
+        # Se i nodi sono nel buffer (caricati asincronicamente), li iniettiamo
+        prefetched = await self.preloader.get_all_prefetched()
+        for nid in prefetched:
+            dense_res.append((nid, 0.1)) # Punteggio eccellente per nodo pre-caricato
+        
         if self._tq_search and not kwargs.get('use_progressive', True):
-            # v3.7.0: TurboQuant v2 Stage 1 + 2
-            dense_res = self._tq_search.search(query_vector, k=k*3, filter_ids=allowed_ids)
+            dense_res += self._tq_search.search(query_vector, k=k*3, filter_ids=allowed_ids)
         else:
-            dense_res = self._hnsw.search(query_vector, k=k*2, ef=ef)
+            dense_res += self._hnsw.search(query_vector, k=k*2, ef=ef)
             if allowed_ids:
                 dense_res = [r for r in dense_res if r[0] in allowed_ids]
+        
+        # 2. SPARSE SEARCH (BM25) - [v4.2.0] Modular activation
+        sparse_res = []
+        if routing and routing.strategy in [RetrievalStrategy.HYBRID, RetrievalStrategy.LEXICAL]:
+            # Calcolo dinamico dello score BM25 se non pre-calcolato o se richiesto
+            query_sparse = self._sparse.encode_query(query_text)
+            # Cerchiamo solo nei nodi vicini densi per velocità, o in tutto il vault se k è piccolo
+            target_nodes = [self._nodes[r[0]] for r in dense_res if r[0] in self._nodes]
+            doc_sparses = [(n.id, n.sparse_vector if n.sparse_vector else self._sparse.encode_document(n.text)) for n in target_nodes]
+            sparse_res = self._sparse.batch_search(query_sparse, doc_sparses, top_k=k)
+
+        # 3. GRAPH SEARCH (RELATIONAL Expansion)
         graph_res = []
-        if intent == QueryIntent.RELATIONAL and dense_res:
-            seed_ids = [r[0] for r in dense_res]
-            seed_scores = {r[0]: 1.0 - r[1] for r in dense_res}
-            # v3.9.5: Conversione GraphTraversalNode -> (id, score) per FusionRanker
+        if routing.strategy == RetrievalStrategy.RELATIONAL and dense_res:
+            print("🔗 [Graph] Relational Incursion attiva: esplorazione vicini...")
+            seed_ids = [r[0] for r in dense_res[:3]] # Prendiamo i top 3 semi
+            seed_scores = {r[0]: 1.0 - r[1] for r in dense_res[:3]}
             graph_raw = self._get_graph().expand(seed_ids, seed_scores=seed_scores, max_hops=1)
-            graph_res = [(gr.node_id, gr.score) for gr in graph_raw]
-        return self._ranker.fuse(dense_results=dense_res, sparse_results=[], graph_results=graph_res, nodes=self._nodes, query_text=query_text, top_k=k)
+            graph_res = [(gr.node_id, gr.score * 1.2) for gr in graph_raw] # Bonus relazionale
+            
+        # 4. FUSION & RERANKING
+        # Passiamo l'alpha suggerito dal router
+        alpha = routing.alpha if routing else 0.7
+        use_reranker = routing.use_reranker if routing else True
+        
+        return self._ranker.fuse(
+            dense_results=dense_res, 
+            sparse_results=sparse_res, 
+            graph_results=graph_res, 
+            nodes=self._nodes, 
+            query_text=query_text, 
+            top_k=k,
+            alpha_override=alpha,
+            reranker_override=use_reranker
+        )
 
     def feedback(self, node_id: str, success: bool = True):
         node = self._nodes.get(node_id)
@@ -1141,6 +1484,16 @@ class NeuralVaultEngine:
             impact = 0.15 if success else -0.10
             self._tq_search.quantizer.update_daba_resolutions(np.abs(node.vector) * impact)
             
+    def _classify_topic(self, text: str) -> str:
+        """[v4.3.0] Classificatore euristico per Temporal Confidence."""
+        text = text.lower()
+        if any(w in text for w in ["python", "code", "def ", "class ", "api", "framework"]): return "code"
+        if any(w in text for w in ["version", "stable", "release", "update", "patch"]): return "technology"
+        if any(w in text for w in ["price", "usd", "eur", "cost", "market"]): return "prices"
+        if any(w in text for w in ["research", "study", "paper", "science"]): return "science"
+        if any(w in text for w in ["century", "ancient", "history", "dynasty"]): return "history"
+        return "general"
+
     def _embed_text(self, text: str) -> np.ndarray:
         dtype = np.float16 if self.use_float16 else np.float32
         if self._embedder_fn: return np.array(self._embedder_fn(text), dtype=dtype)
@@ -1171,10 +1524,19 @@ class NeuralVaultEngine:
             if node.vector is not None:
                 v = node.vector
                 # Lite PCA/Projection logic
+                # [v4.3.1] Calcolo Temporal Confidence (Ritenzione Ebbinghaus)
+                confidence = 1.0
+                if hasattr(node, 'decay_profile'):
+                    from memory_decay import EbbinghausDecay
+                    decay = EbbinghausDecay()
+                    confidence = decay.calculate_retention(node.decay_profile)
+                
                 projections.append({
                     "id": str(node.id),
                     "u": float(np.sum(v[:512])),
-                    "v": float(np.sum(v[512:]))
+                    "v": float(np.sum(v[512:])),
+                    "confidence": confidence,
+                    "topic": node.metadata.get("topic_type", "general")
                 })
         return projections
 
@@ -1199,11 +1561,11 @@ class NeuralVaultEngine:
                 "clusters_count": len(set(n.collection for n in self._nodes.values() if n.collection and n.collection != 'default')),
                 "classes": sum(1 for n in self._nodes.values() if n.metadata.get("kind") == "class"),
                 "functions": sum(1 for n in self._nodes.values() if n.metadata.get("kind") == "function"),
-                "hit_rate": f"{hit_rate:.2f}%",
-                "active_agents": len(self.lab.agents) if hasattr(self, 'lab') else 0
+                "active_learning": 1.0 if hasattr(self, 'active_learning') else 0.0,
+                "active_agents": len(self.orchestrator.agents) if hasattr(self, 'orchestrator') else 0
             }
 
-    def evolve_graph(self, dry_run: bool = False, limit: int = 500, offset: int = 0) -> Any:
+    async def evolve_graph(self, dry_run: bool = False, limit: int = 500, offset: int = 0) -> Any:
         """
         [Phase 2 Sovereign Evolution] Esegue il Fact Mining accelerato per un sottoinsieme di nodi.
         limit: Numero massimo di nodi da scansionare in questo turno.
@@ -1222,7 +1584,7 @@ class NeuralVaultEngine:
             if not node or node.vector is None: continue
             
             # Fact Mining via HNSW (Limitato ai risultati più forti)
-            cands = self.query("", query_vector=node.vector, k=4) 
+            cands = await self.query("", query_vector=node.vector, k=4) 
             for cand in cands:
                 if cand.node.id == node.id: continue
                 # Soglia di evoluzione: Ottimizzata per Apple Silicon (v14.5 Upgrade)
@@ -1313,7 +1675,6 @@ class NeuralVaultEngine:
             node_id=f"vault_reset_{uuid.uuid4().hex[:4]}",
             data_dir=str(self.data_dir / "consensus")
         )
-            
         self.logger.info("✅ Vault is now a Tabula Rasa. Ready for new consciousness.")
 
     def remove_node(self, node_id: str):
@@ -1341,3 +1702,25 @@ class NeuralVaultEngine:
         if self._prefilter: self._prefilter.close()
         if self._tiers: self._tiers.close()
         if hasattr(self, 'agent007') and self.agent007: self.agent007.close()
+
+    async def trigger_deep_sleep(self, force: bool = False):
+        """[v5.0] Trigger manuale del ciclo Deep Sleep (Compattazione + Snapshot)."""
+        print(f"💤 [Deep-Sleep] Inizio ciclo di consolidamento fisico (Force={force})...")
+        try:
+            # 1. Snapshot di Sicurezza (Parquet + JSON)
+            if hasattr(self, 'snapshot_engine'):
+                await self.snapshot_engine.create_snapshot()
+            
+            # 2. Compattazione AOBF (Atomic Object Binary Format)
+            if hasattr(self._tiers, 'compact_physical_storage'):
+                await self._tiers.compact_physical_storage()
+            
+            # 3. Garbage Collection aggressiva
+            import gc
+            gc.collect()
+            
+            print("✅ [Deep-Sleep] Ciclo completato. Vault stabilizzato e protetto.")
+            return True
+        except Exception as e:
+            print(f"❌ [Deep-Sleep] Errore durante il consolidamento: {e}")
+            return False

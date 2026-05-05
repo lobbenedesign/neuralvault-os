@@ -29,6 +29,7 @@ class GossipNode:
         self.shared_key: Optional[bytes] = None
         self.last_seen = time.time()
         self.is_active = True
+        self.paused = False
 
 class GossipManager:
     def __init__(self, local_node_id: str, crypto=None):
@@ -38,6 +39,12 @@ class GossipManager:
         self.logger = logging.getLogger("Mesh-Gossip")
         self.client = httpx.AsyncClient(timeout=5.0)
         self._sync_queue = asyncio.Queue()
+
+    def toggle_pause(self, node_id: str, paused: bool):
+        if node_id in self.peers:
+            self.peers[node_id].paused = paused
+            state = "SOSPESO" if paused else "ATTIVO"
+            self.logger.info(f"⏸️ Gossip verso {node_id} {state}.")
 
     def add_peer(self, node_id: str, address: str, public_key: str = None):
         """Aggiunge o aggiorna un peer nella mesh."""
@@ -55,11 +62,16 @@ class GossipManager:
             self.logger.info(f"🤝 [Mesh] Nuovo peer rilevato: {node_id} @ {address}")
             self.peers[node_id] = GossipNode(node_id, address, public_key)
 
+    def remove_peer(self, node_id: str):
+        if node_id in self.peers:
+            del self.peers[node_id]
+            self.logger.info(f"🗑️ [Mesh] Peer rimosso dal Gossip: {node_id}")
+
     async def broadcast_upsert(self, node_data: Dict):
         """Invia un nuovo nodo a tutti i peer conosciuti (Fan-out)."""
         tasks = []
         for peer in self.peers.values():
-            if peer.is_active:
+            if peer.is_active and not getattr(peer, 'paused', False):
                 # Creiamo un segnale specifico per ogni peer (se cifrato)
                 tasks.append(self._send_signal_to_peer(peer, "upsert", node_data))
         

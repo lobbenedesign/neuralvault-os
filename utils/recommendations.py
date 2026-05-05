@@ -34,7 +34,8 @@ class SovereignRecommendationEngine:
         "evolution_suggestions": "llama3.3:7b",
         "court_judge_1": "llama3.3:7b",
         "court_judge_2": "deepseek-r1:14b",
-        "court_judge_3": "phi3.5:latest"
+        "court_judge_3": "phi3.5:latest",
+        "wiki_synthesis": "qwen3.5:7b"
     }
 
     def __init__(self, installed_models: List[str]):

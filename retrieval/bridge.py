@@ -1,5 +1,6 @@
 import os
 import hashlib
+import time
 from pathlib import Path
 from typing import List, Dict
 import numpy as np
@@ -8,11 +9,12 @@ class LatentBridge:
     """🔗 [Super-Synapse] Collega la documentazione web al codice sorgente locale.
     Ridenominato da CodeDocBridger per compatibilità con il Kernel v0.5.0.
     """
-    def __init__(self, vault=None, project_root=None, **kwargs):
+    def __init__(self, vault=None, project_root=None, settings=None, **kwargs):
         self.vault = vault
-        # Se project_root è None, disattiviamo la scansione della codebase locale
+        self.settings = settings
+        # Se project_root è None o codebase_bridging è OFF, disattiviamo la scansione
         self.project_root = Path(project_root) if project_root else None
-        self.code_signatures = self._scan_codebase() if self.project_root else {}
+        self.code_signatures = self._scan_codebase() if (self.project_root and self.settings and self.settings.get("codebase_bridging", False)) else {}
         self.unified_dim = kwargs.get("unified_dim", 1024)
 
     def _scan_codebase(self) -> Dict[str, Path]:
@@ -56,14 +58,20 @@ class LatentBridge:
         return "\n".join(body[:50]) # Limite per evitare nodi giganteschi legati a file enormi
 
     def ingest_codebase(self):
-        """Versione v2.5.1: Ingestione proattiva con re-scan delle signature."""
+        """Versione v2.5.1: Ingestione proattiva con re-scan delle signature (Rispettando il Toggle)."""
         if not self.vault or not self.project_root: return
         
+        # 🛡️ [Proprioception Toggle] Verifica se l'utente vuole che il sistema guardi se stesso
+        if self.settings and not self.settings.get("codebase_bridging", False):
+            return
+            
         # 🔄 Re-scan signatures to find new functions/classes
         self.code_signatures = self._scan_codebase()
         
         print(f"🏗️ [Bridge] Ingestione codebase granulare da {self.project_root}...")
         nodes_created = 0
+        nodes_updated = 0
+        
         for name, path in self.code_signatures.items():
             try:
                 content = path.read_text()
@@ -74,22 +82,38 @@ class LatentBridge:
                         body = self._extract_body(lines, i)
                         break
                 
-                node_id = f"src_{hashlib.md5(name.encode()).hexdigest()[:8]}"
+                # ID univoco basato su nome e percorso relativo per evitare collisioni tra file diversi
+                rel_path = str(path.relative_to(self.project_root))
+                node_id = f"src_{hashlib.md5(f'{rel_path}:{name}'.encode()).hexdigest()[:10]}"
+                
+                text_content = f"SOURCE_CODE_SIGNATURE [{name.upper()}]\nFILE: {path.name}\nPATH: {rel_path}\n\n{body}"
+                
                 if node_id not in self.vault._nodes:
                     self.vault.add_node(
                         node_id, 
-                        f"SOURCE_CODE_SIGNATURE [{name.upper()}]\nFILE: {path.name}\n\n{body}", 
+                        text_content, 
                         metadata={
-                            "source": str(path.relative_to(self.project_root)),
+                            "source": rel_path,
                             "origin": "local_bridge",
+                            "context": "proprioception", # 🧠 Isolamento semantico
                             "type": "code_signature",
                             "name": name,
                             "color": "#3b82f6" 
                         }
                     )
                     nodes_created += 1
+                else:
+                    # 🧬 [v4.1.4] Aggiornamento del contenuto se cambiato (Propriocezione Dinamica)
+                    existing_node = self.vault._nodes[node_id]
+                    if existing_node.text != text_content:
+                        existing_node.text = text_content
+                        # Innesca la rinfrescata del vettore se necessario (verrà fatto dallo swarm)
+                        existing_node.metadata["updated_at"] = time.time()
+                        nodes_updated += 1
             except: pass
-        print(f"✅ [Bridge] Codebase sincronizzata: {nodes_created} nuovi nodi sorgente.")
+            
+        report = f"✅ [Bridge] Codebase sincronizzata: {nodes_created} nuovi, {nodes_updated} aggiornati."
+        print(report)
 
     def _bridge_nodes_legacy(self, target_vault) -> int:
         """Fallback: Matching testuale se i vettori non sono disponibili."""
@@ -121,7 +145,11 @@ class LatentBridge:
         """🔗 [CB-003 Upgrade] Semantic Bridging: Collega codice e docs tramite similarità vettoriale."""
         target_vault = vault or self.vault
         if not target_vault: return 0
-        
+
+        # 0. [v4.1.4] Proprioception Check: Se il toggle è OFF, non creiamo ponti semantici col codice
+        if self.settings and not self.settings.get("codebase_bridging", False):
+            return 0
+
         # 1. Triage dei Nodi (Web vs Local Code)
         web_nodes = [n for n in target_vault._nodes.values() if n.metadata.get("origin") == "web_forager" and n.vector is not None]
         src_nodes = [n for n in target_vault._nodes.values() if n.metadata.get("origin") == "local_bridge" and n.vector is not None]
@@ -147,6 +175,14 @@ class LatentBridge:
             snode = src_nodes[s_idx]
             score = float(sim_matrix[w_idx, s_idx])
             
+            # 3. [v4.1.4] Contextual Isolation: Impediamo il bridging tra Codice e Documenti Utente
+            # se appartengono a contesti incompatibili (es. propriocezione vs libri)
+            w_context = wnode.metadata.get("context", "user")
+            s_context = snode.metadata.get("context", "proprioception")
+            
+            if w_context != s_context:
+                continue
+
             # Evita duplicati
             if any(e.target_id == snode.id for e in wnode.edges):
                 continue

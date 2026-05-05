@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Aura Bridge - NeuralVault",
+  "version": "0.1.0",
+  "description": "Invia contenuti web direttamente al tuo NeuralVault locale.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "host_permissions": ["http://localhost:8001/*"]
+}

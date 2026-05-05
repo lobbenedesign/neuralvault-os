@@ -4,6 +4,7 @@ import py_compile
 import logging
 from pathlib import Path
 from typing import Dict, Optional
+from security.ast_shield import ASTSafetyShield
 
 logger = logging.getLogger("NeuralVault-Actuator")
 
@@ -18,8 +19,14 @@ class EvolutionActuator:
 
     def apply_fix(self, file_path: str, line_number: int, new_content: str) -> Dict:
         """
-        Applica chirurgicamente una modifica a un file .py.
+        Applica chirurgicamente una modifica a un file .py e convalida tramite Test Suite.
         """
+        # --- [SANDBOX STAGE 0] AST PARRY SHIELD ---
+        is_safe, reason = ASTSafetyShield.is_safe(new_content)
+        if not is_safe:
+            logger.warning(f"🛑 [Security Violation] Agent proposed unsafe code: {reason}")
+            return {"success": False, "error": f"Security Shield Violation: {reason}"}
+
         full_path = self.root / file_path
         if not full_path.exists():
             return {"success": False, "error": f"File {file_path} not found."}
@@ -31,31 +38,75 @@ class EvolutionActuator:
             # Backup temporaneo per validazione
             temp_path = full_path.with_suffix(".py.tmp")
             
-            # Applicazione modifica (Se line_number è 0, aggiungiamo in fondo o cerchiamo match)
+            # Applicazione modifica
             if 0 < line_number <= len(lines):
-                # Sostituzione riga specifica (1-indexed)
                 lines[line_number - 1] = new_content + "\n"
             else:
-                # Fallback: Append se non specificata riga valida
                 lines.append("\n" + new_content + "\n")
 
             with open(temp_path, "w") as f:
                 f.writelines(lines)
 
-            # --- VALIDAZIONE SINTATTICA ---
+            # --- [SANDBOX STAGE 1] VALIDAZIONE SINTATTICA ---
             try:
                 py_compile.compile(str(temp_path), doraise=True)
             except py_compile.PyCompileError as e:
                 if temp_path.exists(): os.remove(temp_path)
-                return {"success": False, "error": f"Syntax Error in suggested code: {e}"}
+                return {"success": False, "error": f"Syntax Error: {e}"}
 
-            # Se valida, sovrascriviamo l'originale
+            # --- [SANDBOX STAGE 2] INTEGRITY TEST SUITE ---
+            # Applichiamo la modifica temporaneamente per far girare i test sul sistema "reale"
+            backup_path = full_path.with_suffix(".py.bak")
+            os.replace(full_path, backup_path)
             os.replace(temp_path, full_path)
-            logger.info(f"✅ [Actuator] Fix applied successfully to {file_path}")
-            return {"success": True, "file": file_path}
+            
+            test_results = self.run_integrity_tests()
+            
+            if not test_results["success"]:
+                # ROLLBACK IMMEDIATO: i test sono falliti
+                os.replace(backup_path, full_path)
+                return {"success": False, "error": f"Integrity Test Failed: {test_results['error']}"}
+            
+            # Se valida, confermiamo e rimuoviamo il backup
+            if backup_path.exists(): os.remove(backup_path)
+            logger.info(f"✅ [Actuator] Fix applied and VERIFIED via Test Suite: {file_path}")
+            return {"success": True, "file": file_path, "test_output": test_results.get("output")}
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def run_integrity_tests(self, timeout: int = 30) -> Dict:
+        """
+        🛡️ [AGENTIC ACTUATOR SANDBOX]
+        Esegue la suite di test in un sottoprocesso isolato con timeout.
+        Previene loop infiniti o crash del Kernel durante la validazione.
+        """
+        import subprocess
+        try:
+            # Cerchiamo di usare pytest se disponibile, altrimenti unittest
+            test_file = "tests/test_engine_core.py"
+            cmd = [sys.executable, "-m", "pytest", test_file]
+            
+            logger.info(f"🧪 [Sandbox] Running Integrity Tests: {' '.join(cmd)}")
+            
+            # Esecuzione isolata con timeout
+            process = subprocess.run(
+                cmd, 
+                cwd=self.root, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout
+            )
+            
+            if process.returncode == 0:
+                return {"success": True, "output": process.stdout}
+            else:
+                return {"success": False, "error": process.stderr or process.stdout}
+                
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "Test Suite TIMEOUT: Code modification may have caused an infinite loop."}
+        except Exception as e:
+            return {"success": False, "error": f"Sandbox Execution Error: {str(e)}"}
 
     def dry_run_diff(self, file_path: str, line_number: int, new_content: str) -> Optional[str]:
         """Genera un'anteprima (diff) della modifica senza applicarla."""

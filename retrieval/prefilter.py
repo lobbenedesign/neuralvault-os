@@ -8,6 +8,8 @@ Permette ricerche SQL-like ultra-veloci (Fisicamente pronti per un milione di no
 import duckdb
 import pandas as pd
 import threading
+import os
+import shutil
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -26,8 +28,17 @@ class DuckDBPrefilter:
                 self.con.execute("CHECKPOINT;")
                 print("🦆 [DuckDB] Hyper-Optimization Active (Checkpoint/WAL consolidation).")
             except Exception as e:
+                error_str = str(e).lower()
                 print(f"⚠️ [Prefilter] WAL Conflict or Internal Error: {e}")
                 db_file = str(db_path / "vault_metadata.db")
+                
+                # [v4.3.1] Lock Awareness: Do NOT delete DB if it's just a lock conflict
+                if "lock" in error_str or "process" in error_str:
+                    print(f"🛑 [Prefilter] CRITICAL: Database is LOCKED by another process.")
+                    print(f"👉 Please ensure no other instances of NeuralVault are running (Check PID mentioned above).")
+                    # In questo caso non resettiamo nulla, lasciamo che il sistema fallisca o aspetti
+                    raise e
+
                 import os
                 wal_path = f"{db_file}.wal"
                 if os.path.exists(wal_path):
@@ -84,12 +95,43 @@ class DuckDBPrefilter:
                 PRIMARY KEY (agent_id, counter_name)
             )
         """)
+
+        # 📅 Sovereign Knowledge Ledger (v4.3.0)
+        self.con.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_events (
+                timestamp TIMESTAMP DEFAULT now(),
+                event_type VARCHAR,
+                topic_cluster VARCHAR,
+                node_id VARCHAR,
+                description TEXT
+            )
+        """)
         
         # Migrazione schema se necessario (v0.5.5 Deduplication + v1.1.0 Lifecycle)
+        # 🌌 Hierarchical GraphRAG: Community Table (v6.0)
+        self.con.execute("""
+            CREATE TABLE IF NOT EXISTS neural_communities (
+                id VARCHAR PRIMARY KEY,
+                level INTEGER DEFAULT 1,
+                title VARCHAR,
+                summary TEXT,
+                key_concepts JSON,
+                node_count INTEGER,
+                created_at TIMESTAMP DEFAULT now(),
+                last_updated TIMESTAMP DEFAULT now(),
+                metadata JSON
+            )
+        """)
+
         try:
             cols = self.con.execute("PRAGMA table_info('vault_metadata')").fetchall()
             col_names = [c[1] for c in cols]
             
+            if 'community_id' not in col_names:
+                print("🌌 [v6.0] Inizializzazione Gerarchia: Aggiunta colonna Community ID...")
+                self.con.execute("ALTER TABLE vault_metadata ADD COLUMN community_id VARCHAR")
+                self.con.execute("CREATE INDEX IF NOT EXISTS idx_community ON vault_metadata(community_id)")
+
             if 'lifecycle_state' not in col_names:
                 print("🔄 [v1.1.0] Aggiunta colonna Lifecycle State...")
                 self.con.execute("ALTER TABLE vault_metadata ADD COLUMN lifecycle_state VARCHAR DEFAULT 'stable'")
@@ -167,6 +209,13 @@ class DuckDBPrefilter:
             (node_id,)
         )
 
+    def log_event(self, event_type: str, node_id: str, topic: str, description: str):
+        """[v4.3.0] Registra un evento nel ledger temporale per la Knowledge Timeline."""
+        self.execute(
+            "INSERT INTO knowledge_events (event_type, node_id, topic_cluster, description) VALUES (?, ?, ?, ?)",
+            (event_type, node_id, topic, description)
+        )
+
     def delete(self, node_id: str) -> bool:
         """Rimuove permanentemente un nodo dai metadati DuckDB."""
         try:
@@ -189,6 +238,29 @@ class DuckDBPrefilter:
 
     def count(self) -> int:
         return self.execute("SELECT count(*) FROM vault_metadata").fetchone()[0]
+
+    def query_nodes(self, sql_where: str, limit: int = 100) -> List[Dict]:
+        """[v5.1] Esegue una query complessa e restituisce i dati completi del nodo (id, text, metadata)."""
+        try:
+            # Recuperiamo i dati e il testo dal tier EPISODIC (che contiene il backup dei nodi in Limbo)
+            query = f"""
+                SELECT m.id, m.metadata, m.lifecycle_state 
+                FROM vault_metadata m 
+                WHERE {sql_where} 
+                LIMIT {limit}
+            """
+            res = self.execute(query).fetchall()
+            nodes = []
+            for r in res:
+                nodes.append({
+                    "id": r[0],
+                    "metadata": json.loads(r[1]) if isinstance(r[1], str) else r[1],
+                    "lifecycle_state": r[2]
+                })
+            return nodes
+        except Exception as e:
+            print(f"⚠️ Errore nel query_nodes: {e}")
+            return []
 
     # --- v1.1.0: Lifecycle & Episodic Memory ---
     
@@ -272,3 +344,29 @@ class DuckDBPrefilter:
         if self.con:
             self.con.close()
             self.con = None
+    def get_audit_stats(self) -> Dict:
+        """Estrae statistiche di integrità e performance dal database analitico."""
+        try:
+            total_nodes = self.execute("SELECT COUNT(*) FROM vault_metadata").fetchone()[0]
+            total_events = self.execute("SELECT COUNT(*) FROM knowledge_events").fetchone()[0]
+            last_event = self.execute("SELECT MAX(timestamp) FROM knowledge_events").fetchone()[0]
+            namespaces = self.execute("SELECT COUNT(DISTINCT namespace) FROM vault_metadata").fetchone()[0]
+            
+            # Calcolo densità (esempio: eventi per nodo)
+            density = total_events / total_nodes if total_nodes > 0 else 0
+            
+            # Recupero path del database in modo sicuro
+            db_info = self.execute("PRAGMA database_list").fetchall()
+            db_path = db_info[0][2]
+            
+            return {
+                "status": "healthy",
+                "total_nodes": total_nodes,
+                "total_events": total_events,
+                "last_sync": str(last_event),
+                "namespaces": namespaces,
+                "ledger_density": round(density, 2),
+                "db_size_kb": os.path.getsize(str(db_path)) // 1024 if db_path else 0
+            }
+        except Exception as e:
+            return {"status": "degraded", "error": str(e)}

@@ -1,0 +1,44 @@
+{
+  "name": "NeuralVault Codex Link",
+  "version": "1.0.0",
+  "description": "Estensione cognitiva per connettere Codex al tuo NeuralVault locale.",
+  "main": "nv-link.py",
+  "activationEvents": [
+    "onStartup",
+    "onCommand:searchVault"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "neuralvault.query",
+        "title": "Query NeuralVault",
+        "description": "Interroga la memoria neurale per suggerimenti di codice."
+      },
+      {
+        "command": "neuralvault.ingest",
+        "title": "Archive to Vault",
+        "description": "Salva lo snippet corrente nel Vault."
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "NeuralVault Configuration",
+      "properties": {
+        "neuralvault.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8001",
+          "description": "URL dell'API locale di NeuralVault"
+        },
+        "neuralvault.apiKey": {
+          "type": "string",
+          "default": "vault_secret_aura_2026",
+          "description": "Chiave segreta del Vault"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "query": "python3 integrations/nv-link.py query",
+    "ingest": "python3 integrations/nv-link.py ingest"
+  }
+}

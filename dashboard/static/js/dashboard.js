@@ -13,6 +13,9 @@ let synthGroup, synthLabel, synthSparks = [], synthSubGroups = {};
 let skywalkerGroup, skywalkerLabel;
 let skywalkerTargetPos = new THREE.Vector3(250000, 250000, 250000);
 let skywalkerLasers = [];
+let smithFleetGroups = {}; // 🕶️ Uno per wormhole
+let smithTargetPositions = {}; 
+let smithLabel; // Mantieniamo un label globale o uno per gruppo? Uno per gruppo è meglio.
 let bridgerGroup, bridgerLabel, bridgerPulseTime = 0;
 let janitorTargetPos = new THREE.Vector3(500000, 200000, 500000);
 let janitorFlashTime = 0; // 4s blue flash
@@ -21,6 +24,7 @@ let reaperCubes = []; // {mesh, expiry}
 let superSynapseAuraDuration = 60000; // 1 minute in ms
 let distillerTargetPos = new THREE.Vector3(-200000, 200000, -200000);
 let reaperTargetPos = new THREE.Vector3(0, 300000, 0);
+let snakeTargetPos = new THREE.Vector3(0, 0, 0);
 let snakeCurrentTarget = new THREE.Vector3(1200000, 0, 0);
 let quantumTargetPos = new THREE.Vector3(800000, 800000, 800000);
 let sentinelTargetPos = new THREE.Vector3(-500000, -500000, 500000);
@@ -41,7 +45,7 @@ let medicalCubes = [];
 let controls, eventSource, vaultPoints = [], installedModels = [];
 let isRotationPaused = false;
 let isUserInteracting = false;
-let layersVisibility = { agents: true, orphans: true, nodes: true, linked_nodes: true, edges: true, sparks: true, cube: true, grid: true, nav_guide: true };
+let layersVisibility = { agents: true, orphans: true, nodes: true, linked_nodes: true, edges: true, sparks: true, cube: true, grid: true, nav_guide: true, wormholes: true };
 let timeTravelFactor = 1.0;
 let nebulaQuality = 'HD';
 let clusterFocus = true;
@@ -52,6 +56,7 @@ let multimodalGroup, multimodalTextures = {}; // 📸 Multimodal Layer
 const VAULT_KEY = "vault_secret_aura_2026";
 
 function log(msg, color = '#4ade80') {
+    window.log = log; // Esposizione globale
     const consoleDiv = document.getElementById('aura-console');
     if (!consoleDiv) return;
     const line = document.createElement('div');
@@ -75,21 +80,40 @@ function init3D() {
         return;
     }
 
-    const glOptions = { 
-        antialias: false, 
-        depth: true, 
-        alpha: true, 
-        preserveDrawingBuffer: true,
-        failIfMajorPerformanceCaveat: false 
-    };
-    let gl = canvas.getContext('webgl2', glOptions) || canvas.getContext('webgl', glOptions);
+    // Ultra-compatible WebGL context acquisition
+    let gl = null;
+    try {
+        gl = canvas.getContext('webgl2', { alpha: true, depth: true, antialias: true }) || 
+             canvas.getContext('webgl', { alpha: true, depth: true, antialias: true }) ||
+             canvas.getContext('experimental-webgl');
+    } catch (e) {
+        console.error("Critical WebGL Error:", e);
+    }
     
     if (!gl) {
-        if (!window.lastContextError || Date.now() - window.lastContextError > 10000) {
-            log("❌ WebGL Context Failure - Retrying in 10s", "#ef4444");
+        console.error("🛑 [WebGL] Context creation failed.");
+        // Se fallisce, proviamo a rigenerare l'elemento canvas (Reset Hardware)
+        const parent = canvas.parentElement;
+        if (parent && !window._canvasResetting) {
+            window._canvasResetting = true;
+            log("♻️ [System] Rigenerazione Canvas 3D...", "#a855f7");
+            const newCanvas = document.createElement('canvas');
+            newCanvas.id = 'isometric-canvas';
+            newCanvas.style.cssText = canvas.style.cssText;
+            canvas.remove();
+            parent.appendChild(newCanvas);
+            setTimeout(() => { 
+                window._canvasResetting = false;
+                init3D(); 
+            }, 500);
+            return;
+        }
+        
+        if (!window.lastContextError || Date.now() - window.lastContextError > 5000) {
+            log("⚠️ WebGL Context Failure - Retrying...", "#ef4444");
             window.lastContextError = Date.now();
         }
-        setTimeout(init3D, 10000);
+        setTimeout(init3D, 2000);
         return;
     }
 
@@ -97,14 +121,6 @@ function init3D() {
         e.preventDefault();
         window.is3DInitialized = false;
         log("⚠️ WebGL Context Lost - Cooling down...", "#f59e0b");
-        // Clear all Three.js objects to free VRAM
-        if (scene) scene.traverse(obj => {
-            if (obj.geometry) obj.geometry.dispose();
-            if (obj.material) {
-                if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-                else obj.material.dispose();
-            }
-        });
         setTimeout(init3D, 4000);
     }, false);
 
@@ -126,12 +142,15 @@ function init3D() {
     }
     
     scene = new THREE.Scene();
+    window.scene = scene; // Assicuriamo accessibilità globale
+    window.camera = camera;
+    window.renderer = renderer;
     const isLight = document.body.classList.contains('light-theme');
     scene.background = new THREE.Color(isLight ? 0xf8fafc : 0x020617);
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 10, 50000000);
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 10, 200000000); // Aumentato Far Plane a 200M (v4.5)
     camera.position.set(5000000, 5000000, 5000000); 
     camera.lookAt(0, 1000000, 0);
 
@@ -146,6 +165,9 @@ function init3D() {
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio > 1 ? 2 : 1);
+    
+    window.camera = camera;
+    window.renderer = renderer;
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.2));
     const dl = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -223,8 +245,8 @@ function init3D() {
             MIDDLE: THREE.MOUSE.DOLLY,
             RIGHT: THREE.MOUSE.PAN
         };
-        controls.minDistance = 50; 
-        controls.maxDistance = 10000000;
+        controls.minDistance = 10; // Permette di entrare nei nodi
+        controls.maxDistance = 100000000; // Esteso a 100M per visione d'insieme v7.5
 
         controls.addEventListener('start', () => { isUserInteracting = true; });
         controls.addEventListener('end', () => { isUserInteracting = false; });
@@ -567,6 +589,10 @@ function provisionAgents() {
     skywalkerGroup.add(skywalkerLabel);
     scene.add(skywalkerGroup);
 
+    // AG-001 fleet is now dynamic in syncMeshWormholes
+    smithLabel = createTextSprite("AG-001 SECURITY FLEET", "#00ff41");
+    window.smithLasers = [];
+
     bridgerGroup = new THREE.Group();
     const bMat = new THREE.MeshPhongMaterial({ color: 0x3b82f6, emissive: 0x1e40af, shininess: 100, wireframe: false });
     const diamondGeo = new THREE.OctahedronGeometry(35000);
@@ -588,11 +614,17 @@ function provisionAgents() {
 }
 
 function animate() {
+    requestAnimationFrame(animate);
+    
+    // 🔋 v4.6: Ottimizzazione GPU - Sospendi rendering se la sezione non è visibile
+    const overview = document.getElementById('overview-view');
+    if (overview && overview.style.display === 'none') return;
+    
+    if (controls) controls.update();
     if (!window.isRenderLoopActive) {
         log("🔄 Render Loop Engaged", "#a855f7");
         window.isRenderLoopActive = true;
     }
-    requestAnimationFrame(animate);
     const now = Date.now();
     const time = now * 0.001;
     
@@ -814,6 +846,36 @@ function animate() {
         if (synthFlashTime > 0) synthFlashTime--;
     }
 
+    // 🕶️ AG-001: Fleet Animation
+    // 🕶️ AG-001: Fleet Animation (v7.0 Shader & Position)
+    Object.keys(smithFleetGroups).forEach(pid => {
+        const group = smithFleetGroups[pid];
+        const target = smithTargetPositions[pid];
+        if (target) group.position.lerp(target, 0.05);
+        
+        // Dynamic Breathing & LookAt camera
+        const pulse = 1.0 + Math.sin(time * 3 + pid.length) * 0.1;
+        group.scale.set(pulse, pulse, 1);
+        
+        // Update Shader Time
+        group.children.forEach(child => {
+            if (child.material && child.material.uniforms) {
+                child.material.uniforms.time.value = time;
+            }
+        });
+
+        // Face the camera (Billboard effect for Mesh)
+        group.quaternion.copy(camera.quaternion);
+    });
+
+    if (window.smithLasers && window.smithLasers.length > 0) {
+        window.smithLasers.forEach(l => {
+            l.material.opacity -= 0.05;
+            if(l.material.opacity <= 0) scene.remove(l);
+        });
+        window.smithLasers = window.smithLasers.filter(l => l.material.opacity > 0);
+    }
+
     if (skywalkerGroup) {
         const exp = nebulaExpansionFactor || 1.0;
         // High-Altitude Periphery Patrol (Outer Guard)
@@ -847,6 +909,7 @@ function animate() {
         bridgerGroup.rotation.y += 0.01;
         const isPulsing = (bridgerPulseTime > 0);
         if (bridgerPulseTime > 0) bridgerPulseTime--;
+        
         if (isPulsing) {
             const pScale = 1.0 + Math.sin(time * 15) * 0.3;
             bridgerGroup.scale.setScalar(pScale);
@@ -863,6 +926,11 @@ function animate() {
             bridgerGroup.rings[0].rotation.y += 0.05;
             bridgerGroup.rings[1].rotation.x += 0.03;
         }
+    }
+
+    // 🕸️ Mesh Wormholes Animation
+    if (window.meshWormholes) {
+        Object.values(window.meshWormholes).forEach(w => w.update());
     }
 
     medicalCubes = medicalCubes.filter(c => {
@@ -904,23 +972,16 @@ function animate() {
             neuralLinks.children.forEach(link => {
                 const now = Date.now();
                 if (link.isSpark) {
-                    // 🌈 [LED RGB EFFECT] Continuous HSL shift
-                    link.material.color.setHSL((time * 0.4) % 1, 1, isLight ? 0.4 : 0.6);
-                    link.material.opacity = isLight ? 0.8 : 0.6 + Math.sin(time * 15) * 0.3;
+                    // ⚡ [SPARK EFFECT] - Flickering Cyan/White (Electric)
+                    const flicker = Math.random() > 0.8 ? 1.0 : 0.4;
+                    link.material.color.setHex(Math.random() > 0.5 ? 0x00ffff : 0xffffff);
+                    link.material.opacity = (isLight ? 0.8 : 0.6) * flicker;
                     link.material.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
                 } else if (link.isSuper) {
-                    // 🟠🟡 [SUPER-LINK PULSE] 2 pulses, then 30s solid orange-yellow
-                    const cycle = now % 31000; // 31 seconds cycle
-                    if (cycle < 2000) {
-                        // 2 rapid pulses in the first 2 seconds
-                        const p = Math.abs(Math.sin(cycle * 0.002 * Math.PI * 2));
-                        link.material.color.setRGB(1.0, 0.6 + 0.4 * p, 0.1); // Arancio -> Giallo
-                        link.material.opacity = 0.4 + 0.6 * p;
-                    } else {
-                        // Solid Orange-Yellow for the rest of the 30s
-                        link.material.color.setHex(0xf59e0b);
-                        link.material.opacity = 0.7;
-                    }
+                    // 🌈 [SUPER-SYNAPSE EFFECT] - Majestic RGB Rainbow Flow
+                    const hue = (time * 0.1 + (link.id % 20) * 0.05) % 1;
+                    link.material.color.setHSL(hue, 0.9, isLight ? 0.4 : 0.6);
+                    link.material.opacity = isLight ? 0.9 : 0.7 + Math.sin(time * 5) * 0.2;
                     link.material.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
                 } else if (link.isNew) {
                     link.material.opacity = 0.5 + Math.sin(time * 20) * 0.5;
@@ -1021,6 +1082,58 @@ function spawnSkywalkerLaser() {
     skywalkerLasers.push(line);
 }
 
+// ⚡ [v4.3.9] Agent Smith Lightning Effect
+function spawnSmithScannerRays(smithGroup, targetPos, color) {
+    if (!smithGroup || !scene) return;
+    const rayCount = 2;
+    for (let i = 0; i < rayCount; i++) {
+        const start = smithGroup.position.clone().add(new THREE.Vector3(0, 50000, 0)); // Da altezza occhiali
+        const points = [
+            start,
+            new THREE.Vector3().lerpVectors(start, targetPos, 0.5).add(new THREE.Vector3((Math.random()-0.5)*300000, (Math.random()-0.5)*300000, (Math.random()-0.5)*300000)),
+            targetPos.clone()
+        ];
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.LineBasicMaterial({ 
+            color: color || 0x00ff00, 
+            transparent: true, 
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending 
+        });
+        const ray = new THREE.Line(geo, mat);
+        scene.add(ray);
+        setTimeout(() => { scene.remove(ray); geo.dispose(); mat.dispose(); }, 120);
+    }
+}
+
+function spawnSmithLightning(smithGroup, targetPos, aggressive = false) {
+    if (!smithGroup || !scene) return;
+    const mat = new THREE.LineBasicMaterial({ 
+        color: aggressive ? (Math.random() > 0.5 ? 0x4ade80 : 0xffffff) : 0x00ff41, 
+        transparent: true, 
+        opacity: 1.0,
+        blending: THREE.AdditiveBlending
+    });
+    const start = smithGroup.position.clone();
+    const points = [];
+    const segments = aggressive ? 30 : 20; 
+    for (let i = 0; i <= segments; i++) {
+        const p = new THREE.Vector3().lerpVectors(start, targetPos, i / segments);
+        if (i > 0 && i < segments) {
+            const jitter = (aggressive ? 250000 : 120000) * (1 - Math.abs(i/segments - 0.5) * 1.5);
+            p.x += (Math.random() - 0.5) * jitter;
+            p.y += (Math.random() - 0.5) * jitter;
+            p.z += (Math.random() - 0.5) * jitter;
+        }
+        points.push(p);
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, aggressive ? 250 : 150);
+}
+
+
 let heatmapMode = false;
 let currentHeatmap = {};
 
@@ -1115,11 +1228,12 @@ function updateThreeScene(points, links = null) {
                     new THREE.Vector3(dstNode.x * exp, dstNode.y * exp, dstNode.z * exp)
                 ]);
                 const isSpark = l.is_aura === true;
-                const isSuper = l.relation === 'synapse';
+                const isSuper = l.relation === 'synapse' || (l.metadata && l.metadata.is_super_synapse === true);
                 const isNew = (now - (l.created_at * 1000) < 6000);
                 
-                let edgeColor = isLight ? 0x475569 : 0x2d3748; // Grigio default
-                let opacity = 0.15;
+                // 🎨 Visibility Refinement (v4.2.2)
+                let edgeColor = isLight ? 0x334155 : 0x94a3b8; // Grigio Scuro (Light Theme) vs Grigio Chiaro (Dark Theme)
+                let opacity = isLight ? 0.25 : 0.18;
                 
                 if (isSpark) {
                     edgeColor = 0xffffff; // Verrà sovrascritto dall'HSL in animate
@@ -1505,7 +1619,7 @@ function populateSwarmSelects(models) {
         'route-chat-mediator', 'route-multimodal', 'route-vision-description', 
         'route-vision-detection', 'route-vision-ocr', 'route-vision-analysis', 'route-evolution',
         'route-evolution-suggestions', 'court-judge-1', 'court-judge-2', 'court-judge-3',
-        'route-coding-1', 'route-coding-2', 'route-coding-supervisor'
+        'route-coding-1', 'route-coding-2', 'route-coding-supervisor', 'route-wiki'
     ];
     const installed = models.filter(m => m.status === 'INSTALLED');
     
@@ -1515,13 +1629,20 @@ function populateSwarmSelects(models) {
             const currentVal = el.value;
             let options = installed.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
             
-            // Allow null/none for judges
             if (id.startsWith('court-judge-')) {
                 options = `<option value="-">-</option>` + options;
             }
             
             el.innerHTML = options;
-            if (currentVal && (currentVal === "-" || installed.find(m => m.name === currentVal))) {
+            
+            // 🛡️ v4.5: Fallback persistente - Se il valore caricato non è tra gli installati, lo aggiungiamo come "OFFLINE" 
+            if (currentVal && !installed.find(m => m.name === currentVal) && currentVal !== "-") {
+                const offlineOpt = document.createElement('option');
+                offlineOpt.value = currentVal;
+                offlineOpt.text = `⚠️ ${currentVal} (OFFLINE)`;
+                offlineOpt.selected = true;
+                el.appendChild(offlineOpt);
+            } else if (currentVal) {
                 el.value = currentVal;
             }
         }
@@ -1531,20 +1652,21 @@ function populateSwarmSelects(models) {
 window.saveSwarmRouting = async () => {
     const config = {
         'api_key': VAULT_KEY,
-        'audit': document.getElementById('route-audit').value,
-        'extraction': document.getElementById('route-extraction').value,
-        'crossref': document.getElementById('route-crossref').value,
-        'synthesis': document.getElementById('route-synthesis').value,
-        'chat_mediator': document.getElementById('route-chat-mediator').value,
-        'multimodal': document.getElementById('route-multimodal').value,
+        'audit': document.getElementById('route-audit')?.value || "",
+        'extraction': document.getElementById('route-extraction')?.value || "",
+        'crossref': document.getElementById('route-crossref')?.value || "",
+        'synthesis': document.getElementById('route-synthesis')?.value || "",
+        'chat_mediator': document.getElementById('route-chat-mediator')?.value || "",
+        'multimodal': document.getElementById('route-multimodal')?.value || "",
+        'wiki_model': document.getElementById('route-wiki')?.value || "",
         'vision_description': document.getElementById('route-vision-description')?.value || "moondream",
         'vision_detection': document.getElementById('route-vision-detection')?.value || "moondream",
         'vision_ocr': document.getElementById('route-vision-ocr')?.value || "moondream",
         'vision_analysis': document.getElementById('route-vision-analysis')?.value || "moondream",
-        'evolution_model': document.getElementById('route-evolution').value,
+        'evolution_model': document.getElementById('route-evolution')?.value || "",
         'evolution_suggestion_model': document.getElementById('route-evolution-suggestions')?.value || "llama3.2",
-        'consensus_threshold': parseInt(document.getElementById('consensus-threshold').value || 2),
-        'weaver_sensitivity': parseFloat(document.getElementById('weaver-sensitivity').value || 0.82),
+        'consensus_threshold': parseInt(document.getElementById('consensus-threshold')?.value || 2),
+        'weaver_sensitivity': parseFloat(document.getElementById('weaver-sensitivity')?.value || 0.82),
         'auto_evolve_active': document.getElementById('auto-evolve-toggle')?.checked || false,
         'autonomous_court': document.getElementById('autonomous-court-toggle')?.checked || false,
         'court_judge_1': document.getElementById('court-judge-1')?.value || "llama3.2",
@@ -1725,6 +1847,281 @@ window.nuclearPurge = async () => {
         await fetch('/api/vault/purge', { method: 'POST', headers: { 'X-API-KEY': VAULT_KEY }});
         location.reload();
     } catch(e) {}
+};
+
+window.openAddPeerModal = () => {
+    log("🕸️ Apertura configurazione Peer Manuale...", "#3b82f6");
+    const modal = document.getElementById('add-peer-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+    } else {
+        console.error("Add Peer Modal not found in DOM");
+    }
+};
+
+window.closeAddPeerModal = () => {
+    document.getElementById('add-peer-modal').style.display = 'none';
+};
+
+// 🆔 [v6.1] SOVEREIGN IDENTITY MANAGEMENT
+window.refreshSovereignIdentity = async () => {
+    try {
+        const r = await fetch('/api/mesh/identity/export', {
+            headers: { 'X-API-KEY': localStorage.getItem('vault_api_key') || 'AURA-ADMIN-77' }
+        });
+        if (r.ok) {
+            const data = await r.json();
+            document.getElementById('my-node-id').value = data.id || 'N/A';
+            document.getElementById('my-vault-url').value = data.url || 'N/A';
+            document.getElementById('my-vault-key').value = data.vault_key || '';
+            window._myVaultIdentity = data; // Cache per export
+        }
+    } catch (e) { console.error("🆔 [Identity] Failed to refresh:", e); }
+};
+
+window.copyToClipboard = (elementId) => {
+    const el = document.getElementById(elementId);
+    el.select();
+    el.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(el.value);
+    showFloatingNotification("Copiato negli appunti! 📋", "success");
+};
+
+window.toggleKeyVisibility = (elementId) => {
+    const el = document.getElementById(elementId);
+    el.type = el.type === 'password' ? 'text' : 'password';
+};
+
+window.downloadHandshakeFile = () => {
+    if (!window._myVaultIdentity) return;
+    const blob = new Blob([JSON.stringify(window._myVaultIdentity, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `handshake_${window._myVaultIdentity.id}.nvvault`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showFloatingNotification("Handshake .nvvault generato! 💾", "success");
+};
+
+window.copyHandshakeToken = () => {
+    if (!window._myVaultIdentity) return;
+    const token = btoa(JSON.stringify(window._myVaultIdentity));
+    navigator.clipboard.writeText(`nv-mesh://invite?payload=${token}`);
+    showFloatingNotification("Token d'invito copiato! 🕸️", "success");
+};
+
+window.refreshNetworkPeers = async () => {
+    const container = document.getElementById('network-peers-container');
+    if (!container) return;
+    
+    try {
+        const idResp = await fetch('/api/mesh/identity/export', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const myId = await idResp.json();
+        const mId = document.getElementById('my-vault-id'); if(mId) mId.innerText = myId.id;
+        const mUrl = document.getElementById('my-vault-url'); if(mUrl) mUrl.innerText = myId.url;
+        const mKey = document.getElementById('my-vault-key'); if(mKey) mKey.innerText = `${myId.vault_key.substring(0,4)}...${myId.vault_key.substring(myId.vault_key.length-4)}`;
+
+        const r = await fetch('/api/mesh/peers', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const d = await r.json();
+        let peers = d.peers || [];
+        
+        if (window.demoPeers) {
+            window.demoPeers.forEach(p => p.last_seen = Date.now()/1000); // Manteniamo i demo peer sempre online
+            peers = [...peers, ...window.demoPeers];
+        }
+
+        if (peers.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 5rem; color: #64748b; font-size: 0.75rem; border: 1px dashed rgba(59,130,246,0.2); border-radius: 16px; background: rgba(59,130,246,0.02);">
+                    <i class="fas fa-satellite-dish" style="font-size: 3rem; margin-bottom: 1.5rem; display: block; opacity: 0.2; color: #3b82f6;"></i>
+                    <span style="letter-spacing: 1px;">NESSUN PEER RILEVATO NELLA NEBULA...</span>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = peers.map(p => {
+            const isPaused = p.paused || false;
+            return `
+            <div class="glass-card" style="padding: 1.5rem; background: ${isPaused ? 'rgba(15, 23, 42, 0.8)' : 'rgba(15, 23, 42, 0.4)'}; border: 1px solid ${isPaused ? 'rgba(239, 68, 68, 0.4)' : (p.isDemo ? 'rgba(168, 85, 247, 0.4)' : 'rgba(59, 130, 246, 0.2)')}; border-radius: 16px; display: flex; flex-direction: column; gap: 1rem; position: relative; overflow: hidden; opacity: ${isPaused ? '0.7' : '1'}; transition: all 0.3s ease;">
+                <div style="position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: ${isPaused ? '#ef4444' : (p.isDemo ? '#a855f7' : (p.source === 'discovery' ? '#10b981' : '#3b82f6'))};"></div>
+                ${p.isDemo ? '<div style="position:absolute; top:0; right:0; background:#a855f7; color:#fff; font-size:0.5rem; padding:2px 8px; font-weight:900;">DEMO MODE</div>' : ''}
+                ${isPaused ? '<div style="position:absolute; top:10px; right:10px; color:#ef4444; font-size:0.6rem; font-weight:900;"><i class="fas fa-pause-circle"></i> PAUSA</div>' : ''}
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 800; color: #fff; font-size: 0.8rem; font-family: 'JetBrains Mono'; text-decoration: ${isPaused ? 'line-through' : 'none'};">${p.id.substring(0, 15)}${p.id.length > 15 ? '...' : ''}</div>
+                    <div style="font-size: 0.5rem; padding: 3px 8px; border-radius: 20px; background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2);">${p.source.toUpperCase()}</div>
+                </div>
+                <div style="font-size: 0.65rem; color: #94a3b8; font-family: 'JetBrains Mono';">${p.url}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.8rem;">
+                    <div style="font-size: 0.55rem; color: #64748b;">LAST_SEEN: ${p.last_seen ? new Date(p.last_seen * 1000).toLocaleTimeString() : 'NEVER'}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 5px; color: ${isPaused ? '#64748b' : (p.last_seen && (Date.now()/1000 - p.last_seen < 60) ? '#10b981' : '#ef4444')}; font-size: 0.55rem; font-weight: 800;">
+                            <i class="fas fa-circle" style="font-size: 0.4rem;"></i> ${isPaused ? 'PAUSED' : (p.last_seen && (Date.now()/1000 - p.last_seen < 60) ? 'ONLINE' : 'OFFLINE')}
+                        </div>
+                        <button onclick="window.togglePausePeer('${p.id}', ${!isPaused})" class="peer-action-btn" title="${isPaused ? 'Riattiva Peer' : 'Metti in Pausa'}" style="color:${isPaused ? '#10b981' : '#f59e0b'};">
+                            <i class="fas fa-${isPaused ? 'play' : 'pause'}"></i>
+                        </button>
+                        <button onclick="window.renamePeer('${p.id}')" class="peer-action-btn" title="Rename Peer" style="color:#94a3b8;"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.deletePeer('${p.id}')" class="peer-action-btn" title="Delete Peer" style="color:#ef4444;"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }).join('');
+    } catch (e) {
+        log("❌ MESH_ERR: Impossibile recuperare la lista dei peer.", "#ef4444");
+    }
+}
+
+window.renamePeer = async (oldId) => {
+    const newId = prompt(`Rinomina Peer [${oldId}] in:`, oldId);
+    if (!newId || newId === oldId) return;
+    try {
+        const r = await fetch('/api/mesh/peers/rename', {
+            method: 'POST',
+            headers: { 'X-API-KEY': VAULT_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: oldId, new_id: newId })
+        });
+        const d = await r.json();
+        if (d.status === 'renamed') {
+            log(`✏️ MESH: Peer rinominato in [${newId}]`, "#3b82f6");
+            window.refreshNetworkPeers();
+        }
+    } catch (e) {
+        log("❌ MESH: Errore durante la rinomina del peer.", "#ef4444");
+    }
+};
+
+window.deletePeer = async (peerId) => {
+    if (!confirm(`Rimuovere permanentemente il peer [${peerId}] dalla Mesh?`)) return;
+    try {
+        const r = await fetch(`/api/mesh/peers/${peerId}`, {
+            method: 'DELETE',
+            headers: { 'X-API-KEY': VAULT_KEY }
+        });
+        const d = await r.json();
+        if (d.status === 'removed') {
+            log(`🗑️ MESH: Peer [${peerId}] rimosso con successo.`, "#ef4444");
+            window.refreshNetworkPeers();
+        }
+    } catch (e) {
+        log("❌ MESH: Errore durante la rimozione del peer.", "#ef4444");
+    }
+};
+
+window.togglePausePeer = async (peerId, paused) => {
+    // 🧬 [v4.2.1] Gestione Demo Peers (Locale)
+    if (window.demoPeers) {
+        const demoPeer = window.demoPeers.find(p => p.id === peerId);
+        if (demoPeer) {
+            demoPeer.paused = paused;
+            log(`⏸️ DEMO: Peer [${peerId}] ${paused ? "SOSPESO" : "RIPRISTINATO"}.`, "#a855f7");
+            window.refreshNetworkPeers();
+            if (window.syncMeshWormholes) window.syncMeshWormholes();
+            return;
+        }
+    }
+
+    try {
+        const r = await fetch('/api/mesh/peers/toggle-pause', {
+            method: 'POST',
+            headers: { 'X-API-KEY': VAULT_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: peerId, paused: paused })
+        });
+        const d = await r.json();
+        if (d.status) {
+            const state = paused ? "SOSPESO" : "RIPRISTINATO";
+            log(`⏸️ MESH: Peer [${peerId}] ${state}.`, paused ? "#f59e0b" : "#10b981");
+            window.refreshNetworkPeers();
+            if (window.syncMeshWormholes) window.syncMeshWormholes();
+        }
+    } catch (e) {
+        log("❌ MESH: Errore durante il cambio di stato del peer.", "#ef4444");
+    }
+};
+
+window.exportVaultIdentity = async () => {
+    try {
+        const r = await fetch('/api/mesh/identity/export', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const d = await r.json();
+        const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${d.id}.vault`;
+        a.click();
+        log("📤 IDENTITY: Profilo esportato con successo (.vault).", "#10b981");
+    } catch (e) {
+        log("❌ IDENTITY: Errore durante l'esportazione.", "#ef4444");
+    }
+};
+
+window.processHandshakeInput = async (val) => {
+    try {
+        if (val.startsWith('nv-mesh://')) {
+            const payload = new URL(val).searchParams.get('payload');
+            if (payload) {
+                const data = JSON.parse(atob(payload));
+                document.getElementById('manual-peer-id').value = data.id || '';
+                document.getElementById('manual-peer-url').value = data.url || '';
+                showFloatingNotification("Token decodificato! 🚀 Premi CONNETTI per finalizzare.", "success");
+            }
+        }
+    } catch (e) { console.error("Handshake decode error:", e); }
+};
+
+window.importVaultIdentity = async (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            log("🕵️ AGENT SMITH: Ispezione file .nvvault in corso...", "#00ff41");
+            const r = await fetch('/api/mesh/identity/import', {
+                method: 'POST',
+                headers: { 'X-API-KEY': VAULT_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const d = await r.json();
+            if (r.ok) {
+                log(`✅ MESH: Peer [${data.id}] importato e collegato.`, "#10b981");
+                window.refreshNetworkPeers();
+                if (document.getElementById('add-peer-modal')) document.getElementById('add-peer-modal').style.display = 'none';
+            } else {
+                log(`🚨 SECURITY: ${d.detail || 'Importazione fallita.'}`, "#ef4444");
+            }
+        } catch (err) {
+            log("❌ IDENTITY: File non valido o corrotto.", "#ef4444");
+        }
+    };
+    reader.readAsText(file);
+};
+
+window.submitManualPeer = async () => {
+    const id = document.getElementById('manual-peer-id').value;
+    const url = document.getElementById('manual-peer-url').value;
+    if (!url) {
+        log("⚠️ MESH: URL del peer obbligatorio.", "#facc15");
+        return;
+    }
+    try {
+        const r = await fetch('/api/mesh/peers/add', {
+            method: 'POST',
+            headers: { 'X-API-KEY': VAULT_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, url: url })
+        });
+        const d = await r.json();
+        if (d.status === 'peer_connected') {
+            log(`🚀 MESH: Connessione al vault [${d.id}] stabilita!`, "#10b981");
+            window.closeAddPeerModal();
+            window.refreshNetworkPeers();
+        }
+    } catch (e) {
+        log("❌ MESH: Errore connessione peer manuale.", "#ef4444");
+    }
 };
 
 window.deployModel = async (id) => { return await window.installModel(id); };
@@ -2014,20 +2411,36 @@ window.showSection = (s) => {
     if (cycloHUD) {
         cycloHUD.style.display = (s === 'overview') ? 'flex' : 'none';
     }
-    const t = document.getElementById(`${s}-view`);
+    const settingsTabs = ['network', 'galaxies', 'limbo'];
+    let targetView = s;
+    if (settingsTabs.includes(s)) {
+        targetView = 'settings';
+    }
+
+    const t = document.getElementById(`${targetView}-view`);
     if (t) {
         t.style.display = 'flex';
         t.style.height = '100%';
+        if (settingsTabs.includes(s)) {
+            switchSettingsTab(s);
+        }
     }
     
     // [SOVEREIGN PRIORITIZATION]
-    // Rimosso blocco stasi automatica: gli agenti ora corrono anche nel Lab (v4.0.1)
     setPriorityFocus(false);
     const nav = document.getElementById(`nav-${s}`);
     if (nav) nav.classList.add('active');
-    if (s === 'overview') { 
-        init3D(); 
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 100); 
+
+    if (targetView === 'overview') { 
+        if (!window.is3DInitialized) {
+            init3D(); 
+        } else {
+            // Se già inizializzato, forza un resize per ricalcolare il frustum
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                if (renderer) renderer.render(scene, camera);
+            }, 50);
+        }
     }
     if (s === 'benchmark') { 
         renderBenchmarkTable(); 
@@ -2415,22 +2828,35 @@ window.refreshRadar = async () => {
     } catch (e) { console.error("Radar refresh failed", e); }
 };
 
-window.switchSettingsTab = (tab) => {
-    document.querySelectorAll('.settings-content').forEach(c => c.style.display = 'none');
+window.switchSettingsTab = (tabId) => {
     document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-    const mapping = { 'swarm': 'config-panel-swarm', 'hub': 'config-panel-hub', 'danger': 'config-panel-settings' };
-    const tabBtnMapping = { 'swarm': 'tab-swarm', 'hub': 'tab-hub', 'danger': 'tab-danger' };
-    const target = document.getElementById(mapping[tab]);
-    if (target) target.style.display = 'block';
-    const activeBtn = document.getElementById(tabBtnMapping[tab]);
-    if (activeBtn) activeBtn.classList.add('active');
-    if (tab === 'swarm') {
+    document.querySelectorAll('.settings-content').forEach(c => c.style.display = 'none');
+    
+    // Mapping speciale per eccezioni di naming
+    const mapping = { 'danger': 'settings' };
+    const contentId = 'config-panel-' + (mapping[tabId] || tabId);
+    
+    const tab = document.getElementById('tab-' + tabId);
+    const content = document.getElementById(contentId);
+    
+    if (tab) tab.classList.add('active');
+    if (content) content.style.display = 'block';
+    
+    // Refresh dei dati specifici per ogni tab
+    if (tabId === 'network') {
+        window.refreshNetworkPeers();
+        window.refreshSovereignIdentity();
+    }
+    if (tabId === 'limbo') window.refreshLimboList();
+    if (tabId === 'galaxies') window.refreshGalaxiesList();
+    if (tabId === 'swarm' || tabId === 'hub') {
         renderModelHubTable().then(() => {
-            loadSwarmConfig();
-            updateRecommendations();
+            if (tabId === 'swarm') {
+                loadSwarmConfig();
+                updateRecommendations();
+            }
         });
     }
-    if (tab === 'hub') renderModelHubTable();
 };
 
 window.toggleTheme = (save = true) => {
@@ -2494,6 +2920,10 @@ window.toggleLayer = (layer) => {
         if (cube) cube.visible = layersVisibility.cube;
     } else if (layer === 'grid') {
         scene.children.forEach(c => { if(c instanceof THREE.GridHelper) c.visible = layersVisibility.grid; });
+    } else if (layer === 'wormholes') {
+        Object.values(window.meshWormholes).forEach(w => {
+            if (w.group) w.group.visible = layersVisibility.wormholes;
+        });
     }
     log(`👁️ VIS: ${layer.toUpperCase()} ${layersVisibility[layer] ? 'ON' : 'OFF'}`);
 };
@@ -2602,12 +3032,14 @@ window.toggleFollow = (agentId) => {
     const mapping = {
         'JA-001': janitorGroup, 'DI-007': distillerGroup, 'RP-001': reaperGroup,
         'SN-008': snakeGroup, 'QA-101': quantumGroup, 'SE-007': sentinelGroup,
-        'SY-009': synthGroup, 'CB-003': bridgerGroup, 'FS-77': skywalkerGroup
+        'SY-009': synthGroup, 'CB-003': bridgerGroup, 'FS-77': skywalkerGroup,
+        'AG-001': Object.values(smithFleetGroups)[0] // Prendi il primo della flotta
     };
     const hudMapping = {
         'JA-001': 'janitron-hud-icon', 'DI-007': 'distiller-hud-icon', 'RP-001': 'reaper-hud-icon',
         'SN-008': 'snake-hud-icon', 'QA-101': 'quantum-hud-icon', 'SE-007': 'sentinel-hud-icon',
-        'SY-009': 'synth-hud-icon', 'CB-003': 'bridger-hud-icon', 'FS-77': 'skywalker-hud-icon'
+        'SY-009': 'synth-hud-icon', 'CB-003': 'bridger-hud-icon', 'FS-77': 'skywalker-hud-icon',
+        'AG-001': 'smith-hud-icon'
     };
     document.querySelectorAll('.agent-mission-item').forEach(el => el.classList.remove('followed-agent'));
     const target = mapping[agentId];
@@ -2828,13 +3260,24 @@ function initSSE() {
                                 id.toLowerCase().includes('qa') ? 'quantum' : 
                                 id.toLowerCase().includes('se') ? 'sentinel' : 
                                 id.toLowerCase().includes('sy') ? 'synth' : 
-                                id.toLowerCase().includes('fs') ? 'skywalker' : 'bridger';
+                                id.toLowerCase().includes('fs') ? 'skywalker' : 
+                                id.toLowerCase().includes('ag') ? 'smith' : 'bridger';
                 
                 const hud = document.getElementById(`${cleanId}-hud-icon`);
                 if (hud) {
-                    const hasActivity = (agentData.processed > 0 || agentData.purged > 0 || agentData.found > 0 || 
-                                         agentData.fused_clusters > 0 || agentData.validated > 0 || 
-                                         agentData.sparks > 0 || agentData.bridges > 0 || agentData.hits > 0);
+                    const hasActivity = (
+                        (agentData.processed || 0) > 0 || 
+                        (agentData.purged || 0) > 0 || 
+                        (agentData.pruned || 0) > 0 || 
+                        (agentData.found || 0) > 0 || 
+                        (agentData.fused_clusters || 0) > 0 || 
+                        (agentData.validated || 0) > 0 || 
+                        (agentData.super_synapses || 0) > 0 || 
+                        (agentData.sparks || 0) > 0 || 
+                        (agentData.bridges || 0) > 0 || 
+                        (agentData.web_hits || 0) > 0 || 
+                        (agentData.nodes_forged || 0) > 0
+                    );
                     const isOperating = agentData.status && !agentData.status.toLowerCase().includes('idle') && !agentData.status.toLowerCase().includes('hold');
                     
                     if (isOperating || hasActivity) hud.classList.remove('inactive-agent');
@@ -2912,6 +3355,77 @@ function initSSE() {
                         const b = document.getElementById('val-bridger-bridges'); if(b) b.innerText = agentData.bridges || 0;
                         bridgerTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                     }
+                    if (id === 'AG-001') {
+                        const statusEl = document.getElementById('smith-mission-stat');
+                        if (statusEl) {
+                            statusEl.innerHTML = `<span>Inspections: ${agentData.inspections || 0}</span> | <span>Blocked: ${agentData.threats || agentData.threats_blocked || 0}</span>`;
+                        }
+                        
+                        // 🛰️ [v8.0] Security Logs Rendering
+                        const logContainer = document.getElementById('smith-security-container');
+                        const threatsCounter = document.getElementById('total-threats-count');
+                        if (logContainer && agentData.security_logs) {
+                            if (threatsCounter) threatsCounter.innerText = agentData.threats || agentData.threats_blocked || 0;
+                            
+                            if (agentData.security_logs.length > 0) {
+                                logContainer.innerHTML = agentData.security_logs.map(l => `
+                                    <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); animation: fadeIn 0.5s;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                            <span style="color: #ef4444; font-weight: bold;">[${l.type}]</span>
+                                            <span style="color: #4ade80;">STATUS: ${l.status}</span>
+                                        </div>
+                                        <div style="color: #fff; opacity: 0.8;">${l.description}</div>
+                                        <div style="display: flex; gap: 15px; margin-top: 2px; font-size: 0.6rem; opacity: 0.6;">
+                                            <span>SRC: ${l.ip}</span>
+                                            <span>TIME: ${l.timestamp}</span>
+                                            <span style="color: #3b82f6;">DEFENSE: ${l.countermeasure}</span>
+                                        </div>
+                                    </div>
+                                `).join('');
+                            }
+                        }
+
+                        // ⚡ [v4.3.9] Smith Fleet Sync & Lightning & Scanner Rays
+                        const fleet = agentData.fleet || {};
+                        const expansion = window.vaultExpansion || 1.0;
+                        const now = Date.now();
+                        
+                        Object.keys(fleet).forEach(pid => {
+                            const sData = fleet[pid];
+                            smithTargetPositions[pid] = new THREE.Vector3(
+                                sData.pos.x * expansion,
+                                sData.pos.y,
+                                sData.pos.z * expansion
+                            );
+                            
+                            const group = smithFleetGroups[pid];
+                            if (group) {
+                                // 👁️ [v8.0] Scanner Rays Logic
+                                const isInspecting = sData.status && sData.status.includes("Inspecting");
+                                const isThreatened = (now / 1000 - (agentData.last_threat || 0)) < 45;
+
+                                if (isInspecting || isThreatened) {
+                                    const targetWh = window.meshWormholes[pid];
+                                    if (targetWh && targetWh.group) {
+                                        // 🔦 Scanner Rays (Green Fluo)
+                                        if (!window[`_lastSmithScan_${pid}`] || (now - window[`_lastSmithScan_${pid}`] > 100)) {
+                                            spawnSmithScannerRays(group, targetWh.group.position, isThreatened ? 0xef4444 : 0x00ff00);
+                                            window[`_lastSmithScan_${pid}`] = now;
+                                        }
+
+                                        // ⚡ Lightning Retaliation (45 Seconds)
+                                        if (isThreatened) {
+                                            if (!window[`_lastSmithFire_${pid}`] || (now - window[`_lastSmithFire_${pid}`] > 250)) {
+                                                spawnSmithLightning(group, targetWh.group.position, true); // true = Aggressive (Green/White)
+                                                window[`_lastSmithFire_${pid}`] = now;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
                     if (id === 'FS-77') {
                         const h = document.getElementById('val-skywalker-hits'); if(h) h.innerText = agentData.web_hits || 0;
                         const n = document.getElementById('val-skywalker-nodes'); if(n) n.innerText = agentData.nodes_forged || agentData.nodes_created || 0;
@@ -2930,31 +3444,32 @@ function initSSE() {
                             document.body.style.boxShadow = "inset 0 0 120px rgba(239, 68, 68, 0.15)";
                             
                             if (isInjecting) {
-                                // ⏸️ Pausa pattugliamento: Blocchiamo la target pos sulla posizione attuale per lo shooting
                                 skywalkerTargetPos.copy(skywalkerSprite.position);
-                                
-                                // 🔥 Burst Fire Logic: Spara solo ogni 500ms durante l'iniezione
                                 const now = Date.now();
                                 if (!window._lastSkywalkerFire || (now - window._lastSkywalkerFire > 500)) {
                                     triggerSkywalkerLaserStorm(agentData.pos); 
                                     window._lastSkywalkerFire = now;
                                 }
                             } else {
-                                // 🛸 Pattugliamento attivo
                                 skywalkerTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                             }
                         } else if (statusEl) {
-                            if (cardEl) cardEl.classList.add('inactive-agent');
+                            // Respect the global activity state
+                            if (cardEl) {
+                                if (hasActivity) cardEl.classList.remove('inactive-agent');
+                                else cardEl.classList.add('inactive-agent');
+                            }
+                            
                             statusEl.style.background = "rgba(239, 68, 68, 0.1)";
-                            statusEl.innerHTML = `<span>Web-Hits: ${agentData.web_hits || 0}</span> | <span>Forged: ${agentData.nodes_forged || 0}</span>`;
+                            statusEl.innerHTML = `<span>Web-Hits: ${agentData.web_hits || 0}</span> | <span>Forged: ${agentData.nodes_forged || agentData.nodes_created || 0}</span>`;
                             document.body.style.boxShadow = "none";
-                            // Continua il pattugliamento in idle
                             skywalkerTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                         }
                     }
                 }
             });
         }
+
         if (d.lab && d.lab.blackboard && d.lab.blackboard.length > 0) {
             const lastSig = d.lab.blackboard.slice(-1)[0];
             const sType = String(lastSig.signal_type || "").toLowerCase();
@@ -2966,24 +3481,22 @@ function initSSE() {
                     if (match) { 
                         evolutionProgress = parseInt(match[2]); 
                         evolutionStep = msg.split("[")[0].trim(); 
-                        updateEvolutionHUD(); 
+                        if (typeof updateEvolutionHUD === 'function') updateEvolutionHUD(); 
                     }
                 } else if (msg.includes("COMPLETE") || msg.includes("CONVALIDATE")) {
                     isEvolving = false; 
-                    refreshVaultState();
+                    if (typeof refreshVaultState === 'function') refreshVaultState();
                 }
             }
         }
-                    if (d.lab) {
-                        const l = d.lab;
-                        if (l.court_actions) {
-                            const courtList = document.getElementById('court-verdicts-list');
-                            const activeTab = document.querySelector('.settings-tab.active');
-                            if (courtList && activeTab && activeTab.id === 'tab-court') {
-                                window.renderCourtVerdicts(l.court_actions);
-                            }
-                        }
-                    }
+
+        if (d.lab && d.lab.court_actions) {
+            const courtList = document.getElementById('court-verdicts-list');
+            const activeTab = document.querySelector('.settings-tab.active');
+            if (courtList && activeTab && activeTab.id === 'tab-court') {
+                if (typeof window.renderCourtVerdicts === 'function') window.renderCourtVerdicts(d.lab.court_actions);
+            }
+        }
                     if (d.swarm_settings) {
             const s = d.swarm_settings;
             const toggle = document.getElementById('autonomous-court-toggle');
@@ -3753,6 +4266,7 @@ const NEURAL_LANG_PACK = {
     "label_layer_sparks": ["Archi Super Sinaptici", "Super Synaptic Arcs"],
     "label_layer_cube": ["Cubo 3D", "3D Cube"],
     "label_layer_grid": ["Piano Griglia", "Grid Plane"],
+    "label_layer_wormholes": ["Wormholes & Nebulose", "Wormholes & Nebulae"],
     "label_rotation_pause": ["Pausa/Avvia Rotazione", "Pause/Play Rotation"],
      "label_immersion": ["Immersione Totale", "Total Immersion"],
     "label_nebula_expansion": ["NEBULA_EXPANSION", "NEBULA_EXPANSION"],
@@ -4095,12 +4609,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.classList.add('light-theme');
         if (themeToggle) themeToggle.checked = true;
     }
+    window.showSection('overview');
     init3D();
     initSSE();
     initCharts();
     refreshModels();
     updateRecommendations();
-    window.showSection('overview');
     try {
         const r = await fetch('/api/system/settings');
         const settings = await r.json();
@@ -4123,6 +4637,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch(e) {}
 });
 
+// 🔴 [v8.0] Skywalker Sovereign Quad-Cannon Laser logic
+function triggerSkywalkerLaser(agent, controller) {
+    if (!window.scene) return;
+    
+    // Mappatura dei 4 cannoni (Tubi Grigi dello Skywalker)
+    const offsets = [
+        {x: 6000, y: 3000, z: 0},   // Superiore Destra
+        {x: -6000, y: 3000, z: 0},  // Superiore Sinistra
+        {x: 6000, y: -3000, z: 0},  // Inferiore Destra
+        {x: -6000, y: -3000, z: 0}  // Inferiore Sinistra
+    ];
+    
+    const targetPos = agent.laserTarget || {x: 2000000, y: 0, z: 2000000}; 
+    
+    // Sequenza rotativa: 1 colpo totale ogni 125ms per avere 2 colpi/sec su 4 cannoni
+    const now = Date.now();
+    const cannonIdx = Math.floor(now / 125) % 4;
+    const off = offsets[cannonIdx];
+    
+    const startPos = {
+        x: agent.pos.x + off.x,
+        y: agent.pos.y + off.y,
+        z: agent.pos.z + off.z
+    };
+    
+    if (controller && controller.drawLaser) {
+        // Laser con Glow (spessore maggiore e colore acceso)
+        controller.drawLaser('FS-77-cannon-' + cannonIdx, startPos, targetPos, "#ff3333", 400);
+        
+        // Rinforziamo l'impatto visivo all'origine (vampa di volata)
+        if (window.triggerSynapticSparks) {
+            window.triggerSynapticSparks(startPos, 2);
+            window.triggerSynapticSparks(targetPos, 8); // Più scintille all'impatto
+        }
+    }
+}
 function animateValue(id, start, end, duration, prefix = "") {
     const obj = document.getElementById(id);
     if (!obj) return;
@@ -4613,44 +5163,27 @@ window.triggerSkywalkerLaserStorm = function(targetPos) {
 // Genera piccoli archi organici che 'germogliano' dallo Snake verso la Nebula
 window.triggerSnakeSprouting = function(agentPos) {
     if (!window.snakeSprite || !window.scene) return;
-    
-    // Solo un burst ogni tanto per non saturare
     if (Math.random() > 0.2) return;
-
     const start = window.snakeSprite.position.clone();
     const exp = 4000;
-    
     for (let i = 0; i < 3; i++) {
-        // Target randomico nel raggio d'azione
         const target = new THREE.Vector3(
             start.x + (Math.random() - 0.5) * 800,
             start.y + (Math.random() - 0.5) * 800,
             start.z + (Math.random() - 0.5) * 800
         );
-        
-        // Curva Bezier per effetto 'organico'
         const mid = start.clone().lerp(target, 0.5);
-        mid.y += 200; // Curva verso l'alto
-        
+        mid.y += 200;
         const curve = new THREE.QuadraticBezierCurve3(start, mid, target);
         const points = curve.getPoints(20);
         const sproutGeo = new THREE.BufferGeometry().setFromPoints(points);
-        
-        const sproutMat = new THREE.LineBasicMaterial({ 
-            color: 0x10b981, // Green Sprout
-            transparent: true,
-            opacity: 0.8
-        });
-        
+        const sproutMat = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.8 });
         const sproutLine = new THREE.Line(sproutGeo, sproutMat);
         window.scene.add(sproutLine);
-        
-        // Animazione: da verde ad arancione e poi scompare
         let progress = 0;
         function animateSprout() {
             progress += 0.02;
             if (progress < 1) {
-                // Sfumatura verso arancio (0xfb923c)
                 sproutMat.color.lerp(new THREE.Color(0xfb923c), progress);
                 sproutMat.opacity = 0.8 * (1 - progress);
                 requestAnimationFrame(animateSprout);
@@ -4661,5 +5194,551 @@ window.triggerSnakeSprouting = function(agentPos) {
             }
         }
         animateSprout();
+    }
+};
+
+// 🌌 [v8.0] H-RAG Visual Feedback: Semantic Shockwave
+window.triggerSemanticShockwave = function() {
+    if (!window.scene) return;
+    console.log("🌌 [H-RAG] SEMANTIC SHOCKWAVE TRIGGERED");
+    if (window.log) window.log("🌌 [H-RAG] Semantic Shockwave: Re-aligning Conceptual Gravity...", "#00f2fe");
+
+    const waveGeo = new THREE.TorusGeometry(100, 30, 16, 100);
+    const waveMat = new THREE.MeshBasicMaterial({ 
+        color: 0x00f2fe, 
+        transparent: true, 
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending 
+    });
+    const wave = new THREE.Mesh(waveGeo, waveMat);
+    wave.rotation.x = Math.PI / 2;
+    window.scene.add(wave);
+
+    let scale = 1;
+    function animateWave() {
+        scale += 100;
+        wave.scale.set(scale, scale, scale);
+        wave.material.opacity -= 0.015;
+        
+        if (wave.material.opacity > 0) {
+            requestAnimationFrame(animateWave);
+        } else {
+            window.scene.remove(wave);
+            waveGeo.dispose();
+            waveMat.dispose();
+        }
+    }
+    animateWave();
+
+// 🌪️ [v8.1] Node Shake & Galactic Re-alignment Effect
+    if (window.pointsMesh && window.vaultPoints) {
+        const originalY = window.pointsMesh.position.y;
+        const exp = window.nebulaExpansionFactor || 1.0;
+        
+        // Calcoliamo i baricentri delle galassie (cluster) per la trazione
+        const centers = {};
+        window.vaultPoints.forEach(p => {
+            const cid = p.cluster_id || 'default';
+            if (!centers[cid]) centers[cid] = { x:0, y:0, z:0, count:0 };
+            centers[cid].x += p.x * exp;
+            centers[cid].y += p.y * exp;
+            centers[cid].z += p.z * exp;
+            centers[cid].count++;
+        });
+        Object.keys(centers).forEach(cid => {
+            centers[cid].x /= centers[cid].count;
+            centers[cid].y /= centers[cid].count;
+            centers[cid].z /= centers[cid].count;
+        });
+
+        let frame = 0;
+        const totalFrames = 120; // Animazione più lunga e fluida (2 secondi a 60fps)
+        
+        function animateGalacticGravity() {
+            frame++;
+            const progress = frame / totalFrames;
+            const ease = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+            
+            // 1. Shake verticale (decrescente)
+            window.pointsMesh.position.y = originalY + Math.sin(frame * 0.5) * (30000 * (1 - progress));
+            
+            // 2. Trazione verso il centro della Galassia e Repulsione tra Galassie
+            const posAttr = window.pointsMesh.geometry.attributes.position;
+            const array = posAttr.array;
+            
+            for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                const p = window.vaultPoints[i];
+                const cid = p.cluster_id || 'default';
+                const center = centers[cid];
+                
+                if (center) {
+                    // Spostiamo i punti verso il loro centro galattico
+                    const targetX = center.x + (p.x * exp - center.x) * 0.8; // Compressione interna
+                    const targetY = center.y + (p.y * exp - center.y) * 0.8;
+                    const targetZ = center.z + (p.z * exp - center.z) * 0.8;
+                    
+                    // Applichiamo una spinta centrifuga alle galassie (repulsione esterna)
+                    // Più il centro è lontano dall'origine, più lo spingiamo fuori
+                    const repulsionX = center.x * 1.2; 
+                    const repulsionY = center.y * 1.2;
+                    const repulsionZ = center.z * 1.2;
+
+                    // Interpolazione dinamica
+                    const finalX = targetX + (repulsionX - center.x) * ease;
+                    const finalY = targetY + (repulsionY - center.y) * ease;
+                    const finalZ = targetZ + (repulsionZ - center.z) * ease;
+
+                    array[i*3] += (finalX - array[i*3]) * 0.05 * (1-progress);
+                    array[i*3+1] += (finalY - array[i*3+1]) * 0.05 * (1-progress);
+                    array[i*3+2] += (finalZ - array[i*3+2]) * 0.05 * (1-progress);
+                }
+            }
+            posAttr.needsUpdate = true;
+            
+            if (frame < totalFrames) requestAnimationFrame(animateGalacticGravity);
+            else window.pointsMesh.position.y = originalY;
+        }
+        animateGalacticGravity();
+    }
+};
+
+// 🧠 [v8.0] H-RAG Visual Feedback: Synaptic Sparks
+window.triggerSynapticSparks = function() {
+    if (!window.scene || !window.lastNeuralLinks || !window.vaultPoints) return;
+    console.log("🧠 [H-RAG] SYNAPTIC SPARKS TRIGGERED");
+    if (window.log) window.log("🧠 [H-RAG] Synaptic Sparks: Archivist is summarizing cluster intelligence...", "#a855f7");
+
+    const ptsMap = {};
+    window.vaultPoints.forEach(p => ptsMap[p.id] = p);
+    
+    // Prendiamo un campione casuale di link per le scintille
+    const links = window.lastNeuralLinks.slice(0, 100).filter(() => Math.random() > 0.7);
+    const exp = window.nebulaExpansionFactor || 1.0;
+
+    links.forEach(l => {
+        const src = ptsMap[l.source];
+        const dst = ptsMap[l.target];
+        if (src && dst) {
+            const start = new THREE.Vector3(src.x * exp, src.y * exp, src.z * exp);
+            const end = new THREE.Vector3(dst.x * exp, dst.y * exp, dst.z * exp);
+            
+            const sparkGeo = new THREE.SphereGeometry(3000, 8, 8); 
+            const sparkMat = new THREE.MeshBasicMaterial({ 
+                color: 0xa855f7,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending
+            });
+            const spark = new THREE.Mesh(sparkGeo, sparkMat);
+            window.scene.add(spark);
+
+            let progress = 0;
+            const speed = 0.01 + Math.random() * 0.03;
+            function animateSpark() {
+                progress += speed;
+                spark.position.lerpVectors(start, end, progress);
+                spark.material.opacity = Math.sin(progress * Math.PI); // Fade in-out
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateSpark);
+                } else {
+                    window.scene.remove(spark);
+                    sparkGeo.dispose();
+                    sparkMat.dispose();
+                }
+            }
+            animateSpark();
+        }
+    });
+};
+
+// --- 🕸️ MESH WORMHOLE VISUALIZATION (v6.0) ---
+class MeshWormhole {
+    constructor(peer) {
+        this.peerId = peer.id;
+        this.url = peer.url;
+        this.group = new THREE.Group();
+        this.group.visible = layersVisibility.wormholes !== undefined ? layersVisibility.wormholes : true;
+        this.initVisuals(peer);
+        window.scene.add(this.group);
+        if (typeof log === 'function') log(`🕸️ [Bridge] Extradimensional Tunnel Active: ${this.peerId.substring(0,8)}`, (peer && peer.isDemo) ? "#a855f7" : "#3b82f6");
+    }
+
+    initVisuals(peer) {
+        // 📍 Posizionamento DETERMINISTICO (v7.5) - Sincronizzato con Agent SMITH
+        const hashCode = (s) => {
+            let h = 0;
+            for(let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+            return Math.abs(h);
+        };
+        const h_val = hashCode(this.peerId);
+        
+        const radius = 5500000 + (h_val % 1000000);
+        const angle = (h_val % 360) * (Math.PI / 180);
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = 1000000 + (h_val % 500000 - 250000);
+        
+        this.basePos = new THREE.Vector3(x, y, z);
+        this.group.position.copy(this.basePos);
+        this.group.lookAt(0, 1000000, 0); 
+
+        // 🎨 [v8.3] Spectral Identity (Unique Bicolor Gradient)
+        const hue1 = (h_val % 360);
+        const hue2 = (hue1 + 60) % 360; // Colore secondario (analogico/complementare)
+        this.color1 = new THREE.Color(`hsl(${hue1}, 100%, 60%)`);
+        this.color2 = new THREE.Color(`hsl(${hue2}, 100%, 50%)`);
+        const colorHex1 = `#${this.color1.getHexString()}`;
+        const colorHex2 = `#${this.color2.getHexString()}`;
+
+        // 🌪️ Geometria Imbuto (Wormhole Bridge)
+        const points = [];
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const r = 50000 + Math.pow(t - 1.0, 2) * 800000; 
+            points.push(new THREE.Vector2(r, (t - 0.5) * 1200000));
+        }
+        const funnelGeo = new THREE.LatheGeometry(points, 32);
+        const funnelMat = new THREE.MeshPhongMaterial({
+            color: this.color1,
+            emissive: this.color2,
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            wireframe: true
+        });
+        this.funnel = new THREE.Mesh(funnelGeo, funnelMat);
+        this.funnel.rotation.x = -Math.PI / 2; 
+        this.group.add(this.funnel);
+
+        const sprite = createTextSprite(this.peerId.substring(0, 10), colorHex1);
+        sprite.position.z = -800000; 
+        sprite.scale.set(800000, 200000, 1);
+        this.group.add(sprite);
+
+        const nebulaGeo = new THREE.BufferGeometry();
+        const partCount = 800; // Aumentato per densità
+        const posArr = new Float32Array(partCount * 3);
+        const colArr = new Float32Array(partCount * 3); // Per vertex colors
+        
+        for(let i=0; i<partCount; i++) {
+            // Posizione
+            const r = 200000 + Math.random() * 500000;
+            const a = Math.random() * Math.PI * 2;
+            posArr[i*3] = Math.cos(a) * r;
+            posArr[i*3+1] = Math.sin(a) * r;
+            posArr[i*3+2] = -800000 + (Math.random() - 0.5) * 400000; 
+            
+            // Colore (interpolazione casuale tra color1 e color2)
+            const mix = Math.random();
+            const r_col = this.color1.r * (1 - mix) + this.color2.r * mix;
+            const g_col = this.color1.g * (1 - mix) + this.color2.g * mix;
+            const b_col = this.color1.b * (1 - mix) + this.color2.b * mix;
+            colArr[i*3] = r_col;
+            colArr[i*3+1] = g_col;
+            colArr[i*3+2] = b_col;
+        }
+        
+        nebulaGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+        nebulaGeo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+        
+        // Generazione Texture morbida per effetto gas (Premium Glow)
+        const createSoftGlow = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(32,32,0, 32,32,32);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.3, 'rgba(255,255,255,0.4)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,64,64);
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        };
+
+        const nebulaMat = new THREE.PointsMaterial({
+            size: 140000, // Dimensione aumentata per l'effetto glow
+            map: createSoftGlow(),
+            vertexColors: true, 
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        this.nebulaPoints = new THREE.Points(nebulaGeo, nebulaMat);
+        this.group.add(this.nebulaPoints);
+
+        // 🕸️ Archi e Apici
+        const cubePos = (window.cube && window.cube.position) ? window.cube.position : new THREE.Vector3(0, 1002000, 0);
+        const halfSize = 2000000;
+        this.apices = [
+            [-1,-1,-1], [1,-1,-1], [-1,1,-1], [1,1,-1],
+            [-1,-1,1], [1,-1,1], [-1,1,1], [1,1,1]
+        ].map(a => new THREE.Vector3(
+            a[0]*halfSize + cubePos.x, 
+            a[1]*halfSize + cubePos.y, 
+            a[2]*halfSize + cubePos.z
+        ));
+
+        this.arcs = [];
+        this.curves = [];
+        this.apices.forEach(apex => {
+            const start = new THREE.Vector3(0, 0, 600000);
+            const end = apex.clone().sub(this.group.position);
+            const quat = this.group.quaternion.clone().invert();
+            end.applyQuaternion(quat);
+
+            const mid = start.clone().lerp(end, 0.5);
+            mid.x += (Math.random() - 0.5) * 1500000;
+
+            const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+            this.curves.push(curve);
+            
+            const points = curve.getPoints(40);
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: this.color2, transparent: true, opacity: 0.2 });
+            const arc = new THREE.Line(geo, mat);
+            this.group.add(arc);
+            this.arcs.push(arc);
+        });
+
+        const flowGeo = new THREE.BufferGeometry();
+        this.flowCount = 80; 
+        this.flowPositions = new Float32Array(this.flowCount * 3);
+        this.flowProgress = new Float32Array(this.flowCount); 
+        for(let i=0; i<this.flowCount; i++) {
+            this.flowProgress[i] = Math.random();
+        }
+        flowGeo.setAttribute('position', new THREE.BufferAttribute(this.flowPositions, 3));
+        const flowMat = new THREE.PointsMaterial({
+            color: this.color1,
+            size: 40000,
+            transparent: true,
+            opacity: 1.0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        this.flowSystem = new THREE.Points(flowGeo, flowMat);
+        this.group.add(this.flowSystem);
+    }
+
+    update() {
+        const time = Date.now() * 0.001;
+        const exp = window.nebulaExpansionFactor || 1.0;
+        const center = new THREE.Vector3(0, 1000000, 0);
+
+        // 🔴 [v8.2] Skywalker Sovereign Laser Fire logic
+        const isSkywalkerFiring = (this.agents && this.agents['FS-77'] && 
+            (this.agents['FS-77'].status.startsWith("MISSION:") || 
+             this.agents['FS-77'].status.startsWith("🚀") ||
+             this.agents['FS-77'].status.startsWith("REINFORCING:") ||
+             this.agents['FS-77'].status.startsWith("INJECTING:")));
+
+        this.group.position.copy(this.basePos)
+            .sub(center)
+            .multiplyScalar(exp)
+            .add(center);
+
+        // Manteniamo l'orientamento verso il centro reale
+        this.group.lookAt(center);
+
+        if (this.nebulaPoints) {
+            this.nebulaPoints.rotation.z += 0.01;
+        }
+        if (this.funnel) {
+            this.funnel.rotation.y += 0.02;
+            this.funnel.material.emissiveIntensity = 0.5 + Math.sin(time*3)*0.3;
+        }
+
+        // Ricalcolo archi per riflettere il movimento del wormhole rispetto al cubo fisso
+        const quatInv = this.group.quaternion.clone().invert();
+        this.curves.forEach((curve, idx) => {
+            // 🔴 [v8.0] Skywalker Sovereign Laser Fire logic
+            if (this.agents && this.agents['FS-77'] && this.agents['FS-77'].laser) {
+                const now = Date.now();
+                if (!this.lastSkywalkerShot) this.lastSkywalkerShot = 0;
+                
+                // Raffica quad-cannon: 1 proiettile ogni 125ms per un totale di 8 colpi/sec
+                if (now - this.lastSkywalkerShot > 125) {
+                    if (typeof triggerSkywalkerLaser === 'function') {
+                        triggerSkywalkerLaser(this.agents['FS-77'], this);
+                    }
+                    this.lastSkywalkerShot = now;
+                }
+            } else if (this.agents && this.agents['FS-77'] && !this.agents['FS-77'].laser) {
+                // Se il laser non è attivo, disegna solo lo sprite (o nulla se già gestito)
+            }
+            const start = new THREE.Vector3(0, 0, 600000);
+            const endWorld = this.apices[idx];
+            const endLocal = endWorld.clone().sub(this.group.position).applyQuaternion(quatInv);
+            
+            curve.v0.copy(start);
+            curve.v2.copy(endLocal);
+            // v1 (mid) può rimanere interpolato o essere ricalcolato per fluidità
+            curve.v1.copy(start).lerp(endLocal, 0.5);
+            
+            const points = curve.getPoints(40);
+            this.arcs[idx].geometry.setFromPoints(points);
+        });
+
+        const posAttr = this.flowSystem.geometry.attributes.position;
+        for (let i = 0; i < this.flowCount; i++) {
+            this.flowProgress[i] += 0.005; 
+            if (this.flowProgress[i] > 1) this.flowProgress[i] = 0;
+
+            const curveIdx = i % this.curves.length;
+            const p = this.curves[curveIdx].getPoint(this.flowProgress[i]);
+            posAttr.setXYZ(i, p.x, p.y, p.z);
+        }
+        posAttr.needsUpdate = true;
+
+        this.arcs.forEach(arc => {
+            arc.material.opacity = 0.1 + Math.sin(time*2)*0.1;
+        });
+    }
+
+    destroy() {
+        window.scene.remove(this.group);
+    }
+
+    destroy() {
+        window.scene.remove(this.group);
+    }
+}
+
+window.meshWormholes = {};
+window.syncMeshWormholes = async () => {
+    try {
+        const r = await fetch('/api/mesh/peers', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const d = await r.json();
+        let peers = d.peers || [];
+
+        // Includiamo i demo peers nella sincronizzazione 3D
+        if (window.demoPeers) {
+            peers = [...peers, ...window.demoPeers];
+        }
+        
+        const currentIds = peers.filter(p => !p.paused).map(p => p.id);
+        Object.keys(window.meshWormholes).forEach(id => {
+            if (!currentIds.includes(id)) {
+                window.meshWormholes[id].destroy();
+                delete window.meshWormholes[id];
+            }
+        });
+
+        peers.forEach(p => {
+            if (p.paused) return; // 🛡️ Non renderizzare peer in pausa
+            if (!window.meshWormholes[p.id]) {
+                console.log("🕸️ [Mesh] Inizializzazione Wormhole per:", p.id);
+                window.meshWormholes[p.id] = new MeshWormhole(p);
+                
+                // 🕶️ [v7.0] Initialize Matrix-Smith Shader Mesh
+                const group = new THREE.Group();
+                const smithTex = new THREE.TextureLoader().load('/static/img/agent_smith_v7.png');
+                
+                // Custom Shader for "Matrix Rain" effect
+                const smithMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        map: { value: smithTex },
+                        time: { value: 0 }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform sampler2D map;
+                        uniform float time;
+                        varying vec2 vUv;
+                        void main() {
+                            vec4 texColor = texture2D(map, vUv);
+                            // Rimuovi pixel neri/scuri (Alpha mask procedurale)
+                            if (texColor.g < 0.05) discard;
+                            
+                            // Effetto pioggia Matrix dinamica sulla faccia
+                            float rain = fract(vUv.y * 1.5 + time * 0.7);
+                            rain = pow(rain, 3.0); 
+                            
+                            vec3 color = texColor.rgb * (0.7 + rain * 2.5);
+                            gl_FragColor = vec4(color, texColor.a);
+                        }
+                    `,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    side: THREE.DoubleSide
+                });
+
+                const geometry = new THREE.PlaneGeometry(1, 1);
+                const mesh = new THREE.Mesh(geometry, smithMat);
+                mesh.scale.set(600000, 600000, 1); // Imponente
+                group.add(mesh);
+                
+                const label = createTextSprite(`AGENT-SMITH [GATEWAY]`, "#00ff41");
+                label.position.y = 350000;
+                group.add(label);
+                
+                scene.add(group);
+                smithFleetGroups[p.id] = group;
+            }
+        });
+        
+        // Cleanup Smith Fleet
+        Object.keys(smithFleetGroups).forEach(pid => {
+            if (!currentIds.includes(pid)) {
+                scene.remove(smithFleetGroups[pid]);
+                delete smithFleetGroups[pid];
+                delete smithTargetPositions[pid];
+            }
+        });
+    } catch(e) {
+        console.error("🚨 [Mesh] Errore Sincronizzazione Wormholes:", e);
+    }
+};
+
+// --- 🧪 DEMO MODE PEERS (v6.0) ---
+window.demoPeers = [
+    { id: "AURA-OS-001", url: "http://10.0.0.45:8001", source: "zeroconf", last_seen: Date.now()/1000 - 15, isDemo: true },
+    { id: "NEURAL-V-77", url: "http://192.168.1.22:8001", source: "manual", last_seen: Date.now()/1000 - 450, isDemo: true }
+];
+
+// Inizializzazione cicli sync
+setInterval(window.syncMeshWormholes, 10000);
+setTimeout(window.syncMeshWormholes, 3000); // Primo avvio rapido
+
+// 🛡️ [v6.1] Global Handshake Initializer
+document.addEventListener('DOMContentLoaded', () => {
+    // Caricamento immediato identità sovrana
+    window.refreshSovereignIdentity();
+
+    const checkInterval = setInterval(() => {
+        const handshakeInput = document.getElementById('handshake-token-input');
+        if (handshakeInput) {
+            handshakeInput.addEventListener('dragover', (e) => { e.preventDefault(); handshakeInput.style.borderColor = '#a855f7'; });
+            handshakeInput.addEventListener('dragleave', () => { handshakeInput.style.borderColor = 'rgba(168,85,247,0.2)'; });
+            handshakeInput.addEventListener('drop', (e) => {
+                e.preventDefault();
+                handshakeInput.style.borderColor = 'rgba(168,85,247,0.2)';
+                const file = e.dataTransfer.files[0];
+                if (file && file.name.endsWith('.nvvault')) {
+                    window.importVaultIdentity(file);
+                } else {
+                    showFloatingNotification("File non valido. Trascina un file .nvvault ⚠️", "error");
+                }
+            });
+            clearInterval(checkInterval);
+        }
+    }, 1000);
+});
+
+// 🛡️ [v8.0] Security Log Helpers
+window.clearSecurityLogs = () => {
+    const container = document.getElementById('smith-security-container');
+    if (container) {
+        container.innerHTML = '<div style="padding: 2rem; text-align: center; color: #4ade80; opacity: 0.5;"><i class="fas fa-user-secret" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>SYSTEM PURGED. RE-SCANNING...</div>';
     }
 };

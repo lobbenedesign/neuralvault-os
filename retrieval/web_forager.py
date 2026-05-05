@@ -142,6 +142,10 @@ class SovereignWebForager:
         )
 
     def _normalize_url(self, url: str) -> str:
+        """Pulisce e normalizza l'URL, rimuovendo caratteri illegali e spazi."""
+        if not url: return ""
+        # Rimuove ritorni a capo e caratteri non stampabili che causano InvalidURL
+        url = "".join(ch for ch in url if ch.isprintable() and not ch.isspace()).strip()
         url, _ = urldefrag(url)
         return url.rstrip("/")
 
@@ -372,13 +376,13 @@ class SovereignWebForager:
                 current_idx = pages_count + 1
                 progress_pct = (current_idx / self.max_pages) * 100 if self.max_pages > 0 else 0
                 
-                print(f"📄 [Forager] [{current_idx}/{self.max_pages}] {progress_pct:.1f}% | Memoria Synaptica: {url[:60]}...")
+                print(f"📄 [Forager] [{current_idx}/{self.max_pages}] {progress_pct:.1f}% | Memoria Synaptica: {norm_url[:60]}...")
 
-                html = await self._fetch_page(url)
+                html = await self._fetch_page(norm_url)
                 if not html:
                     continue
 
-                page = await self._parse_html(html, url)
+                page = await self._parse_html(html, norm_url)
                 page.depth = depth
 
                 pages_count += 1
