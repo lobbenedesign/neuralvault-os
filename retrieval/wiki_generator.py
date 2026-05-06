@@ -14,6 +14,8 @@ import json
 import re
 from retrieval.wiki_monitor import WikiFreshnessMonitor
 from retrieval.mesh_consensus import MeshConsensusEngine
+from retrieval.causal_simulator import CausalSimulator
+from retrieval.wiki_visualizer import WikiVisualizer
 
 @dataclass
 class WikiCitation:
@@ -48,6 +50,11 @@ class SovereignWikiGenerator:
         self.engine = engine
         self.monitor = WikiFreshnessMonitor(engine)
         self.consensus_engine = MeshConsensusEngine(engine)
+        self.simulator = CausalSimulator(engine)
+        self.visualizer = WikiVisualizer(engine)
+        # 🏺 [v8.0] Knowledge Versioning Path
+        self.history_dir = Path(engine.data_dir) / "wiki_history"
+        self.history_dir.mkdir(exist_ok=True)
 
     async def generate_page(self, topic: str) -> WikiPage:
         print(f"📖 [Wiki] Generazione pagina per: {topic}")
@@ -264,6 +271,11 @@ class SovereignWikiGenerator:
     def to_markdown(self, page: WikiPage) -> str:
         md = f"# 📖 Wiki: {page.title.upper()}\n\n"
         md += f"> {page.summary}\n\n"
+        
+        # 🏺 [v8.0] Epistemic Weather HUD
+        sections_meta = [{"confidence": s.confidence} for s in page.sections]
+        md += self.visualizer.generate_confidence_dashboard(sections_meta)
+        
         md += f"---\n"
         
         for sec in page.sections:
@@ -276,13 +288,51 @@ class SovereignWikiGenerator:
                     md += f"- **{c.source_title}**{link}: *\"{c.excerpt}...\"* [ID: {c.node_id[:8]}]\n"
                 md += "\n"
         
+        # 📊 [v8.0] Phase 7: Generative Multimedia
+        all_nodes = []
+        for sec in page.sections:
+            for cit in sec.citations:
+                n = self.engine.get_node(cit.node_id)
+                if n: all_nodes.append(n)
+        
+        if all_nodes:
+            md += "---\n## 🌌 Conceptual Galaxy Visualization (v8.0)\n"
+            md += "```mermaid\n"
+            md += self.visualizer.generate_mermaid_flow(all_nodes[:15])
+            md += "\n```\n\n"
+            
+            timeline = self.visualizer.generate_knowledge_timeline(all_nodes)
+            if timeline:
+                md += "## 🕰️ Evolutionary Knowledge Timeline\n"
+                md += "```mermaid\n"
+                md += timeline
+                md += "\n```\n"
+
+        # 🧪 [v8.0] What-If Simulation Entry Point
+        md += "\n---\n## 🧪 Decision Simulation (What-If)\n"
+        md += "*Simula l'impatto di una modifica a questa conoscenza:*\n"
+        md += f"[Avvia Simulazione Causale per {page.title}](/api/wiki/simulate?topic={page.title})\n"
+
         if page.related_topics:
             md += "---\n## 🔗 Argomenti Correlati\n"
             md += ", ".join([f"[[{t}]]" for t in page.related_topics])
             md += "\n"
             
-        md += f"\n\n*Generato automaticamente dal Sovereign Wiki Engine il {page.generated_at.strftime('%Y-%m-%d %H:%M')}*"
+        md += f"\n\n*Generato automaticamente dal Sovereign Wiki Engine v8.0 il {page.generated_at.strftime('%Y-%m-%d %H:%M')}*"
+        
+        # 💾 Knowledge Versioning (Phase 7)
+        self._archive_wiki_version(page.title, md)
+        
         return md
+
+    def _archive_wiki_version(self, topic: str, markdown: str):
+        """Salva una versione immutabile della conoscenza attuale."""
+        import time
+        ts = int(time.time())
+        safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
+        version_file = self.history_dir / f"{safe_topic}_{ts}.md"
+        with open(version_file, "w") as f:
+            f.write(markdown)
 
     async def _mesh_verify_weighted(self, section: str, text: str):
         """[v7.5] Query peers and compute weighted consensus."""

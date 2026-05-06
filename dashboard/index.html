@@ -505,6 +505,14 @@
                 <div class="nav-item" onclick="showSection('lab')" id="nav-lab">
                     <i class="fas fa-microscope" style="margin-right: 10px;"></i> <span data-i18n="nav_lab">LABORATORIO NEURALE</span>
                 </div>
+                <!-- [v8.0] Phase 7: Sovereign Wiki 3.0 -->
+                <div class="nav-item" onclick="showSection('wiki')" id="nav-wiki">
+                    <i class="fas fa-book-reader" style="margin-right: 10px;"></i> <span data-i18n="nav_wiki">NEURAL WIKI 3.0</span>
+                </div>
+                <!-- [v8.0] Phase 7: What-If Simulation -->
+                <div class="nav-item" onclick="showSection('simulation')" id="nav-simulation">
+                    <i class="fas fa-vial" style="margin-right: 10px;"></i> <span data-i18n="nav_simulation">WHAT-IF SIMULATION</span>
+                </div>
                 <!-- Chat is now part of Lab -->
                 <div class="nav-item" onclick="showSection('analytics')" id="nav-analytics">
                     <i class="fas fa-chart-line" style="margin-right: 10px;"></i> <span data-i18n="nav_analytics">ANALISI AVANZATA</span>
@@ -1372,6 +1380,7 @@
                         <button id="tab-network" class="settings-tab" onclick="switchSettingsTab('network')" style="border-color: #3b82f6; color: #3b82f6;" data-i18n="tab_network_manager"><i class="fas fa-project-diagram"></i> NETWORK</button>
                         <button id="tab-galaxies" class="settings-tab" onclick="switchSettingsTab('galaxies')" style="border-color: #00f2fe; color: #00f2fe;" data-i18n="tab_concept_galaxies">CONCEPT GALAXIES</button>
                         <button id="tab-limbo" class="settings-tab" onclick="switchSettingsTab('limbo')" style="border-color: #facc15; color: #facc15;" data-i18n="tab_neural_limbo">NEURAL LIMBO</button>
+                        <button id="tab-compression" class="settings-tab" onclick="switchSettingsTab('compression')" style="border-color: #10b981; color: #10b981;"><i class="fas fa-compress-arrows-alt"></i> COMPRESSION</button>
                         <button id="tab-danger" class="settings-tab" onclick="switchSettingsTab('danger')" style="color: #3b82f6;" data-i18n="tab_settings">IMPOSTAZIONI</button>
                     </div>
                 </div>
@@ -1524,6 +1533,41 @@
                             <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #64748b; font-size: 0.7rem; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px;">
                                 <i class="fas fa-box-open" style="font-size: 2rem; margin-bottom: 1rem; display: block; opacity: 0.3;"></i>
                                 Limbo vuoto. Nessun nodo in attesa di decisione.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- [v8.0] NEURAL IMPLICIT COMPRESSION (NIC) -->
+                <div id="config-panel-compression" class="settings-content" style="display:none; min-height: 60vh;">
+                    <div style="background: rgba(16,185,129,0.05); padding: 2rem; border-radius: 12px; border: 1px solid rgba(16,185,129,0.2); width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <div>
+                                <label style="display:block; color: #10b981; font-weight: 800; font-size: 0.8rem; letter-spacing: 2px;">🦾 NEURAL IMPLICIT COMPRESSION (NIC)</label>
+                                <p style="font-size: 0.55rem; color: #8b949e; margin-top: 5px;">Ottimizza lo storage degli embedding comprimendoli tramite quantizzazione neurale locale (VQ-VAE).</p>
+                            </div>
+                            <button onclick="triggerNeuralCompression()" id="compression-btn" style="background: rgba(16,185,129,0.1); border: 1px solid #10b981; color: #10b981; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.6rem; font-weight: 800;"><i class="fas fa-compress-arrows-alt"></i> OTTIMIZZA ORA</button>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                            <div class="glass-card" style="padding: 1rem; text-align: center; border-color: rgba(16,185,129,0.2);">
+                                <div style="font-size: 0.5rem; color: #8b949e;">STORAGE ATTUALE</div>
+                                <div id="comp-storage-raw" style="font-size: 1.2rem; font-weight: 900; color: #fff;">1.2 GB</div>
+                            </div>
+                            <div class="glass-card" style="padding: 1rem; text-align: center; border-color: rgba(59,130,246,0.2);">
+                                <div style="font-size: 0.5rem; color: #8b949e;">STORAGE OTTIMIZZATO</div>
+                                <div id="comp-storage-opt" style="font-size: 1.2rem; font-weight: 900; color: #10b981;">124 MB</div>
+                            </div>
+                            <div class="glass-card" style="padding: 1rem; text-align: center; border-color: rgba(250,204,21,0.2);">
+                                <div style="font-size: 0.5rem; color: #8b949e;">EFFICIENZA</div>
+                                <div id="comp-efficiency" style="font-size: 1.2rem; font-weight: 900; color: #facc15;">90%</div>
+                            </div>
+                        </div>
+
+                        <div id="compression-progress-container" style="display:none; margin-top: 1rem;">
+                            <div style="font-size: 0.5rem; color: #10b981; margin-bottom: 5px; text-transform: uppercase;">Compressione in corso: <span id="comp-status-text">Addestramento Codebook Neurale...</span></div>
+                            <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden;">
+                                <div id="comp-progress-bar" style="width: 30%; height: 100%; background: #10b981; transition: width 0.3s;"></div>
                             </div>
                         </div>
                     </div>
@@ -2185,6 +2229,101 @@
                     </div>
                 </div>
             </div>
+            <!-- 🏺 [v8.0] NEURAL WIKI 3.0 VIEW (Phase 7) -->
+            <div id="wiki-view" class="view-container" style="display: none; padding: 2rem; background: rgba(2, 6, 23, 0.98); z-index: 1000; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem; border-bottom: 2px solid #3b82f6; padding-bottom: 15px;">
+                    <h1 style="color: #3b82f6; margin:0; text-transform: uppercase; font-weight: 900;"><i class="fas fa-book-reader"></i> <span data-i18n="nav_wiki">NEURAL WIKI 3.0</span></h1>
+                    <div style="display: flex; gap: 1rem;">
+                        <input type="text" id="wiki-search-portal" placeholder="Cerca nella Wiki..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(59,130,246,0.3); color: white; padding: 0.6rem 1.2rem; border-radius: 50px; width: 300px; font-size: 0.75rem; outline: none;">
+                        <button onclick="refreshWikiList()" style="background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; color: #3b82f6; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-size: 0.65rem; font-weight: 800;"><i class="fas fa-sync"></i> REFRESH</button>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2rem; min-height: 80vh;">
+                    <!-- Sidebar: Galassie & Versioni -->
+                    <div style="background: rgba(0,0,0,0.4); border-radius: 16px; padding: 1.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; max-height: 80vh;">
+                        <div style="font-size: 0.6rem; color: #3b82f6; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem;">GALASSIE DI CONCETTI</div>
+                        <div id="wiki-galaxies-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
+                            <!-- Popolated by JS -->
+                        </div>
+                        
+                        <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem;">STORICO (TIME-TRAVEL)</div>
+                        <div id="wiki-history-list" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.65rem; color: #64748b;">
+                            Seleziona una galassia per vedere lo storico.
+                        </div>
+                    </div>
+                    
+                    <!-- Content Area -->
+                    <div id="wiki-portal-content" style="background: rgba(15, 23, 42, 0.5); border-radius: 20px; padding: 3rem; border: 1px solid rgba(59,130,246,0.1); overflow-y: auto; max-height: 80vh; font-family: 'Inter', sans-serif;">
+                        <div style="text-align: center; padding: 5rem; opacity: 0.3;">
+                            <i class="fas fa-brain" style="font-size: 4rem; margin-bottom: 2rem; display: block;"></i>
+                            <h2 style="letter-spacing: 5px;">SOVEREIGN KNOWLEDGE PORTAL</h2>
+                            <p>Seleziona una galassia o cerca un argomento per iniziare.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🧪 [v8.0] WHAT-IF SIMULATION VIEW (Phase 7) -->
+            <div id="simulation-view" class="view-container" style="display: none; padding: 2rem; background: rgba(2, 6, 23, 0.98); z-index: 1000; overflow-y: auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem; border-bottom: 2px solid #facc15; padding-bottom: 15px;">
+                    <h1 style="color: #facc15; margin:0; text-transform: uppercase; font-weight: 900;"><i class="fas fa-vial"></i> <span data-i18n="nav_simulation">WHAT-IF ENGINE</span></h1>
+                    <div style="display: flex; gap: 1rem;">
+                        <button onclick="resetSimulation()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-size: 0.65rem; font-weight: 800;"><i class="fas fa-undo"></i> RESET</button>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 400px; gap: 2rem;">
+                    <!-- Simulatore Attivo -->
+                    <div style="background: rgba(0,0,0,0.4); border-radius: 20px; padding: 2rem; border: 1px solid rgba(250,204,21,0.2); min-height: 70vh;">
+                        <div style="margin-bottom: 2rem;">
+                            <label style="font-size: 0.7rem; color: #facc15; font-weight: 800; letter-spacing: 2px;">MAPPA D'IMPATTO CAUSALE</label>
+                            <div id="simulation-graph-container" style="width: 100%; height: 500px; margin-top: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed rgba(250,204,21,0.1);">
+                                <!-- Cytoscape Simulation Graph -->
+                            </div>
+                        </div>
+                        
+                        <div id="simulation-results-table" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+                            <!-- Impact cards -->
+                        </div>
+                    </div>
+                    
+                    <!-- Pannello di Controllo -->
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="glass-card" style="padding: 1.5rem; border-color: rgba(250,204,21,0.4);">
+                            <div style="font-size: 0.65rem; color: #facc15; font-weight: 900; margin-bottom: 1rem;">INTERVENTO CAUSALE</div>
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                <div>
+                                    <label style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">NODO TARGET</label>
+                                    <div id="selected-sim-node" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.75rem; color: #fff; border: 1px solid rgba(255,255,255,0.1);">
+                                        Nessun nodo selezionato. Clicca su un nodo nel grafo per intervenire.
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">INTENSITÀ INTERVENTO</label>
+                                    <input type="range" id="sim-intensity" min="-100" max="100" value="50" style="width: 100%; accent-color: #facc15;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.5rem; color: #8b949e; margin-top: 5px;">
+                                        <span>INIBIZIONE</span>
+                                        <span id="sim-intensity-val" style="color: #facc15; font-weight: 800;">+50%</span>
+                                        <span>ATTIVAZIONE</span>
+                                    </div>
+                                </div>
+                                <button onclick="runCausalSimulation()" style="width: 100%; padding: 1rem; background: linear-gradient(135deg, #facc15, #f59e0b); border: none; border-radius: 12px; color: #000; font-weight: 900; font-size: 0.75rem; cursor: pointer; box-shadow: 0 4px 20px rgba(250,204,21,0.3);">ESEGUI SIMULAZIONE</button>
+                            </div>
+                        </div>
+                        
+                        <div class="glass-card" style="padding: 1.5rem; flex: 1; border-color: rgba(59,130,246,0.3);">
+                            <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; margin-bottom: 1rem;">RIEPILOGO PROBABILISTICO</div>
+                            <div id="sim-stats" style="font-size: 0.7rem; color: #94a3b8; display: flex; flex-direction: column; gap: 10px;">
+                                <div>Nodi Influenzati: <span id="sim-affected-count" style="color: #fff;">0</span></div>
+                                <div>Rischio di Instabilità: <span id="sim-risk-score" style="color: #ef4444;">0%</span></div>
+                                <div>Confidenza Modello: <span id="sim-confidence" style="color: #4ade80;">0%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </section>
 
@@ -2547,7 +2686,10 @@
     </div>
 
         <!-- 🚀 JS MAIN ENTRY (v4.0) -->
-        <script src="/static/js/dashboard.js?v=4.4.1"></script>
+    <script src="/static/js/dashboard.js?v=8.0.0"></script>
+    <script src="/static/js/v51_features.js"></script>
+    <script src="/static/js/v60_features.js"></script>
+    <script src="/static/js/v80_features.js"></script>
 
     <!-- 🌐 AURA PERSISTENT LAYER (Modals & Scripts isolated from Grid) -->
     <!-- 📊 AI BENCHMARK HUB -->
@@ -2647,8 +2789,5 @@
         .btn-red { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); }
         .evo-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
     </style>
-    <!-- 🧪 v5.1 Sovereign Voice & Consciousness Timeline -->
-    <script src="/static/js/v51_features.js"></script>
-    <script src="/static/js/v60_features.js"></script>
 </body>
 </html>

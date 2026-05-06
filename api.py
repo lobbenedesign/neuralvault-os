@@ -92,6 +92,7 @@ from network.gossip import SyncSignal
 from retrieval.web_forager import SovereignWebForager
 from retrieval.multimodal import MultimodalSynapseProcessor
 from interface.voice import SovereignVoiceEngine
+from utils.neural_compression import NeuralImplicitCompressor
 # 🛡️ Agent Smith Security Engine State (v6.0.1)
 RETALIATION_LOCKS = {} # {ip: timestamp_expiry}
 THREAT_LEVELS = {}     # {ip: score}
@@ -2719,6 +2720,46 @@ async def get_taxonomy(api_key: str = Depends(get_api_key)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.get("/api/wiki/simulate")
+async def simulate_wiki_impact(topic: str, node_id: Optional[str] = None):
+    """🧪 [v8.0] Phase 7: What-If Simulation Engine."""
+    try:
+        if not node_id:
+            # Trova il nodo più rappresentativo per il topic
+            results = await engine.query(topic, k=1)
+            if results: node_id = results[0].node.id
+        
+        if not node_id:
+            return JSONResponse({"error": "No starting node found for topic"}, status_code=404)
+            
+        simulation = await engine.wiki.simulator.simulate_intervention(node_id)
+        return JSONResponse(simulation)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/history")
+async def get_wiki_history(topic: str):
+    """🏺 [v8.0] Knowledge Versioning: Recupera lo storico della conoscenza."""
+    try:
+        history_dir = Path(engine.data_dir) / "wiki_history"
+        safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
+        files = glob.glob(str(history_dir / f"{safe_topic}_*.md"))
+        
+        history = []
+        for f in sorted(files, reverse=True):
+            with open(f, "r") as fh:
+                content = fh.read()
+                # Estraiamo timestamp dal nome file
+                ts = f.split("_")[-1].replace(".md", "")
+                history.append({
+                    "timestamp": int(ts),
+                    "date": datetime.fromtimestamp(int(ts)).strftime('%Y-%m-%d %H:%M'),
+                    "preview": content[:200] + "..."
+                })
+        return JSONResponse({"topic": topic, "versions": history})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/limbo/list")
 async def list_limbo_nodes(api_key: str = Depends(get_api_key)):
     """[v5.1] Elenca i nodi nel Semantic Trash Bin (Limbo) con testo completo."""
@@ -3507,6 +3548,26 @@ async def apply_sync_delta(payload: Dict):
     for op in delta:
         await engine.crdt.apply_remote_op(op)
     return {"status": "success", "applied_ops": len(delta)}
+
+@app.post("/api/system/compress")
+async def trigger_neural_compression(background_tasks: BackgroundTasks):
+    """🧠 [v8.0] Trigger Neural Implicit Compression (NIC)."""
+    async def _run_nic():
+        nic = NeuralImplicitCompressor()
+        # Recupera tutti gli embedding per il training
+        all_ids = engine._prefilter.filter("1=1")
+        vectors = []
+        for nid in all_ids:
+            n = engine.get_node(nid)
+            if n and n.vector is not None: vectors.append(n.vector)
+        
+        if len(vectors) > 500:
+            nic.train_on_vault(np.array(vectors))
+            nic.save(str(Path(engine.data_dir) / "nic_codebook.npy"))
+            # In v8.1+ i nodi useranno nic.compress() per lo storage
+    
+    background_tasks.add_task(_run_nic)
+    return {"status": "Compression training started in background"}
 
 if __name__ == "__main__":
     print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v6.0.1 Sovereign Maturity...")

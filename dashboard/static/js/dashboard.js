@@ -2513,6 +2513,9 @@ window.showSection = (s) => {
         if (settingsTabs.includes(s)) {
             switchSettingsTab(s);
         }
+        // [v8.0] Phase 7: Auto-Init
+        if (s === 'wiki') window.refreshWikiList();
+        if (s === 'simulation') window.initSimulationGraph();
     }
     
     // [SOVEREIGN PRIORITIZATION]

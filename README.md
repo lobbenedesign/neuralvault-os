@@ -1,32 +1,29 @@
-# 🏛️ NeuralVault-OS v7.5: The Verification Era
-**The Autonomous Modular Agentic RAG with Hierarchical GraphRAG, Kinetic Swarm, and 3D Neural Visualization.**
+# 🏛️ NeuralVault-OS v8.0: The Predictive Cognitive Engine
+**The Autonomous Modular Agentic RAG with Hierarchical GraphRAG, Causal Simulation, and Neural Implicit Compression.**
 
 ---
 
 ## 📜 Vision: The Active Wisdom Core [ITA/EN]
 
-**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Superando il RAG tradizionale, NeuralVault trasforma i dati grezzi in saggezza verificata attraverso uno sciame di agenti cinetici e una gerarchia semantica auto-organizzante.
+**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Con la **Release v8.0**, NeuralVault compie il salto da archivio passivo a simulatore predittivo: non si limita a ricordare il passato, ma simula scenari "What-If" per prevedere l'impatto di nuove informazioni sulla tua base di conoscenza.
 
-**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. Moving beyond traditional RAG, NeuralVault transforms raw data into verified wisdom through a swarm of kinetic agents and a self-organizing semantic hierarchy.
+**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v8.0**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
 
 ---
 
 ## 🌌 Why NeuralVault?
 
-- **🛡️ Sovranità Assoluta / Absolute Sovereignty**: 100% Offline, locale, crittografato. I tuoi dati non lasciano mai il tuo Mac. / 100% Offline, local, encrypted. Your data never leaves your Mac.
-- **🐝 Intelligenza di Sciame / Swarm Intelligence**: 9 agenti autonomi che curano, potano e collegano i tuoi pensieri. / 9 autonomous agents that curate, prune, and link your thoughts.
-- **🌌 H-RAG (Hierarchical GraphRAG)**: Mappatura automatica in Galassie Concettuali per una ricerca 10x più precisa. / Automatic mapping into Conceptual Galaxies for 10x more precise retrieval.
-- **🛡️ Verification Era (v7.5)**: Red Teaming autonomo e Consenso Pesato tra Vault (Meritocrazia Epistemica). / Autonomous Red Teaming and Weighted Consensus between Vaults (Epistemic Meritocracy).
-- **🕹️ Visualizzazione 3D Nebula**: Naviga fisicamente nella tua memoria neurale in tempo reale. / Physically navigate your neural memory in real-time.
+- **🧪 What-If Engine (v8.0)**: Simula l'impatto causale di un cambiamento prima di implementarlo. / Simulate the causal impact of a change before implementing it.
+- **🦾 Neural Implicit Compression (NIC)**: Riduzione dello storage degli embedding fino al 90% (VQ-VAE). / Embedding storage reduction up to 90% via neural quantization.
+- **🏛️ Sovereign Wiki 3.0**: Portale enciclopedico generativo con diagrammi Mermaid e Epistemic Weather HUD. / Generative encyclopedic portal with Mermaid diagrams and Epistemic Weather HUD.
+- **🌌 H-RAG (Hierarchical GraphRAG)**: Mappatura automatica in Galassie Concettuali. / Automatic mapping into Conceptual Galaxies.
+- **🛡️ Verification Era**: Red Teaming autonomo e Consenso Pesato tra Vault. / Autonomous Red Teaming and Weighted Consensus.
 
 ![Nexus Vault](assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
 
 ---
 
 ## 📖 Documentazione Completa & Quick Start / Documentation & Quick Start
-
-**ITA**: Per istruzioni sull'installazione, dettagli tecnici profondi e il manifesto del progetto, consulta il documento principale:
-**EN**: For installation instructions, deep technical details, and the project manifesto, please refer to the main document:
 
 👉 [**🏛️ LEGGI IL MANIFESTO TECNICO (ARCHITETTURA.md)**](ARCHITETTURA.md)
 
@@ -48,14 +45,24 @@ python3 api.py
 ---
 
 ## 📊 Analytical Comparison (Market Matrix)
+*Un'analisi onesta e approfondita delle capacità di NeuralVault rispetto ai leader di mercato.*
 
-| Feature | **NeuralVault v7.5** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Data Sovereignty** | **✅ Local-Locked** | ❌ Cloud | ✅ Local | ❌ Cloud Only | ⚠️ Hybrid |
-| **Agentic Evolution** | **✅ 9 Kinetic Agents** | ❌ No | ❌ No | ❌ No | ⚠️ Basic |
-| **Verification Era** | **✅ Red-Team/Consensus** | ❌ No | ❌ No | ❌ No | ❌ No |
-| **3D Visualization** | **✅ Native Nebula** | ❌ No | ❌ 2D Simple | ❌ No | ❌ No |
-| **Inference Cost** | **✅ 0 (Local)** | ❌ Token Heavy | ✅ 0 | ❌ High SaaS | ⚠️ Tiered |
+| Feature | **NeuralVault v8.0** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Quivr / Verba |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Sovereignty** | **✅ 100% Local-Locked** | ❌ Cloud-Based | ✅ Local | ❌ SaaS Cloud | ⚠️ Hybrid | ✅ Local |
+| **Causal Simulation** | **✅ What-If Engine** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Neural Compression** | **✅ NIC (VQ-VAE)** | ❌ No | ❌ No | ⚠️ Scalar Quant. | ❌ No | ❌ No |
+| **Agentic Swarm** | **✅ 9 Autonomous Agents** | ❌ No | ❌ No | ❌ No | ⚠️ Basic | ❌ No |
+| **Knowledge Wiki** | **✅ Generative Portal** | ❌ No | ❌ Chat Only | ❌ No | ❌ No | ❌ No |
+| **Verification** | **✅ Red-Team/Consensus** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **3D Visualization** | **✅ Native Nebula** | ❌ No | ❌ 2D Simple | ❌ No | ❌ No | ❌ No |
+| **P2P Mesh Network** | **✅ ZeroConf Mesh** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Price** | **✅ FREE (Local)** | ❌ High Token Cost | ✅ FREE | ❌ High SaaS | ⚠️ Tiered | ✅ FREE |
+
+**Honest Assessment / Valutazione Onesta:**
+- **NeuralVault** eccelle nella **comprensione profonda**, nella **verificabilità** e nella **simulazione**. È l'unico sistema che permette di "stressare" la propria conoscenza.
+- **Pinecone/Zilliz** rimangono superiori per carichi di lavoro **Enterprise a scala globale** (miliardi di vettori) dove la coerenza locale non è la priorità.
+- **MS GraphRAG** offre un'integrazione nativa con Azure, ma a costi di inferenza proibitivi per singoli ricercatori.
 
 ---
 
