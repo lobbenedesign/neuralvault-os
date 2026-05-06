@@ -1,4 +1,4 @@
-# 🏛️ NeuralVault-OS v8.0: The Predictive Cognitive Engine
+# 🏛️ NeuralVault-OS v8.0.1: The Predictive Cognitive Engine
 **The Autonomous Modular Agentic RAG with Hierarchical GraphRAG, Causal Simulation, and Neural Implicit Compression.**
 
 ---
