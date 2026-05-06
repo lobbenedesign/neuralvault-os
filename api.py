@@ -542,6 +542,12 @@ async def get_dashboard():
     with open("dashboard/index.html", "r") as f:
         return f.read()
 
+@app.get("/wiki", response_class=HTMLResponse)
+async def get_wiki_standalone():
+    """🏛️ [v8.0] Sovereign Wiki Standalone Entry."""
+    with open("dashboard/index.html", "r") as f:
+        return f.read()
+
 app.mount("/static", StaticFiles(directory="dashboard/static"), name="static")
 
 
@@ -2631,10 +2637,11 @@ async def neural_chat(request: QueryRequest, x_api_key: str = Header(None)):
 @app.post("/api/wiki/generate")
 async def generate_wiki_page(req: dict, api_key: str = Depends(get_api_key)):
     topic = req.get("topic")
+    mode = req.get("mode", "TECHNICAL")
     if not topic: raise HTTPException(400, "Topic missing")
     
     try:
-        page = await engine.wiki.generate_page(topic)
+        page = await engine.wiki.generate_page(topic, mode=mode)
         if not page: return {"status": "error", "message": "No information found for this topic."}
         
         all_citations = []

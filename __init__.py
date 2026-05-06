@@ -65,6 +65,7 @@ from retrieval.reflective import ReflectiveMemoryLayer
 from retrieval.community_engine import CommunityEngine # [v6.0]
 from security.shadow_sandbox import SovereignShadowSandbox # [v6.0]
 from utils.event_bus import NeuralEventBus, NeuralEventType # [v6.0]
+from utils.neural_compression import NeuralImplicitCompressor # [v8.0]
 
 class QueryIntent:
     SEMANTIC = "semantic"
@@ -139,6 +140,7 @@ class NeuralVaultEngine:
         self.logger = NeuralLogger(log_dir=self.data_dir / "logs" if self.data_dir else None)
         self._tiers = MemoryTierManager(data_dir=self.data_dir, dim=dim)
         self._nodes = {}
+        self.nic = NeuralImplicitCompressor() # [v8.0]
         self._sessions = SessionManager(data_dir=self.data_dir)
         storage_get_fn = lambda nid: self._tiers.get(nid)
         self._hnsw = AdaptiveHNSW(dim=dim, use_rust=use_rust, storage_get_fn=storage_get_fn)
@@ -465,19 +467,23 @@ class NeuralVaultEngine:
     def get_node(self, node_id: str) -> Optional[VaultNode]:
         """
         [Fase 2.9: Universal Accessor]
-        Recupera un nodo in modo affidabile cercando in RAM (Neural Grid) 
-        e poi nei Tiers di memoria persistenti.
+        Recupera un nodo e ricostruisce i vettori compressi tramite NIC [v8.0].
         """
         node_id = str(node_id)
         # 1. Check RAM (Neural Grid)
         node = self._nodes.get(node_id)
-        if node: return node
+        if not node:
+            # 2. Check Persistenza
+            try:
+                node = self._tiers.get(node_id)
+            except:
+                node = None
         
-        # 2. Check Persistenza (Aegis-Log/EPISODIC)
-        try:
-            return self._tiers.get(node_id)
-        except:
-            return None
+        # 3. [v8.0] Neural Implicit Reconstruction
+        if node and (node.vector is None or len(node.vector) == 0):
+            node.vector = self.nic.reconstruct(node_id)
+            
+        return node
 
     def _get_semantic_chunks(self, text: str) -> List[str]:
         """

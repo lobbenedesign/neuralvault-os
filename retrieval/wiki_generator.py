@@ -56,8 +56,8 @@ class SovereignWikiGenerator:
         self.history_dir = Path(engine.data_dir) / "wiki_history"
         self.history_dir.mkdir(exist_ok=True)
 
-    async def generate_page(self, topic: str) -> WikiPage:
-        print(f"📖 [Wiki] Generazione pagina per: {topic}")
+    async def generate_page(self, topic: str, mode: str = "TECHNICAL") -> WikiPage:
+        print(f"📖 [Wiki v8.1] Generazione pagina {mode} per: {topic}")
         
         # 1. Recupero Nodi (H-RAG: Hierarchical Retrieval)
         # [v4.3.1] Prioritize Concept Galaxies for context
@@ -88,8 +88,17 @@ class SovereignWikiGenerator:
         # Chiediamo all'LLM di definire una struttura basata sui dati trovati
         context_data = "\n".join([f"ID:{r.node.id} | Titolo:{r.node.metadata.get('title', 'N/A')} | Contenuto:{r.node.text[:200]}" for r in results])
         
+        # [v8.1] Adaptive Reading Protocol Prompting
+        mode_instructions = {
+            "EXECUTIVE": "Sintesi estrema (max 150 parole). Focus su decisioni chiave, rischi e opportunità. Usa bullet points. Niente dettagli tecnici profondi.",
+            "TECHNICAL": "Analisi tecnica approfondita. Focus su implementazione, benchmark e meccaniche. Prosa dettagliata con riferimenti specifici.",
+            "RESEARCH": "Ricerca completa e accademica. Includi storia, stato dell'arte, domande aperte e soprattutto CONTRADDIZIONI tra le fonti."
+        }
+        
         struct_prompt = f"""
         Analizza questi dati estratti dal Vault su '{topic}'.
+        Utilizza il PROTOCOLLO DI LETTURA: {mode} -> {mode_instructions.get(mode, mode_instructions['TECHNICAL'])}
+        
         Utilizza le Galassie Concettuali per definire i macro-temi e i Nodi Atomici per i dettagli.
 
         GALASSIE CONCETTUALI (Punti di riferimento):
@@ -251,9 +260,20 @@ class SovereignWikiGenerator:
             generated_at=datetime.now()
         )
         # Inseriamo le proposte e la verifica mesh nei metadati per il frontend
+        # [v8.1] Build Semantic Entity Map for Progressive Disclosure
+        entity_map = {}
+        for r in results:
+            t = r.node.metadata.get('title')
+            if t: entity_map[t] = r.node.id
+            for ent in r.node.metadata.get('entities', []):
+                entity_map[ent] = r.node.id
+
         page.metadata = {
             "proposals": proposals,
-            "mesh_verification": self.metadata_cache.get("mesh_verification", {})
+            "mesh_verification": self.metadata_cache.get("mesh_verification", {}),
+            "confidence": sum([s.confidence for s in page.sections]) / len(page.sections) if page.sections else 0.85,
+            "freshness": await self.monitor.check_freshness(topic),
+            "entity_map": entity_map
         }
         self.metadata_cache = {} # Reset
         return page
@@ -280,7 +300,19 @@ class SovereignWikiGenerator:
         
         for sec in page.sections:
             md += f"## {sec.title}\n\n"
-            md += f"{sec.content}\n\n"
+            
+            # [v8.1] Semantic Entity Wrapping for Progressive Disclosure
+            content = sec.content
+            emap = page.metadata.get("entity_map", {})
+            # Ordina per lunghezza decrescente per evitare match parziali errati
+            sorted_entities = sorted(emap.keys(), key=len, reverse=True)
+            for entity in sorted_entities:
+                if entity.lower() in content.lower() and len(entity) > 3:
+                    # Usiamo una sostituzione case-insensitive ma mantenendo l'originale
+                    pattern = re.compile(re.escape(entity), re.IGNORECASE)
+                    content = pattern.sub(f'<span class="wiki-entity" data-node-id="{emap[entity]}">\\g<0></span>', content)
+            
+            md += f"{content}\n\n"
             if sec.citations:
                 md += "#### 📌 Fonti Verificate:\n"
                 for c in sec.citations:

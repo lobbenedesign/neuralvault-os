@@ -52,6 +52,7 @@
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.21.1/cytoscape.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <style>
@@ -2254,11 +2255,33 @@
                     </div>
                     
                     <!-- Content Area -->
-                    <div id="wiki-portal-content" style="background: rgba(15, 23, 42, 0.5); border-radius: 20px; padding: 3rem; border: 1px solid rgba(59,130,246,0.1); overflow-y: auto; max-height: 80vh; font-family: 'Inter', sans-serif;">
-                        <div style="text-align: center; padding: 5rem; opacity: 0.3;">
-                            <i class="fas fa-brain" style="font-size: 4rem; margin-bottom: 2rem; display: block;"></i>
-                            <h2 style="letter-spacing: 5px;">SOVEREIGN KNOWLEDGE PORTAL</h2>
-                            <p>Seleziona una galassia o cerca un argomento per iniziare.</p>
+                    <div id="wiki-portal-content-wrapper" style="position: relative; background: rgba(15, 23, 42, 0.5); border-radius: 20px; border: 1px solid rgba(59,130,246,0.1); overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Epistemic HUD (v8.0 Weather) -->
+                        <div id="wiki-epistemic-hud" style="display: none; padding: 1rem 2rem; background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 10;">
+                            <div style="display: flex; gap: 2rem; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i id="wiki-trust-icon" class="fas fa-sun" style="color: #facc15;"></i>
+                                    <span style="font-size: 0.6rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px;">METEO COGNITIVO: <b id="wiki-trust-text" style="color: #fff;">STABILE</b></span>
+                                </div>
+                                <div id="wiki-hud-actions" style="display: flex; align-items: center; gap: 10px;"></div>
+                                <div style="display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end;">
+                                    <div style="font-size: 0.55rem; color: #8b949e;">CONFIDENZA:</div>
+                                    <div style="width: 100px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                                        <div id="wiki-trust-bar" style="width: 85%; height: 100%; background: #4ade80; border-radius: 10px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- [v8.1] Progressive Disclosure Panel -->
+                        <div id="wiki-disclosure-panel" style="display: none; position: absolute; z-index: 1000; background: #1e293b; border: 1px solid #3b82f6; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: auto;"></div>
+
+                        <div id="wiki-portal-content" style="padding: 3rem; overflow-y: auto; flex: 1; font-family: 'Inter', sans-serif;">
+                            <div style="text-align: center; padding: 5rem; opacity: 0.3;">
+                                <i class="fas fa-brain" style="font-size: 4rem; margin-bottom: 2rem; display: block;"></i>
+                                <h2 style="letter-spacing: 5px;">SOVEREIGN KNOWLEDGE PORTAL</h2>
+                                <p>Seleziona una galassia o cerca un argomento per iniziare.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
