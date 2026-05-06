@@ -19,7 +19,7 @@
 - **🛡️ Verification Era (v7.5)**: Red Teaming autonomo e Consenso Pesato tra Vault (Meritocrazia Epistemica). / Autonomous Red Teaming and Weighted Consensus between Vaults (Epistemic Meritocracy).
 - **🕹️ Visualizzazione 3D Nebula**: Naviga fisicamente nella tua memoria neurale in tempo reale. / Physically navigate your neural memory in real-time.
 
-![Nexus Vault](/assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
+![Nexus Vault](assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
 
 ---
 
@@ -28,7 +28,7 @@
 **ITA**: Per istruzioni sull'installazione, dettagli tecnici profondi e il manifesto del progetto, consulta il documento principale:
 **EN**: For installation instructions, deep technical details, and the project manifesto, please refer to the main document:
 
-👉 [**🏛️ LEGGI IL MANIFESTO TECNICO (ARCHITETTURA.md)**](file:///Users/giuseppelobbene/Downloads/DATABASE%20VETTORIALE/ARCHITETTURA.md)
+👉 [**🏛️ LEGGI IL MANIFESTO TECNICO (ARCHITETTURA.md)**](ARCHITETTURA.md)
 
 ---
 

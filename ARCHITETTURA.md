@@ -26,17 +26,17 @@ python3 api.py
 ### 🌌 Nexus Vault [ITA/EN]
 **ITA**: L'interfaccia 3D principale per monitorare l'ingestione dei nodi, le attività dello sciame e lo stato del sistema.
 **EN**: The primary 3D interface to monitor real-time node ingestion, swarm activities, and system health.
-![Nexus Vault](/assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
+![Nexus Vault](assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
 
 ### 📊 LLM Benchmark Hub [ITA/EN]
 **ITA**: Analisi comparativa delle prestazioni dei modelli locali via Cognitive Radar.
 **EN**: Comparative performance analysis of local models via Cognitive Radar.
-![LLM Benchmark Hub](/assets/Screenshot%202026-05-05%20alle%2013.22.56.png)
+![LLM Benchmark Hub](assets/Screenshot%202026-05-05%20alle%2013.22.56.png)
 
 ### 🧠 Neural Lab & Swarm Control [ITA/EN]
 **ITA**: Controllo profondo dello sciame cinetico e dei parametri di evoluzione.
 **EN**: Deep control of the kinetic swarm and evolution parameters.
-![Neural Lab](/assets/Screenshot%202026-05-05%20alle%2012.35.44.png)
+![Neural Lab](assets/Screenshot%202026-05-05%20alle%2012.35.44.png)
 
 ---
 
@@ -88,7 +88,7 @@ python3 api.py
 
 **ITA**: Organizzazione automatica in Galassie Concettuali per gestire 100k+ nodi senza perdita di precisione.
 **EN**: Automatic organization into Conceptual Galaxies to handle 100k+ nodes without precision loss.
-![Memory Overview 3D](/assets/Screenshot%202026-05-05%20alle%2012.18.23.png)
+![Memory Overview 3D](assets/Screenshot%202026-05-05%20alle%2012.18.23.png)
 
 ---
 
@@ -105,7 +105,7 @@ python3 api.py
 
 **ITA**: Difesa proattiva con feedback visivo (laser/fulmini) nella Nebula 3D.
 **EN**: Proactive defense with visual feedback (lasers/lightning) in the 3D Nebula.
-![Agent Smith Defense](/assets/Screenshot%202026-05-05%20alle%2012.19.04.png)
+![Agent Smith Defense](assets/Screenshot%202026-05-05%20alle%2012.19.04.png)
 
 ---
 
