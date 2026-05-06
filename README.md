@@ -47,14 +47,15 @@ python3 api.py
 
 ---
 
-## 📊 Analytical Comparison
+## 📊 Analytical Comparison (Market Matrix)
 
-| Feature | Pinecone | Mem0 | Microsoft GraphRAG | **NeuralVault v7.5** |
-| :--- | :---: | :---: | :---: | :---: |
-| **Data Sovereignty** | ❌ Cloud | ⚠️ Hybrid | ❌ Enterprise | **✅ Local-Locked** |
-| **Offline Capacity** | ❌ No | ❌ No | ⚠️ Partial | **✅ 100% Air-Gapped** |
-| **Agentic Swarm** | ❌ No | ⚠️ Basic | ❌ No | **✅ 9 Kinetic Agents** |
-| **Verification Era** | ❌ No | ❌ No | ❌ No | **✅ Red-Team & Consensus** |
+| Feature | **NeuralVault v7.5** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Data Sovereignty** | **✅ Local-Locked** | ❌ Cloud | ✅ Local | ❌ Cloud Only | ⚠️ Hybrid |
+| **Agentic Evolution** | **✅ 9 Kinetic Agents** | ❌ No | ❌ No | ❌ No | ⚠️ Basic |
+| **Verification Era** | **✅ Red-Team/Consensus** | ❌ No | ❌ No | ❌ No | ❌ No |
+| **3D Visualization** | **✅ Native Nebula** | ❌ No | ❌ 2D Simple | ❌ No | ❌ No |
+| **Inference Cost** | **✅ 0 (Local)** | ❌ Token Heavy | ✅ 0 | ❌ High SaaS | ⚠️ Tiered |
 
 ---
 

@@ -101,6 +101,33 @@ python3 api.py
 
 ---
 
+## 📊 IX. IL MERCATO DELLA CONOSCENZA: COMPARAZIONE TECNICA E FILOSOFICA
+
+| Feature | **NeuralVault v7.5** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Weaviate (Verba) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Paradigma** | **Agentic Knowledge Engine** | Hierarchical RAG | RAG Desktop App | **Vector Database** | Agentic Memory | Managed RAG |
+| **Sovranità Dati** | **✅ Local-Locked (100%)** | ❌ Enterprise/Cloud | ✅ Local | ❌ Cloud Only | ⚠️ Hybrid | ✅ Local/Cloud |
+| **Evoluzione Autonoma** | **✅ Sciame Cinetico (9 Agenti)** | ❌ No | ❌ No | ❌ No | ⚠️ Basic | ❌ No |
+| **Verifica Epistemica** | **✅ Red-Team & Consenso** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Visualizzazione** | **✅ 3D Nebula Immersiva** | ❌ No | ❌ 2D Semplice | ❌ Solo Admin UI | ❌ No | ⚠️ 2D Graph |
+| **Logica Causale** | **✅ Archi CAUSES/PREVENTS** | ⚠️ Relazionale | ❌ Solo Vettoriale | ❌ Solo Vettoriale | ❌ No | ❌ No |
+| **Manutenzione** | **✅ Auto-Pruning (Janitor)** | ❌ No | ❌ Manuale | ❌ Manuale | ❌ No | ❌ No |
+| **Integrazione** | **✅ MCP Native Bridge** | ❌ No | ⚠️ Plugin | ⚠️ API | ❌ No | ⚠️ API |
+| **Costi Operativi** | **✅ 0 (Local Hardware)** | ❌ Alti (Tokens) | ✅ 0 | ❌ Alti (SaaS) | ⚠️ Variabili | ✅ Bassi |
+| **Scalabilità** | ⚠️ RAM Locale (M1/M2/M3) | **✅ Alta** | ✅ Media | **✅ Infinita** | ⚠️ Media | **✅ Alta** |
+
+---
+
+### 🏛️ Analisi Onesta dei Posizionamenti
+
+*   **Perché scegliere Pinecone/Zilliz?** Se sei una grande azienda che deve gestire miliardi di vettori in cloud e non ti serve intelligenza agentica, ma solo un indice di ricerca veloce.
+*   **Perché scegliere MS GraphRAG?** Se lavori in un ambiente Microsoft e hai bisogno di una gerarchia di riassunti molto profonda su dataset enormi, accettando costi di token elevati.
+*   **Perché scegliere NeuralVault?** Se la **Privacy** è un dogma non negoziabile, se vuoi che la tua conoscenza **si organizzi da sola** e se hai bisogno di uno strumento che **verifichi la verità** di ciò che scrive.
+
+---
+
+---
+
 ## 🛡️ IX. AGENT SMITH FIREWALL
 
 **ITA**: Difesa proattiva con feedback visivo (laser/fulmini) nella Nebula 3D.
