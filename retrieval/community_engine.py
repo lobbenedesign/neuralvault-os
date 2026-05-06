@@ -145,36 +145,44 @@ class CommunityEngine:
     async def generate_community_summaries(self):
         """
         L'Archivista analizza ogni Galassia e genera una sintesi strutturata.
+        [v6.1] Parallel processing with Semaphore to avoid LLM congestion.
         """
         # Recuperiamo comunità senza riassunto
         pending = self.engine._prefilter.execute(
             "SELECT id FROM neural_communities WHERE summary IS NULL"
         ).fetchall()
 
-        for (comm_id,) in pending:
-            # Recuperiamo i testi dei nodi in questa comunità
-            nodes = self.engine._prefilter.query_nodes(f"community_id = '{comm_id}'", limit=30)
-            if not nodes: continue
+        if not pending: return
+        
+        self.logger.info(f"🏛️ [H-RAG] Avvio sintesi per {len(pending)} Galassie...")
+        
+        # Limitiamo a 3 sintesi parallele per non saturare l'LLM
+        semaphore = asyncio.Semaphore(3)
+        
+        async def _summarize_single(comm_id):
+            async with semaphore:
+                # Recuperiamo i testi dei nodi in questa comunità
+                nodes = self.engine._prefilter.query_nodes(f"community_id = '{comm_id}'", limit=30)
+                if not nodes: return
 
-            # Estrazione sicura del testo dai metadati JSON con fallback su Deep Hydration
-            texts = []
-            for n in nodes:
-                m = n.get('metadata', {})
-                node_text = m.get('text', "")
+                # Estrazione sicura del testo
+                texts = []
+                for n in nodes:
+                    m = n.get('metadata', {})
+                    node_text = m.get('text', "")
+                    
+                    if not node_text:
+                        full_node = self.engine.get_node(n['id'])
+                        if full_node:
+                            node_text = full_node.text
+                    
+                    if node_text:
+                        texts.append(node_text[:600])
                 
-                # [Deep Hydration Fallback] Se il testo manca nei metadati DuckDB, caricalo dal Kernel
-                if not node_text:
-                    full_node = self.engine.get_node(n['id'])
-                    if full_node:
-                        node_text = full_node.text
+                if not texts: return
+                combined_text = "\n---\n".join(texts)
                 
-                if node_text:
-                    texts.append(node_text[:600])
-            
-            if not texts: continue
-            combined_text = "\n---\n".join(texts)
-            
-            prompt = f"""### TASK: Generate a Sovereign Intelligence Report for this Concept Galaxy.
+                prompt = f"""### TASK: Generate a Sovereign Intelligence Report for this Concept Galaxy.
 ### DATA:
 {combined_text}
 
@@ -186,52 +194,76 @@ Respond ONLY with a JSON object:
   "key_concepts": ["concept1", "concept2", "concept3"]
 }}
 """
-            try:
-                # Usiamo l'LLM di sistema (AUDIT o CHAT)
-                model = getattr(self.engine, 'settings', {}).get("chat_model", "llama3.2")
-                # Chiamata simulata/placeholder per l'integrazione con l'orchestratore
-                # In una vera implementazione useremmo self.engine.lab.ask(...)
-                response = await self.engine.agent007_lab.ask_fast(prompt, model=model)
-                
-                # Pulizia della risposta (a volte gli LLM aggiungono markdown)
-                clean_json = response.strip()
-                if "```json" in clean_json:
-                    clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-                
-                data = json.loads(clean_json)
-                
-                self.engine._prefilter.execute(
-                    "UPDATE neural_communities SET title = ?, summary = ?, key_concepts = ? WHERE id = ?",
-                    (data['title'], data['summary'], json.dumps(data['key_concepts']), comm_id)
-                )
-                self.logger.info(f"🏛️ Galassia '{data['title']}' riassunta con successo.")
+                try:
+                    # [FIX] chat_model -> chat (Matches SwarmSettingsManager)
+                    model = getattr(self.engine, 'settings', {}).get("chat", "llama3.2:3b")
+                    response = await self.engine.agent007_lab.ask_fast(prompt, model=model)
+                    
+                    if not response:
+                        raise ValueError("LLM response is empty")
 
-            except Exception as e:
-                self.logger.error(f"❌ Errore nel riassunto comunità {comm_id}: {e}")
+                    # Pulizia della risposta
+                    clean_json = response.strip()
+                    if "```json" in clean_json:
+                        clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                    elif "{" in clean_json:
+                        # Fallback: cerca la prima parentesi graffa
+                        clean_json = clean_json[clean_json.find("{"):clean_json.rfind("}")+1]
+                    
+                    data = json.loads(clean_json)
+                    
+                    self.engine._prefilter.execute(
+                        "UPDATE neural_communities SET title = ?, summary = ?, key_concepts = ? WHERE id = ?",
+                        (data['title'], data['summary'], json.dumps(data['key_concepts']), comm_id)
+                    )
+                    self.logger.info(f"🏛️ Galassia '{data['title']}' riassunta.")
+
+                except Exception as e:
+                    self.logger.error(f"❌ Errore nel riassunto comunità {comm_id}: {e}")
+                    # Segnamo come fallito per non riprovare all'infinito nel loop corrente
+                    # Ma lasciamo summary=NULL se vogliamo che il prossimo ciclo riprovi
+                    pass
+
+        # Lanciamo tutti i task in parallelo (gestiti dal semaforo)
+        tasks = [_summarize_single(cid[0]) for cid in pending]
+        await asyncio.gather(*tasks)
+        self.logger.info("✅ [H-RAG] Ciclo di sintesi completato.")
 
     def hierarchical_search(self, query: str, limit: int = 5) -> List[Dict]:
         """
-        Ricerca Gerarchica: Prima trova le comunità rilevanti, poi i nodi atomici.
+        Ricerca Gerarchica Avanzata: Cerca tra titoli, riassunti e concetti chiave delle Galassie.
         """
-        # 1. Cerchiamo tra i riassunti delle comunità
-        # Nota: In un'implementazione completa useremmo embedding sui riassunti.
-        # Qui usiamo una ricerca testuale su DuckDB per velocità.
         try:
+            # [v6.1] Infallible Hierarchical Matching
+            search_query = """
+                SELECT id, title, summary, node_count 
+                FROM neural_communities 
+                WHERE title ILIKE ? 
+                   OR summary ILIKE ? 
+                   OR CAST(key_concepts AS VARCHAR) ILIKE ?
+                ORDER BY (title ILIKE ?) DESC, node_count DESC
+                LIMIT ?
+            """
+            pattern = f"%{query}%"
+            # In DuckDB, per cercare in JSON castiamo a VARCHAR o usiamo funzioni specifiche.
+            # Qui usiamo il cast per semplicità e compatibilità.
             comm_res = self.engine._prefilter.execute(
-                "SELECT id, title, summary FROM neural_communities WHERE summary ILIKE ? LIMIT 3",
-                (f"%{query}%",)
+                search_query, 
+                (pattern, pattern, pattern, pattern, limit)
             ).fetchall()
             
             results = []
-            for cid, title, summary in comm_res:
+            for cid, title, summary, count in comm_res:
                 results.append({
                     "id": cid,
                     "type": "community",
-                    "title": title,
-                    "text": summary,
+                    "title": title or "Galassia Senza Nome",
+                    "text": summary or "Nessun riassunto disponibile.",
+                    "node_count": count,
                     "score": 0.95
                 })
             
             return results
-        except:
+        except Exception as e:
+            self.logger.error(f"⚠️ [Hierarchical Search Error] {e}")
             return []

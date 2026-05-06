@@ -10,6 +10,7 @@ import pandas as pd
 import threading
 import os
 import shutil
+import json
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -164,12 +165,10 @@ class DuckDBPrefilter:
 
     def add_node(self, node_id: str, collection: str, metadata: Dict):
         """Indicizza un singolo nodo (Fallback)."""
-        import json
         self.add_nodes_batch([(node_id, collection, metadata)])
 
     def add_nodes_batch(self, nodes_data: List[tuple]):
         """Indicizza nodi in batch con supporto cognitivo e transazione atomica (v0.5.2)."""
-        import json
         
         # Prepariamo i dati per l'inserimento di massa
         data_to_insert = []
@@ -209,11 +208,13 @@ class DuckDBPrefilter:
             (node_id,)
         )
 
-    def log_event(self, event_type: str, node_id: str, topic: str, description: str):
+    def log_event(self, event_type: str, node_id: str, topic: str = None, description: str = "", topic_cluster: str = None):
         """[v4.3.0] Registra un evento nel ledger temporale per la Knowledge Timeline."""
+        # [v4.3.1 Fix] Support both positional 'topic' and keyword 'topic_cluster'
+        final_topic = topic_cluster or topic or "general"
         self.execute(
             "INSERT INTO knowledge_events (event_type, node_id, topic_cluster, description) VALUES (?, ?, ?, ?)",
-            (event_type, node_id, topic, description)
+            (event_type, node_id, final_topic, description)
         )
 
     def delete(self, node_id: str) -> bool:

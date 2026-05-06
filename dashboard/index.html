@@ -11,12 +11,51 @@
     <link rel="stylesheet" href="/static/css/style.css?v=2.7.7">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style id="wiki-premium-tooltips">
+        .wiki-citation { position: relative; display: inline-block; transition: 0.3s; }
+        .wiki-citation:hover { transform: scale(1.1); filter: brightness(1.2); }
+        .wiki-citation[data-tooltip]::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 150%;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            color: #f8fafc;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            white-space: pre-wrap;
+            width: 320px;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 0 20px rgba(168,85,247,0.1);
+            pointer-events: none;
+            line-height: 1.5;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: left;
+        }
+        .wiki-citation:hover[data-tooltip]::before {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.21.1/cytoscape.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <style>
-        /* ð­ SYMMETRIC HUD ORCHESTRATION (v10.5) */
+        /* ðŸŽ­ SYMMETRIC HUD ORCHESTRATION (v10.5) */
         #mc-wrapper, #nav-guide-tab {
             position: absolute !important;
             bottom: 30px !important; /* Symmteric alignment with Cycloscope UI */
@@ -786,6 +825,7 @@
                             <div class="inspector-footer" style="padding: 1rem 1.5rem; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
                                 <div style="font-size: 0.55rem; color: #64748b; font-weight: 800; letter-spacing: 1px;">INTEGRITY_STATUS: <span style="color: #4ade80;">CERTIFIED</span></div>
                                 <div style="display: flex; gap: 0.8rem;">
+                                    <button id="extract-causal-btn" onclick="extractCausalLogic()" style="padding: 0.6rem 1.2rem; background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; color: #f59e0b; border-radius: 8px; font-size: 0.65rem; font-weight: 900; cursor: pointer; transition: 0.3s;">LOGIC REASONING</button>
                                     <button id="verify-node-btn" onclick="verifyNodeCoherence()" style="padding: 0.6rem 1.2rem; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981; border-radius: 8px; font-size: 0.65rem; font-weight: 900; cursor: pointer; transition: 0.3s;">VERIFICA COERENZA</button>
                                     <button onclick="closeInspector()" style="padding: 0.6rem 1.2rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 8px; font-size: 0.65rem; font-weight: 900; cursor: pointer;">CHIUDI</button>
                                 </div>
@@ -1021,7 +1061,7 @@
                                     <div id="consensus-btn" onclick="toggleConsensusUI()" style="flex: 1; background: rgba(168,85,247,0.05); border: 1px solid rgba(168,85,247,0.2); padding: 0.4rem; border-radius: 10px; font-size: 0.5rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #8b949e; transition: 0.3s;">
                                         <span data-i18n="label_consensus">CONSENSUS</span>: <span id="consensus-status" style="margin-left: 5px;" data-i18n="label_consensus_off">OFF</span>
                                     </div>
-                                    <div id="voice-trigger" onclick="toggleVoice()" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(168,85,247,0.1); border: 1px solid #a855f7; display: flex; align-items: center; justify-content: center; cursor: pointer;" data-i18n-title="label_voice_mic" title="VOCE">
+                                    <div id="voice-trigger" onclick="toggleVoiceListen()" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(168,85,247,0.1); border: 1px solid #a855f7; display: flex; align-items: center; justify-content: center; cursor: pointer;" data-i18n-title="label_voice_mic" title="VOCE">
                                         <span id="mic-icon" style="color: #a855f7; font-size: 0.8rem;">🎙️</span>
                                     </div>
                                 </div>
@@ -1403,7 +1443,7 @@
                         </div>
 
                         <!-- 🛡️ SMITH SECURITY FLEET LOGS (v8.0) -->
-                        <div style="background: rgba(13, 17, 23, 0.8); border: 1px solid #ef4444; border-radius: 16px; padding: 1.5rem; margin-top: 1.5rem; position: relative; overflow: hidden;">
+                        <div style="background: rgba(13, 17, 23, 0.8); border: 1px solid #ef4444; border-radius: 16px; padding: 1.5rem; margin-top: 1.5rem; margin-bottom: 2.5rem; position: relative; overflow: hidden;">
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, #ef4444, transparent); animation: scanline 3s linear infinite;"></div>
                             
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
@@ -1435,7 +1475,7 @@
                             .btn-id-action:hover { filter: brightness(1.2); transform: translateY(-1px); }
                         </style>
 
-                        <div id="network-peers-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1.5rem;">
+                        <div id="network-peers-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
                             <!-- Populated by JS -->
                             <div style="grid-column: 1/-1; text-align: center; padding: 5rem; color: #64748b; font-size: 0.75rem; border: 1px dashed rgba(59,130,246,0.2); border-radius: 16px; background: rgba(59,130,246,0.02);">
                                 <i class="fas fa-satellite-dish" style="font-size: 3rem; margin-bottom: 1.5rem; display: block; opacity: 0.2; color: #3b82f6;"></i>

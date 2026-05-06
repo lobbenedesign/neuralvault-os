@@ -1028,33 +1028,8 @@ class NeuralVaultEngine:
         # 1. Ricerca Interna iniziale
         results = await self._query_internal(query_text, q_v, intent, **kwargs)
         
-        # [v4.2.0] Corrective RAG (CRAG) Trigger
-        # Se il punteggio del miglior risultato è basso, proviamo ad arricchire dal Web via SkyWalker
-        if results and results[0].final_score < 0.35 and hasattr(self, 'orchestrator') and self.orchestrator:
-            print("🔍 [CRAG] Rilevato gap di conoscenza locale. Attivazione Skywalker per Intel Esterna...")
-            skywalker = self.orchestrator.agents.get("FS-77")
-            if skywalker:
-                try:
-                    # Eseguiamo la ricerca web via SkyWalker (Async)
-                    external_intel = await skywalker.targeted_search(query_text)
-                    if external_intel:
-                        print(f"🛰️ [CRAG] Ricevuta Intel Esterna ({len(external_intel)} bytes). Iniezione temporanea e re-ranking...")
-                        # Creiamo un nodo "virtuale" o temporaneo per la generazione
-                        from index.node import VaultNode
-                        temp_node = VaultNode(id=f"temp_crag_{uuid.uuid4().hex[:8]}", text=external_intel, collection="crag_cache")
-                        temp_res = QueryResult(node=temp_node, final_score=0.8, path="crag_external")
-                        results.append(temp_res)
-                        # Re-ranker con i nuovi dati
-                        results = self._ranker.fuse(
-                            dense_results=[(r.node.id, 1.0 - r.dense_score) for r in results if r.path != "crag_external"],
-                            sparse_results=[], 
-                            graph_results=[(r.node.id, r.graph_score) for r in results if r.path != "crag_external"],
-                            nodes={**self._nodes, temp_node.id: temp_node},
-                            query_text=query_text,
-                            top_k=kwargs.get('k', 10)
-                        )
-                except Exception as e:
-                    print(f"⚠️ [CRAG] Errore durante la ricerca correttiva: {e}")
+        # [v4.2.0] Hybrid Context Enrichment (Placeholder for future routing expansion)
+        pass
         
         # v0.5.0 Cognitive Scoring (Ebbinghaus Decay)
         now = time.time()

@@ -18,10 +18,10 @@ class AnticipatoryPrefetcher:
         self.hot_cache = {} # Pre-loaded nodes [id] -> node_object
         self.prediction_depth = 3
         
-        # 🧬 [v4.3.1] Query DNA Fingerprint
+        # 🧬 [v7.5] Behavioral Transformer Logic
         self.topic_affinity = Counter()
-        self.query_dna = [] # Sequence of interaction vectors
-        self.knowledge_gaps = [] # Identified areas with low density
+        self.interaction_dna = deque(maxlen=50) # Sequence of recent interaction metadata
+        self.knowledge_frontier = [] # Identified areas for proactive exploration
 
     def record_interaction(self, node_id: str, topic: str = None):
         """Registra un accesso a un nodo per aggiornare il modello predittivo."""

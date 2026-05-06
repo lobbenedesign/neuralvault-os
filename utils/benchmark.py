@@ -49,7 +49,7 @@ class ModelBenchmarkTracker:
 
     def get_stats(self) -> List[Dict]:
         try:
-            # Enhanced stats for Recommendation Engine
+            # Enhanced stats for Recommendation Engine (v4.5)
             res = self.vault._prefilter.fetchdf("""
                 SELECT 
                     model_name, 
@@ -58,6 +58,7 @@ class ModelBenchmarkTracker:
                     ROUND(AVG(tokens_per_sec), 2) as tps,
                     ROUND(AVG(ram_usage_mb) / 1024, 2) as ram,
                     ROUND(AVG(gen_quality) * 10, 1) as score,
+                    ROUND(AVG(precision_score) * 100, 1) as stability,
                     MAX(tokens_per_sec) as peak_tps
                 FROM model_benchmarks
                 GROUP BY model_name

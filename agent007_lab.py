@@ -204,28 +204,48 @@ class Agent007Lab:
             pass
         return {"score": 5, "risks": ["Manual review needed"], "rec": "Ollama offline."}
 
-    async def ask_fast(self, prompt: str, model: str = "phi3") -> str:
+    async def ask_fast(self, prompt: str, model: str = "llama3.2:3b") -> str:
         """
         🚀 [v6.1] Bridge veloce per l'Archivista e compiti di sintesi.
+        Include auto-resolution del modello per gestire tag mancanti (es. llama3.2 -> llama3.2:3b).
         """
         try:
             base_url = "http://localhost:11434"
             if hasattr(self.engine, 'settings'):
                 base_url = self.engine.settings.get("ollama_url", "http://localhost:11434")
             
-            # Sanitizzazione del modello: se non presente, usiamo uno sicuro
-            if not model: model = "phi3"
+            # Sanitizzazione del modello
+            if not model: model = "llama3.2:3b"
             
             async with httpx.AsyncClient() as client:
+                # [v6.1] Tentativo 1: Modello richiesto
                 resp = await client.post(f"{base_url}/api/generate", json={
                     "model": model, 
                     "prompt": prompt, 
                     "stream": False,
-                    "options": {"num_predict": 300, "temperature": 0.3} # Veloce e deterministico
+                    "options": {"num_predict": 300, "temperature": 0.3}
                 }, timeout=120.0)
                 
                 if resp.status_code == 200:
                     return resp.json().get("response", "").strip()
+                
+                # [v6.1] Tentativo 2: Fallback se il modello non esiste (Ollama error)
+                error_msg = resp.json().get("error", "").lower()
+                if resp.status_code == 404 or "not found" in error_msg:
+                    fallback = "llama3.2:3b" # Default sicuro per questo ambiente
+                    if model == "llama3.2:3b": fallback = "qwen2.5:7b" # Secondo fallback
+                    
+                    self.logger.warning(f"⚠️ Modello {model} non trovato. Provo fallback: {fallback}")
+                    
+                    resp = await client.post(f"{base_url}/api/generate", json={
+                        "model": fallback, 
+                        "prompt": prompt, 
+                        "stream": False
+                    }, timeout=120.0)
+                    
+                    if resp.status_code == 200:
+                        return resp.json().get("response", "").strip()
+
         except Exception as e:
             print(f"⚠️ [Agent007Lab] ask_fast fallito: {e}")
         return ""

@@ -99,9 +99,13 @@ class FusionRanker:
         for nid, rrf in rrf_scores.items():
             if nid not in nodes: continue
             node = nodes[nid]
+            # [v0.2.6] Score Normalization: RRF scores are naturally small (1/61). 
+            # We normalize so rank #1 in all lists equals 1.0.
+            normalized_rrf = rrf * (self.rrf_k + 1)
+            
             candidates.append(QueryResult(
                 node=node,
-                final_score=rrf,
+                final_score=normalized_rrf,
                 dense_score=1.0 - next((d for n, d in dense_results if n == nid), 1.0),
                 sparse_score=next((s for n, s in sparse_results if n == nid), 0.0),
                 temporal_confidence=1.0, # Placeholder, aggiornato dopo se engine disponibile

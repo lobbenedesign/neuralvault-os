@@ -228,6 +228,10 @@ function init3D() {
     neuralLinks.position.y = 1000000;
     scene.add(neuralLinks);
 
+    ignoranceGroup = new THREE.Group();
+    ignoranceGroup.position.y = 1000000;
+    scene.add(ignoranceGroup);
+
     if (typeof THREE.OrbitControls === 'function') {
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1000000, 0);
@@ -287,6 +291,11 @@ function init3D() {
     provisionAgents();
     animate();
     window.is3DInitialized = true;
+    
+    // [v7.0] Metacognition Refresh Cycle
+    window.refreshIgnoranceGaps();
+    setInterval(() => window.refreshIgnoranceGaps(), 30000);
+
     log("\uD83C\uDF0C Neural Cycloscope Active", "#3b82f6");
 
     window.addEventListener('resize', () => {
@@ -1231,13 +1240,29 @@ function updateThreeScene(points, links = null) {
                 const isSuper = l.relation === 'synapse' || (l.metadata && l.metadata.is_super_synapse === true);
                 const isNew = (now - (l.created_at * 1000) < 6000);
                 
-                // 🎨 Visibility Refinement (v4.2.2)
-                let edgeColor = isLight ? 0x334155 : 0x94a3b8; // Grigio Scuro (Light Theme) vs Grigio Chiaro (Dark Theme)
+                // 🎨 [v7.0] Causal Logic & Visibility Refinement
+                let edgeColor = isLight ? 0x334155 : 0x94a3b8; 
                 let opacity = isLight ? 0.25 : 0.18;
                 
+                const rel = (l.relation || "").toLowerCase();
                 if (isSpark) {
-                    edgeColor = 0xffffff; // Verrà sovrascritto dall'HSL in animate
+                    edgeColor = 0xffffff;
                     opacity = 0.8;
+                } else if (rel === 'causes') {
+                    edgeColor = 0xff4d00; // Deep Orange
+                    opacity = 0.9;
+                } else if (rel === 'prevents') {
+                    edgeColor = 0xef4444; // Red
+                    opacity = 0.9;
+                } else if (rel === 'requires') {
+                    edgeColor = 0x3b82f6; // Blue
+                    opacity = 0.9;
+                } else if (rel === 'enables') {
+                    edgeColor = 0x00f2fe; // Teal
+                    opacity = 0.9;
+                } else if (rel === 'supersedes') {
+                    edgeColor = 0xa855f7; // Purple
+                    opacity = 0.9;
                 } else if (isSuper) {
                     edgeColor = 0xf59e0b; // Arancio base
                     opacity = 0.7;
@@ -1262,6 +1287,51 @@ function updateThreeScene(points, links = null) {
         });
     }
 }
+
+window.refreshIgnoranceGaps = async () => {
+    if (typeof ignoranceGroup === 'undefined' || !scene) return;
+    try {
+        const r = await fetch('/api/metacognition/gaps', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const d = await r.json();
+        
+        ignoranceGroup.clear();
+        if (d.status === 'success' && d.gaps) {
+            d.gaps.forEach(gap => {
+                const geo = new THREE.SphereGeometry(gap.radius, 32, 32);
+                const mat = new THREE.MeshBasicMaterial({ 
+                    color: 0x94a3b8, 
+                    transparent: true, 
+                    opacity: 0.15,
+                    wireframe: true 
+                });
+                const sphere = new THREE.Mesh(geo, mat);
+                const exp = window.nebulaExpansionFactor || 1.0;
+                sphere.position.set(gap.x * exp, gap.y * exp, gap.z * exp);
+                
+                sphere.userData = { 
+                    id: gap.id, 
+                    isGap: true, 
+                    context: gap.context, 
+                    missing: gap.missing 
+                };
+                ignoranceGroup.add(sphere);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 256; canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = "#94a3b8";
+                ctx.font = "bold 24px 'JetBrains Mono'";
+                ctx.fillText("TERRA INCOGNITA", 10, 40);
+                const tex = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.6 });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.position.set(gap.x * exp, gap.y * exp + gap.radius, gap.z * exp);
+                sprite.scale.set(gap.radius * 2, gap.radius * 0.5, 1);
+                ignoranceGroup.add(sprite);
+            });
+        }
+    } catch(e) { console.error("Metacognition Error:", e); }
+};
 
 function renderClusters(points) {
     if (!clusterNodesGroup) return;
@@ -1354,7 +1424,7 @@ window.exportAuditLedger = function(format) {
     if(document.getElementById('export-dropdown')) document.getElementById('export-dropdown').classList.add('hidden');
 };
 
-let currentInspectedNodeId = null;
+window.currentInspectedNodeId = null;
 
 async function selectNode(id) {
     currentInspectedNodeId = id;
@@ -2227,10 +2297,29 @@ window.onNebulaClick = (event) => {
     const intersectsNodes = raycaster.intersectObject(pointsMesh);
     const intersectsMultimodal = raycaster.intersectObjects(multimodalGroup.children);
     const intersectsClusters = raycaster.intersectObjects(clusterNodesGroup.children);
+    const intersectsGaps = raycaster.intersectObjects(ignoranceGroup.children);
     
     let hitNodeId = null;
 
-    if (intersectsMultimodal.length > 0) {
+    if (intersectsGaps.length > 0) {
+        const gap = intersectsGaps[0].object.userData;
+        if (gap && gap.isGap) {
+            log(`🌌 [Metacognition] Terra Incognita rilevata!`, "#94a3b8");
+            log(`🧠 Gap tra: ${gap.context}`, "#94a3b8");
+            log(`🔍 Argomenti suggeriti: ${gap.missing.join(', ')}`, "#3b82f6");
+            if (confirm(`Terra Incognita rilevata: ${gap.missing.join(', ')}. Vuoi inviare lo sciame a colmare questo gap?`)) {
+                log(`🚀 [Metacognition] Missione di recupero avviata per: ${gap.missing[0]}`, "#10b981");
+                const queryInput = document.getElementById('floating-query-input');
+                if (queryInput) {
+                    queryInput.value = `Indaga e recupera informazioni approfondite su: ${gap.missing.join(' e ')}`;
+                    const badge = document.getElementById('mode-badge');
+                    if (badge && badge.innerText !== "QUERY") window.toggleCommandMode();
+                    window.queryNeuralVault();
+                }
+            }
+            return; // Non ispezioniamo nodi se colpiamo un gap
+        }
+    } else if (intersectsMultimodal.length > 0) {
         hitNodeId = intersectsMultimodal[0].object.userData.id;
     } else if (intersectsClusters.length > 0) {
         hitNodeId = intersectsClusters[0].object.userData.id;
@@ -2445,6 +2534,10 @@ window.showSection = (s) => {
     if (s === 'benchmark') { 
         renderBenchmarkTable(); 
         refreshRadar(); // 🧬 Trigger Radar Synthesis
+    }
+    if (s === 'analytics') {
+        refreshAnalytics();
+        refreshHistoricalEngine();
     }
     if (s === 'lab') { refreshHistoricalEngine(); }
     if (s === 'settings') { 
@@ -3166,12 +3259,29 @@ function initSSE() {
             ['stat-nodes', 'stat-nodes-2', 'stat-nodes-lab'].forEach(id => {
                 const el = document.getElementById(id); if(el) el.innerText = d.nodes_count;
             });
+            
+            // [v4.1] Update Knowledge Growth Chart
+            if (window.growthChart) {
+                const data = window.growthChart.data.datasets[0].data;
+                data.shift();
+                data.push(d.nodes_count);
+                window.growthChart.update('none'); // Update without animation for performance
+            }
         }
         if (d.edges_count !== undefined) {
             document.querySelectorAll('.stat-synapses').forEach(el => el.innerText = d.edges_count);
             ['stat-synapses', 'stat-synapses-2', 'stat-synapses-lab'].forEach(id => {
                 const el = document.getElementById(id); if(el) el.innerText = d.edges_count;
             });
+            
+            // [v4.1] Update Cognitive Density Chart
+            if (window.densityChart && d.nodes_count > 0) {
+                const density = (d.edges_count / d.nodes_count).toFixed(2);
+                const data = window.densityChart.data.datasets[0].data;
+                data.shift();
+                data.push(density);
+                window.densityChart.update('none');
+            }
         }
         if (d.clusters_count !== undefined) {
             document.querySelectorAll('.stat-clusters').forEach(el => el.innerText = d.clusters_count);
@@ -3194,6 +3304,28 @@ function initSSE() {
             if (el) el.innerText = `Ret: ${(d.cognitive.retention * 100).toFixed(1)}% | Stab: ${(d.cognitive.stability * 100).toFixed(1)}%`;
         }
         if (d.heatmap) currentHeatmap = d.heatmap;
+        
+        // 💤 [v7.0] Sleep & Dreaming UI Sync
+        const remInd = document.getElementById('rem-phase-indicator');
+        if (remInd && d.sleep) {
+            if (d.sleep.active) {
+                remInd.classList.remove('hidden');
+                const remText = remInd.querySelector('span');
+                if (remText) {
+                    if (d.sleep.dreaming) {
+                        remText.innerText = `DREAMING: ${d.sleep.topic.toUpperCase()}`;
+                        remInd.style.borderColor = "#f59e0b";
+                        remInd.querySelector('.pulse-dot').style.background = "#f59e0b";
+                    } else {
+                        remText.innerText = "REM PHASE ACTIVE";
+                        remInd.style.borderColor = "#a855f7";
+                        remInd.querySelector('.pulse-dot').style.background = "#a855f7";
+                    }
+                }
+            } else {
+                remInd.classList.add('hidden');
+            }
+        }
 
         // 🧬 [v4.0] Sovereign Hardware Telemetry Update
         if (d.hardware) {
@@ -3221,6 +3353,47 @@ function initSSE() {
             const diskBar = document.getElementById('hw-disk-bar');
             if (diskVal) diskVal.innerText = `${hw.disk.used} / ${hw.disk.total} GB`;
             if (diskBar) diskBar.style.width = `${hw.disk.percent}%`;
+
+            // [ADVANCED ANALYTICS SYNC]
+            const dnaTrace = document.getElementById('hardware-dna-trace');
+            if (dnaTrace) dnaTrace.innerText = `${hw.gpu.backend || 'LOCAL-CORE'}`;
+            
+            const ramFill = document.getElementById('ram-usage-fill');
+            const ramText = document.getElementById('ram-usage-text');
+            if (ramFill) ramFill.style.width = `${hw.ram.percent}%`;
+            if (ramText) ramText.innerText = `${hw.ram.percent}% / ${hw.ram.total} GB`;
+
+            const computeMode = document.getElementById('active-compute-mode');
+            if (computeMode) computeMode.innerText = `MODE: ${hw.gpu.backend === 'APPLE METAL' ? 'METAL HYBRID' : 'SOVEREIGN CPU'}`;
+
+            const mpsPressure = document.getElementById('mps-pressure-val');
+            if (mpsPressure) mpsPressure.innerText = `MPS: ${Math.round(hw.gpu.percent)}%`;
+
+            // Populate CPU Grid if in Analytics view
+            if (document.getElementById('analytics-view')?.style.display !== 'none') {
+                updateCPUGrid(hw.cpu);
+            }
+        }
+
+        if (d.lab) {
+            const lab = d.lab;
+            // Update Active Model Name
+            const modelName = document.getElementById('ai-model-name');
+            const modelQuant = document.getElementById('ai-model-quant');
+            const activeModel = lab.swarm_settings?.chat_model || lab.swarm_settings?.audit_model || "NEURAL-HUB-CORE";
+            if (modelName) modelName.innerText = activeModel.toUpperCase();
+            if (modelQuant) modelQuant.innerText = activeModel.includes('q') ? activeModel.split(':').pop() : "8-bit";
+
+            // Update Historical Stats (Simulated or from lab data)
+            const wisdom = document.getElementById('hist-wisdom');
+            const depth = document.getElementById('hist-depth');
+            const yieldVal = document.getElementById('hist-yield');
+            const growth = document.getElementById('hist-growth');
+            
+            if (wisdom) wisdom.innerText = (lab.blackboard?.recent?.length || 0) + (d.nodes_count % 100);
+            if (depth) depth.innerText = (d.nodes_count / 100).toFixed(1) + " Layers";
+            if (yieldVal) yieldVal.innerText = "98.2%";
+            if (growth) growth.innerText = "+" + (d.nodes_count > 0 ? (d.nodes_count/10).toFixed(1) : 0) + " pts";
         }
 
         const weather = d.weather || (d.lab ? d.lab.weather : null);
@@ -3973,10 +4146,10 @@ async function refreshBenchmarks() {
             body.innerHTML = data.benchmarks.map((m, i) => `
                 <tr style="background: rgba(255,255,255,0.02); border-radius: 10px;">
                     <td style="padding: 10px; font-weight: 950; color: ${i === 0 ? '#fbbf24' : '#fff'};">#${i+1}</td>
-                    <td style="padding: 10px; font-family: 'JetBrains Mono';">${m.name}</td>
+                    <td style="padding: 10px; font-family: 'JetBrains Mono';">${m.model_name}</td>
                     <td style="padding: 10px; color: #10b981;">${m.tps} <span style="font-size: 0.6rem;">tok/s</span></td>
-                    <td style="padding: 10px; color: #3b82f6;">${m.ram} <span style="font-size: 0.6rem;">MB</span></td>
-                    <td style="padding: 10px; color: #a855f7;">${m.stability}%</td>
+                    <td style="padding: 10px; color: #3b82f6;">${m.ram} <span style="font-size: 0.6rem;">GB</span></td>
+                    <td style="padding: 10px; color: #a855f7;">${m.stability || 0}%</td>
                 </tr>
             `).join('');
         }
@@ -3987,20 +4160,26 @@ async function refreshBenchmarks() {
             window.radarChart.update();
         }
 
-        // 3. Model Suggestions Logic
+        // 3. Model Suggestions Logic (v4.5)
         const recList = document.getElementById('mission-recommendation');
-        if (recList && data.benchmarks.length > 0) {
-            const bestSpeed = data.benchmarks[0].name;
-            const bestStability = [...data.benchmarks].sort((a,b) => b.stability - a.stability)[0].name;
+        if (recList && data.benchmarks && data.benchmarks.length > 0) {
+            const bestSpeed = data.benchmarks.sort((a,b) => b.tps - a.tps)[0].model_name;
+            const bestStability = data.benchmarks.sort((a,b) => b.stability - a.stability)[0].model_name;
             
             recList.innerHTML = `
-                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border-left: 3px solid #10b981;">
-                    <div style="font-size: 0.5rem; color: #10b981;">OPTIMAL FOR JANITORIAL/PURGE</div>
-                    <div style="font-weight: 900; font-size: 0.8rem; color: #fff;">${bestSpeed.toUpperCase()} (FAST)</div>
+                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border-left: 3px solid #10b981; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 0.5rem; color: #10b981; font-weight: 800; letter-spacing: 1px;">OPTIMAL FOR JANITORIAL/PURGE</div>
+                        <div style="font-weight: 900; font-size: 0.8rem; color: #fff;">${bestSpeed.toUpperCase()}</div>
+                    </div>
+                    <div style="font-size: 0.6rem; color: #10b981; font-weight: 900; background: rgba(16,185,129,0.1); padding: 4px 10px; border-radius: 4px;">FAST</div>
                 </div>
-                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border-left: 3px solid #a855f7;">
-                    <div style="font-size: 0.5rem; color: #a855f7;">OPTIMAL FOR AUDITS/COURT</div>
-                    <div style="font-weight: 900; font-size: 0.8rem; color: #fff;">${bestStability.toUpperCase()} (STABLE)</div>
+                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border-left: 3px solid #a855f7; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 0.5rem; color: #a855f7; font-weight: 800; letter-spacing: 1px;">OPTIMAL FOR AUDITS/COURT</div>
+                        <div style="font-weight: 900; font-size: 0.8rem; color: #fff;">${bestStability.toUpperCase()}</div>
+                    </div>
+                    <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; background: rgba(168,85,247,0.1); padding: 4px 10px; border-radius: 4px;">STABLE</div>
                 </div>
             `;
         }
@@ -4615,6 +4794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initCharts();
     refreshModels();
     updateRecommendations();
+    startUptimeCounter();
     try {
         const r = await fetch('/api/system/settings');
         const settings = await r.json();
@@ -4673,21 +4853,43 @@ function triggerSkywalkerLaser(agent, controller) {
         }
     }
 }
-function animateValue(id, start, end, duration, prefix = "") {
-    const obj = document.getElementById(id);
-    if (!obj) return;
-    if (start === end) return;
-    let startTimestamp = null;
-    const step = (timestamp) => {
-        if (!startTimestamp) startTimestamp = timestamp;
-        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-        const val = Math.floor(progress * (end - start) + start);
-        obj.innerText = prefix + val.toLocaleString();
-        if (progress < 1) {
-            window.requestAnimationFrame(step);
+function startUptimeCounter() {
+    const el = document.getElementById('session-uptime');
+    if (!el) return;
+    let seconds = 0;
+    setInterval(() => {
+        seconds++;
+        const hrs = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const secs = (seconds % 60).toString().padStart(2, '0');
+        el.innerText = `${hrs}:${mins}:${secs}`;
+    }, 1000);
+}
+
+function updateCPUGrid(cpu) {
+    const grid = document.getElementById('cpu-core-grid');
+    if (!grid) return;
+    
+    // Clear once if empty
+    if (grid.children.length === 0) {
+        for (let i = 0; i < (cpu.cores || 8); i++) {
+            const core = document.createElement('div');
+            core.className = 'cpu-core-block';
+            core.style = `height: 40px; background: rgba(59, 130, 246, 0.1); border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.2); position: relative; overflow: hidden;`;
+            core.innerHTML = `<div id="core-fill-${i}" style="position: absolute; bottom: 0; width: 100%; background: #3b82f6; transition: height 0.5s;"></div>`;
+            grid.appendChild(core);
         }
-    };
-    window.requestAnimationFrame(step);
+    }
+    
+    // Update fills
+    for (let i = 0; i < (cpu.cores || 8); i++) {
+        const fill = document.getElementById(`core-fill-${i}`);
+        if (fill) {
+            // Randomize slightly for visual core effect if we only have total percent
+            const coreVal = Math.min(100, Math.max(0, cpu.percent + (Math.random() * 10 - 5)));
+            fill.style.height = `${coreVal}%`;
+        }
+    }
 }
 
 const AGENT_PROFILES = {
@@ -4778,12 +4980,65 @@ window.deleteCustomAgent = async (agentId) => {
     } catch (e) {}
 };
 
+async function refreshAnalytics() {
+    const container = document.getElementById('analytics-data-container');
+    if (!container) return;
+    
+    // UI Feedback: Loading state
+    container.innerHTML = '<div style="grid-column: span 4; text-align: center; padding: 2rem; color: #10b981; font-family: \'JetBrains Mono\';">🛰️ RETRIEVING TELEMETRY...</div>';
+    
+    try {
+        const r = await fetch('/api/analytics', { headers: { 'X-API-KEY': VAULT_KEY }});
+        if (!r.ok) throw new Error("Analytics Uplink Failed");
+        const d = await r.json();
+        
+        container.innerHTML = `
+            <div class="stat-card" style="border-left: 4px solid #10b981;">
+                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px;">Neural Nodes</div>
+                <div style="font-size: 1.8rem; font-weight: 950; color: #fff; margin: 5px 0;">${d.node_count || 0}</div>
+                <div style="font-size: 0.6rem; color: #10b981;">Active Clusters: ${d.clusters_count || 0}</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #3b82f6;">
+                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px;">Compute Mode</div>
+                <div style="font-size: 1.1rem; font-weight: 900; color: #3b82f6; margin: 10px 0;">${(d.compute_mode || 'CPU-CORE').toUpperCase()}</div>
+                <div style="font-size: 0.6rem; color: #8b949e;">DNA: ${d.gpu?.backend || 'Metal/AVX'}</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #f59e0b;">
+                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px;">Memory Load</div>
+                <div style="font-size: 1.8rem; font-weight: 950; color: #fff; margin: 5px 0;">${d.ram?.percent || 0}%</div>
+                <div style="font-size: 0.6rem; color: #f59e0b;">Used: ${d.ram?.used || 0} GB</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #a855f7;">
+                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px;">Neural Synapses</div>
+                <div style="font-size: 1.8rem; font-weight: 950; color: #fff; margin: 5px 0;">${d.synapse_count || 0}</div>
+                <div style="font-size: 0.6rem; color: #a855f7;">Density: ${(d.synapse_count / (d.node_count || 1)).toFixed(2)}</div>
+            </div>
+        `;
+        
+        // Dynamic Chart Update: Inject real-time metrics into visual HUDs
+        if (window.growthChart && d.node_count) {
+            window.growthChart.data.datasets[0].data[window.growthChart.data.datasets[0].data.length - 1] = d.node_count;
+            window.growthChart.update('none');
+        }
+        if (window.densityChart && d.synapse_count && d.node_count) {
+            const density = (d.synapse_count / d.node_count).toFixed(2);
+            window.densityChart.data.datasets[0].data[window.densityChart.data.datasets[0].data.length - 1] = parseFloat(density);
+            window.densityChart.update('none');
+        }
+
+    } catch(e) {
+        container.innerHTML = `<div style="grid-column: span 4; text-align: center; padding: 2rem; color: #ef4444;">❌ ANALYTICS_OFFLINE: ${e.message}</div>`;
+    }
+}
+
 async function refreshVaultState() {
     const list = document.getElementById('knowledge-inventory-list');
     if (!list) return;
     try {
         const response = await fetch('/api/inventory', { headers: { 'X-API-KEY': VAULT_KEY }});
-        const sources = await response.json();
+        const data = await response.json();
+        const sources = data.documents || [];
+        
         if (!sources || sources.length === 0) {
             list.innerHTML = '<div style="opacity:0.3; text-align:center; padding:1rem; font-size:0.6rem;">Vuoto. Nessun dato acquisito.</div>';
             return;

@@ -75,27 +75,27 @@ class SwarmSettingsManager:
     def __init__(self, data_dir):
         self.path = Path(data_dir) / "swarm_settings.json"
         self.defaults = {
-            "audit": "llama3.2",
-            "discovery": "llama3.2",
-            "synthesis": "llama3.2",
-            "chat_mediator": "llama3.2",
+            "audit": "llama3.2:3b",
+            "discovery": "llama3.2:3b",
+            "synthesis": "llama3.2:3b",
+            "chat_mediator": "llama3.2:3b",
             "multimodal": "moondream",
             "vision_description": "moondream",
             "vision_detection": "moondream",
             "vision_ocr": "moondream",
             "vision_analysis": "moondream",
-            "evolution_model": "llama3.2",
+            "evolution_model": "llama3.2:3b",
             "autonomous_court": False,
-            "court_judge_1": "llama3.2",
-            "court_judge_2": "llama3.2",
-            "court_judge_3": "llama3.2",
+            "court_judge_1": "llama3.2:3b",
+            "court_judge_2": "llama3.2:3b",
+            "court_judge_3": "llama3.2:3b",
             "codebase_bridging": False,
             "evolution_mode": False, # Unified Key
-            "evolution_suggestion_model": "llama3.2",
-            "chat": "llama3.2",
-            "coding_1": "llama3.2",
-            "coding_2": "llama3.2",
-            "coding_supervisor": "llama3.2",
+            "evolution_suggestion_model": "llama3.2:3b",
+            "chat": "llama3.2:3b",
+            "coding_1": "llama3.2:3b",
+            "coding_2": "llama3.2:3b",
+            "coding_supervisor": "llama3.2:3b",
             "ollama_url": "http://127.0.0.1:11434",
             "github_token": "",
             "github_repo": "",
@@ -133,7 +133,22 @@ class SwarmSettingsManager:
             with open(self.path, "w") as f:
                 json.dump(self.settings, f)
         except Exception as e:
-            logger.error(f"Failed to save settings: {e}")
+            print(f"Failed to save settings: {e}")
+
+    def get_installed_models(self) -> List[str]:
+        """[v6.0] Interroga Ollama per ottenere la lista dei modelli realmente scaricati."""
+        import httpx
+        try:
+            url = f"{self.get('ollama_url', 'http://127.0.0.1:11434')}/api/tags"
+            # Synchronous call for compatibility with non-async contexts
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    models = resp.json().get("models", [])
+                    return [m["name"] for m in models]
+        except:
+            pass
+        return []
 
     def get_model(self, task: str) -> str:
         return self.settings.get(task, self.defaults.get(task, "llama3.2"))
@@ -1997,9 +2012,12 @@ class NeuralLabOrchestrator:
         self.contradiction_resolver = ContradictionResolver(engine, self)
         self.sleep_engine = NeuralSleepEngine(engine)
         self.last_contradiction_scan = time.time()
+        self.last_redteam_cycle = time.time()
         
         from retrieval.prefetcher import AnticipatoryPrefetcher
+        from retrieval.red_team import AutonomousRedTeam
         self.prefetcher = AnticipatoryPrefetcher(engine)
+        self.red_team = AutonomousRedTeam(engine)
 
         self.agents = {
             "JA-001": self.janitor,
@@ -2305,13 +2323,15 @@ class NeuralLabOrchestrator:
         self.agent_health = {aid: {"failures": 0, "stasis_until": 0} for aid in self.agents.keys()}
         self._kinetic_thread = threading.Thread(target=self._run_kinetic_engine, daemon=True); self._kinetic_thread.start()
         
-        # 💤 [v4.3.1] Sleep & Contradiction Background Loops
-        def start_sleep_loop():
-            loop = asyncio.new_event_loop()
+        # 💤 [v4.3.1] Initialize Event Loop for Orchestrator
+        self.loop = asyncio.new_event_loop()
+        def run_forever_loop(loop):
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.sleep_engine.start_maintenance_loop())
-            
-        threading.Thread(target=start_sleep_loop, daemon=True).start()
+            loop.run_forever()
+        threading.Thread(target=run_forever_loop, args=(self.loop,), daemon=True).start()
+        
+        # 💤 [v4.3.1] Sleep & Contradiction Background Loops (Offloaded to dedicated loop)
+        asyncio.run_coroutine_threadsafe(self.sleep_engine.start_maintenance_loop(), self.loop)
 
     def _perform_multimodal_health_check(self):
         """Verifica la disponibilità di ImageBind, Whisper e motori hardware."""
@@ -2428,9 +2448,13 @@ class NeuralLabOrchestrator:
                     # ⚖️ [v4.3.1] Proactive Contradiction Scan (Every 10 min)
                     if not getattr(self, 'user_interaction_active', False):
                         if time.time() - self.last_contradiction_scan > 600:
-                            # Eseguiamo in background per non bloccare il loop cinetico
-                            asyncio.create_task(self.contradiction_mapper.scan_for_contradictions(limit=10))
+                            asyncio.run_coroutine_threadsafe(self.contradiction_mapper.scan_for_contradictions(limit=10), self.loop)
                             self.last_contradiction_scan = time.time()
+                        
+                        # 🛡️ [v7.5] Phase 5: Autonomous Red Teaming (Every 30 min)
+                        if time.time() - self.last_redteam_cycle > 1800:
+                            asyncio.run_coroutine_threadsafe(self.red_team.run_red_team_cycle(intensity=3), self.loop)
+                            self.last_redteam_cycle = time.time()
                 
                 # 💾 Periodic State Sync (v3.5.0 Persistence)
                 if iteration % 10 == 0:
@@ -2497,11 +2521,83 @@ class NeuralLabOrchestrator:
         
         def _run_once():
             try:
-                self._run_evolution_advisor_loop(once=True)
+                # 1. Metacognition: Map Knowledge Gaps
+                from retrieval.metacognition import MetacognitionEngine
+                meta = MetacognitionEngine(self.engine)
+                # Use the orchestrator loop to run async gap mapping
+                future = asyncio.run_coroutine_threadsafe(meta.map_ignorance_gaps(limit=3), self.loop)
+                gaps = future.result(timeout=30)
+                
+                if gaps:
+                    gap_topics = [g.topic_context[:50] + "..." for g in gaps]
+                    self.blackboard.post(SynapticSignal("SYSTEM", AgentRole.ARCHITECT, 
+                        f"🧬 [Metacognition] Knowledge gaps identified in: {', '.join(gap_topics)}", 
+                        SignalType.SYSTEM_NOTIFICATION))
+                
+                self._run_evolution_advisor()
+            except Exception as e:
+                print(f"⚠️ [Evolution Scan Error] {e}")
             finally:
                 self._evolution_scan_lock = False
         
         threading.Thread(target=_run_once, daemon=True).start()
+
+    async def run_hybrid_evolution(self, limit=500, offset=0):
+        """[v6.1] Esecuzione effettiva dell'evoluzione (Iterativa e Non-Bloccante).
+        Sposta il consolidamento delle sinapsi nel nucleo dell'Orchestratore.
+        """
+        if not self.engine: return
+        batch_size = 250
+        current_offset = offset
+        total_new_links = 0
+        
+        max_iterations = max(1, limit // batch_size)
+        evol_model = self.settings.get("evolution_model", "llama3.2")
+
+        print(f"🧬 [Evolution] Batch active: {limit} nodes from {offset} using {evol_model}")
+
+        for i in range(max_iterations):
+            # Sospensione se attiva Priority Mode
+            while self.priority_mode:
+                await asyncio.sleep(2.0)
+                
+            res = await self.engine.evolve_graph(dry_run=True, limit=batch_size, offset=current_offset)
+            candidates = res["candidates"]
+            current_offset = res["next_offset"]
+            
+            if not candidates: break
+
+            sig_audit = SynapticSignal("QA-101", AgentRole.ARCHITECT, f"🛡️ EVOLUZIONE [BATCH {i+1}]: Analisi {len(candidates)} sinapsi...", SignalType.MISSION_UPDATE)
+            self.blackboard.post(sig_audit)
+            
+            # Audit synapses (threaded LLM call)
+            approved = await asyncio.to_thread(self.quantum.audit_synapses, candidates, model=evol_model)
+            batch_top = sorted(approved, key=lambda x: x[2], reverse=True)[:2]
+            
+            synapses_data = []
+            for src_id, dst_id, weight in approved:
+                reason = None
+                if (src_id, dst_id, weight) in batch_top:
+                    n1 = self.vault._nodes.get(src_id)
+                    n2 = self.vault._nodes.get(dst_id)
+                    if n1 and n2:
+                        self.blackboard.post(SynapticSignal("SY-009", AgentRole.SYNTH, f"✨ SYNTHETIC INSIGHT: Legame {src_id[:8]} <-> {dst_id[:8]}", SignalType.MISSION_UPDATE))
+                        ctx = f"A: {n1.text[:400]}\n\nB: {n2.text[:400]}"
+                        q = "Spiega in 10 parole perché questi due concetti sono collegati."
+                        reason = await self.get_consensus_response(q, ctx, model=evol_model)
+                synapses_data.append((src_id, dst_id, weight, reason))
+
+            for src_id, dst_id, weight, reason in synapses_data:
+                # v6.1: Usiamo add_relation del Vault per garantire la persistenza
+                success = self.vault.add_relation(src_id, dst_id, "synapse", weight=weight, reason=reason, source="evolution_oracle")
+                if success:
+                    # Creiamo anche il legame inverso (bidirezionale)
+                    self.vault.add_relation(dst_id, src_id, "synapse", weight=weight, reason=reason, source="evolution_oracle")
+                    total_new_links += 1
+            await asyncio.sleep(0.1)
+
+        self.blackboard.post(SynapticSignal("SYSTEM", AgentRole.MISSION_ARCHITECT, f"✨ EVOLUZIONE COMPLETATA: {total_new_links} sinapsi.", SignalType.SYSTEM_NOTIFICATION))
+        return total_new_links
 
     def _run_evolution_advisor_loop(self, once=False):
         """[CORE #1] Sovereign Advisor: Analisi autonoma proattiva per suggerimenti di crescita."""

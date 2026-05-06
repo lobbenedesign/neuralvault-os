@@ -54,7 +54,13 @@ class RelationType(str, Enum):
     PARENT       = "parent"
     CHILD        = "child"
     QUANTUM_LINK = "quantum_link"
-    SEMANTIC     = "semantic" # [v6.0.1] Fixed Orchestrator Compatibility
+    SEMANTIC     = "semantic" 
+    RESOLVED_BY  = "resolved_by" 
+    CAUSES       = "causes"      # [v7.0] Causal Logic
+    PREVENTS     = "prevents"    # [v7.0] Causal Logic
+    REQUIRES     = "requires"    # [v7.0] Causal Logic
+    ENABLES      = "enables"     # [v7.0] Causal Logic
+    SUPERSEDES   = "supersedes"  # [v7.0] Causal Logic
 
 
 @dataclass

@@ -182,9 +182,9 @@ class TelegramSovereignLink:
         err_str = str(err)
         
         # Se è un errore di connessione noto, stampiamo un avviso sintetico solo una volta ogni tanto
-        if "ConnectError" in err_str or "nodename nor servname" in err_str:
+        if "ConnectError" in err_str or "nodename nor servname" in err_str or "ReadError" in err_str:
             if not hasattr(self, '_last_conn_err') or time.time() - self._last_conn_err > 300:
-                print("📡 [Telegram] Link in standby: Host non raggiungibile (Modalità Offline attiva).")
+                print("📡 [Telegram] Link in standby: Host non raggiungibile o Timeout (Modalità Offline attiva).")
                 self._last_conn_err = time.time()
             return
             

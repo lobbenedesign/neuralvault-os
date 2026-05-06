@@ -16,6 +16,8 @@ class NeuralSleepEngine:
         self.idle_threshold = idle_threshold_sec
         self.last_interaction = time.time()
         self.is_sleeping = False
+        self.is_dreaming = False
+        self.current_dream = ""
         self._stop_event = asyncio.Event()
 
     def touch(self):
@@ -58,15 +60,19 @@ class NeuralSleepEngine:
                 logger.info("⚖️ [Sleep] Tentativo di risoluzione autonoma conflitti...")
                 await self.engine.orchestrator.contradiction_resolver.resolve_pending_contradictions()
             
-            # 4. Log dell'evento nel Ledger
+            # 4. [v7.0] Proactive Dreaming: Generazione wiki autonoma su gap identificati
+            if not self.is_sleeping: return
+            await self._proactive_dreaming()
+            
+            # 5. Log dell'evento nel Ledger
             self.engine._prefilter.log_event(
                 event_type="NEURAL_SLEEP_COMPLETE",
                 topic_cluster="System Maintenance",
                 node_id="system",
-                description="Consolidamento ciclico della memoria completato con successo."
+                description="Consolidamento ciclico e Proactive Dreaming completati."
             )
             
-            logger.info("✅ [Sleep] Consolidamento completato. Il sistema è più denso e coerente.")
+            logger.info("✅ [Sleep] Consolidamento e Dreaming completati. Il sistema è più saggio.")
             
         except Exception as e:
             logger.error(f"❌ [Sleep Error] Durante il consolidamento: {e}")
@@ -87,12 +93,82 @@ class NeuralSleepEngine:
         await asyncio.sleep(1)
 
     async def _synthesize_clusters(self):
-        """Crea Super-Nodi di sintesi per i cluster più densi."""
-        logger.info("🧱 [Sleep] Sintesi dei cluster (Creazione Super-Nodi)...")
-        # In una versione avanzata, qui QA-101 identificherebbe i cluster 
-        # e Synth creerebbe un nodo di 'Abstract Memory'.
-        # Per ora, simuliamo il processo.
-        await asyncio.sleep(2)
+        """Crea Super-Nodi di sintesi e aggiorna le Galassie Concettuali (H-RAG)."""
+        logger.info("🧱 [Sleep] Sintesi dei cluster (Hierarchical Clustering)...")
+        
+        if hasattr(self.engine, 'communities'):
+            try:
+                # 🌌 1. Avvia il clustering gerarchico (Grafico + Vettoriale)
+                # build_graph_and_cluster è sincrono ma gestisce internamente la Sandbox
+                self.engine.communities.build_graph_and_cluster()
+                
+                # 🌌 2. Genera i riassunti per le nuove comunità identificate (Async)
+                await self.engine.communities.generate_community_summaries()
+                
+                logger.info("✅ [Sleep] Galassie Concettuali aggiornate e riassunte.")
+            except Exception as e:
+                logger.error(f"❌ [Sleep] Errore durante la sintesi gerarchica: {e}")
+        else:
+            logger.warning("⚠️ [Sleep] CommunityEngine non trovato nell'engine.")
+        
+        await asyncio.sleep(1)
 
     def stop(self):
         self._stop_event.set()
+
+    async def _proactive_dreaming(self):
+        """[v7.0] Identifica gap o argomenti d'interesse e genera Wiki autonomamente."""
+        logger.info("💤 [Dreaming] Analisi gap semantici per generazione proattiva...")
+        
+        try:
+            from retrieval.metacognition import MetacognitionEngine
+            from retrieval.wiki_generator import SovereignWikiGenerator
+            
+            # 1. Hybrid Evolution: Strengthening existing synapses
+            if hasattr(self.engine, 'orchestrator'):
+                logger.info("🧬 [Dreaming] Avvio batch di evoluzione ibrida (Sinapsi)...")
+                await self.engine.orchestrator.run_hybrid_evolution(limit=250)
+
+            # 2. Identificazione Gap (Terra Incognita)
+            meta = MetacognitionEngine(self.engine)
+            gaps = await meta.map_ignorance_gaps(limit=3)
+            
+            if not gaps:
+                logger.info("💤 [Dreaming] Nessun gap significativo trovato. Cerco argomenti caldi...")
+                # Fallback: Skywalker mission su un tema casuale
+                if hasattr(self.engine, 'orchestrator'):
+                    await self.engine.orchestrator.dispatch_skywalker_mission("Emergent AI Trends")
+                return
+
+            # 3. Selezione del Gap più "promettente"
+            target_gap = gaps[0]
+            dream_topic = target_gap.missing_concepts[0] if target_gap.missing_concepts else "Sintesi Conoscenza"
+            
+            logger.info(f"✨ [Dreaming] Sognando approfondimento su: '{dream_topic}'")
+            self.is_dreaming = True
+            self.current_dream = dream_topic
+            
+            # 4. Generazione Wiki Proattiva
+            wiki_gen = SovereignWikiGenerator(self.engine)
+            try:
+                page = await wiki_gen.generate_wiki_page(dream_topic)
+                
+                # 5. Skywalker Expansion: Se abbiamo trovato un gap, mandiamo Skywalker a foraggiare
+                if page and hasattr(self.engine, 'orchestrator'):
+                    logger.info(f"🚀 [Dreaming] Dispatching FS-77 Skywalker for: {dream_topic}")
+                    await self.engine.orchestrator.dispatch_skywalker_mission(dream_topic)
+                    
+            finally:
+                self.is_dreaming = False
+                self.current_dream = ""
+            
+            if page:
+                logger.info(f"✅ [Dreaming] Nuova pagina Wiki 'sognata' con successo: {dream_topic}")
+                self.engine._prefilter.log_event(
+                    event_type="WIKI_DREAM_GENERATED",
+                    topic_cluster=dream_topic,
+                    node_id="system",
+                    description=f"Il sistema ha generato autonomamente un approfondimento su '{dream_topic}' per colmare un gap semantico."
+                )
+        except Exception as e:
+            logger.error(f"⚠️ [Dreaming Error] Fallimento durante il sogno: {e}")

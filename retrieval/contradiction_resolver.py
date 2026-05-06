@@ -34,14 +34,19 @@ class ContradictionResolver:
         node_b = self.engine._nodes.get(id_b)
         if not node_a or not node_b: return
 
+        # 🛰️ [Phase 4] Skywalker Protocol: Verifica esterna
+        external_context = await self._skywalker_verify(f"{node_a.text[:100]} vs {node_b.text[:100]}")
+        
         prompt = f"""
         CONFLITTO RILEVATO:
         TESI A: {node_a.text}
         TESI B: {node_b.text}
+        
+        {"CONTESTO ESTERNO (Skywalker): " + external_context if external_context else ""}
 
         Compito: Agisci come Arbitro della Corte Suprema. Crea una SINTESI che risolva la contraddizione 
         o spieghi perché entrambi i punti di vista sono validi in contesti diversi.
-        La sintesi deve essere oggettiva e tecnica.
+        Usa il contesto esterno se disponibile per determinare la verità fattuale.
         
         Rispondi ESCLUSIVAMENTE con un JSON:
         {{
@@ -67,7 +72,8 @@ class ContradictionResolver:
                     metadata={
                         "type": "resolution",
                         "resolved_nodes": [id_a, id_b],
-                        "strategy": result["action"]
+                        "strategy": result["action"],
+                        "skywalker_verified": bool(external_context)
                     }
                 )
                 
@@ -75,15 +81,26 @@ class ContradictionResolver:
                 self.engine.add_relation(id_a, res_node.id, RelationType.RESOLVED_BY)
                 self.engine.add_relation(id_b, res_node.id, RelationType.RESOLVED_BY)
                 
-                # Rimuovi l'arco di contraddizione (optional, or keep for history)
-                # Qui lo teniamo ma cambiamo il peso o lo stato
-                
                 self.engine._prefilter.log_event(
                     "CONTRADICTION_RESOLVED",
                     "Logic",
                     res_node.id,
-                    f"Risoluzione generata tra {id_a[:8]} e {id_b[:8]}."
+                    f"Risoluzione generata tra {id_a[:8]} e {id_b[:8]}. Verified: {bool(external_context)}"
                 )
                 
         except Exception as e:
             logger.error(f"❌ [Resolver Error] {e}")
+
+    async def _skywalker_verify(self, claim: str) -> Optional[str]:
+        """[Phase 4] Skywalker Protocol: Verifica esterna via Web Search."""
+        try:
+            # [v6.1 Fix] Accesso diretto via Orchestrator / SkyWalkerAgent
+            if self.orchestrator and hasattr(self.orchestrator, 'skywalker'):
+                logger.info(f"🛰️ [Skywalker] Verifica esterna in corso per: {claim[:50]}...")
+                # targeted_search restituisce una sintesi dei top risultati
+                external_context = await self.orchestrator.skywalker.targeted_search(claim, limit=3)
+                if external_context and len(external_context) > 100:
+                    return external_context
+        except Exception as e:
+            logger.warning(f"⚠️ [Skywalker Bridge] Fallito: {e}")
+        return None

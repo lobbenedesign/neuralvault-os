@@ -41,7 +41,21 @@ class TemporalConfidenceEngine:
         
         return round(max(0.1, confidence), 3)
 
+    def get_visual_status(self, confidence: float) -> Dict[str, str]:
+        """
+        [v4.3.1] Dual Decay Visual Mapping.
+        Ritorna la configurazione visiva per il nodo (bordo).
+        """
+        if confidence < 0.3: 
+            return {"color": "#ef4444", "status": "EXPIRED", "border": 3}
+        if confidence < 0.6: 
+            return {"color": "#f59e0b", "status": "STALE", "border": 2}
+        if confidence < 0.8:
+            return {"color": "#3b82f6", "status": "VERIFIED", "border": 1}
+        return {"color": "#10b981", "status": "FRESH", "border": 0}
+
     def get_warning_label(self, confidence: float) -> str:
-        if confidence < 0.3: return "🔴 OBSOLETO"
-        if confidence < 0.6: return "🟡 POTENZIALMENTE DATATO"
+        status = self.get_visual_status(confidence)["status"]
+        if status == "EXPIRED": return "🔴 OBSOLETO"
+        if status == "STALE": return "🟡 POTENZIALMENTE DATATO"
         return "🟢 ATTUALE"
