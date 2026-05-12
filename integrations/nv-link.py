@@ -12,10 +12,21 @@ Uso:
 
 import sys
 import json
+import os
+from pathlib import Path
+
+# Caricamento variabili d'ambiente (v1.1)
+try:
+    from dotenv import load_dotenv
+    # Cerca il .env nella cartella superiore rispetto a questa (integrations/)
+    env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(dotenv_path=env_path)
+except ImportError:
+    pass
 
 # Configurazione predefinita
-API_URL = "http://127.0.0.1:8001"
-VAULT_KEY = "vault_secret_aura_2026"
+API_URL = os.getenv("NEURALVAULT_API_URL", "http://127.0.0.1:8001")
+VAULT_KEY = os.getenv("NEURAL_VAULT_KEY", "sovereign_vault_alpha_2026_secure_core")
 
 try:
     import httpx

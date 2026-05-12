@@ -8,14 +8,14 @@ Estrae relazioni di causa-effetto, prevenzione e requisiti dai nodi del Vault.
 import json
 import re
 from typing import List, Dict
-from index.node import RelationType, VaultNodeEdge
+from index.node import RelationType, SemanticEdge
 
 class CausalExtractor:
     def __init__(self, engine):
         self.engine = engine
         self.orchestrator = engine.orchestrator
 
-    async def extract_causal_relations(self, node) -> List[VaultNodeEdge]:
+    async def extract_causal_relations(self, node) -> List[SemanticEdge]:
         """
         Analizza il testo di un nodo e identifica relazioni causali verso altri concetti o nodi.
         """
@@ -73,7 +73,7 @@ class CausalExtractor:
                             if search_res:
                                 target_id = search_res[0].node.id
                         
-                        causal_edges.append(VaultNodeEdge(
+                        causal_edges.append(SemanticEdge(
                             target_id=target_id,
                             relation=rel_type,
                             weight=0.9,

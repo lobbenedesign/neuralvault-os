@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import re
 import time
+import random
 import hashlib
 import asyncio
+import urllib.parse
 from urllib.parse import urljoin, urlparse, urldefrag
 from typing import List, Dict, Optional, Set
 from dataclasses import dataclass, field
@@ -37,6 +39,7 @@ except ImportError:
 
 try:
     import playwright.async_api as pw
+    from playwright_stealth import Stealth
     HAS_PLAYWRIGHT = True
 except ImportError:
     HAS_PLAYWRIGHT = False
@@ -123,7 +126,7 @@ class SovereignWebForager:
         max_pages: int = 25000,
         rate_limit_sec: float = 0.2,
         same_domain_only: bool = True,
-        timeout_sec: float = 20.0,
+        timeout_sec: float = 180.0,
         use_playwright: bool = False,
     ):
         self.max_depth = max_depth
@@ -140,6 +143,74 @@ class SovereignWebForager:
             headers={"User-Agent": "NeuralVault-Forager/1.0 (compatible; Sovereign Knowledge Engine)"},
             follow_redirects=True,
         )
+
+    @staticmethod
+    def refine_query(query: str, max_len: int = 180) -> str:
+        """
+        [Query Optimizer v1.2 APEX]
+        Pulisce e ottimizza la query per i motori di ricerca.
+        """
+        if not query: return ""
+        
+        # 1. Rimuove path (es: /Users/.../file.py)
+        query = re.sub(r'/[a-zA-Z0-9._/-]+/[a-zA-Z0-9._-]+\.[a-z]{2,4}', '', query)
+        
+        # 2. Rimuove frammenti di log/esadecimali/indirizzi di memoria
+        query = re.sub(r'0x[0-9a-fA-F]+', '', query)
+        query = re.sub(r'[a-fA-F0-9]{32,}', '', query) # Long hex hashes
+        
+        # 3. Se somiglia a codice, estraiamo i termini salienti
+        if any(c in query for c in "()[]{}.->"):
+            # Filtriamo parole comuni di programmazione se troppo brevi o noise
+            words = re.findall(r'[a-zA-Z0-9_]{3,}', query)
+            # Stopwords tecniche comuni da ignorare nella query di ricerca
+            tech_stopwords = {"self", "this", "null", "none", "true", "false", "void", "return", "import", "from", "class", "def"}
+            filtered_words = [w for w in words if w.lower() not in tech_stopwords]
+            query = " ".join(filtered_words[:10])
+        
+        # 4. Pulizia caratteri speciali residui
+        query = re.sub(r'[^\w\s\-\.\?]', ' ', query)
+        query = " ".join(query.split())
+        
+        # 5. Troncamento intelligente
+        if len(query) > max_len:
+            query = query[:max_len].rsplit(' ', 1)[0]
+            
+        return query.strip()
+
+    async def search(self, query: str, num_results: int = 3):
+        """
+        Esegue una ricerca su Google con query ottimizzata e restituisce i risultati.
+        Esegue internamente il foraging delle pagine trovate.
+        """
+        clean_query = self.refine_query(query)
+        if not clean_query: return
+        
+        search_url = f"https://www.google.com/search?q={httpx.utils.quote(clean_query)}"
+        print(f"🔍 [Forager/Search] Query Ottimizzata: '{clean_query}'")
+        
+        # Usiamo il fetch standard del forager (che ha fallback Playwright)
+        html = await self._fetch_page(search_url)
+        if not html: return
+
+        # Estrazione URL dai risultati di Google
+        found_urls = []
+        if HAS_BS4:
+            soup = BeautifulSoup(html, "html.parser")
+            for a in soup.select('a'):
+                href = a.get('href', '')
+                if href.startswith('/url?q='):
+                    u = href.split('/url?q=')[1].split('&')[0]
+                    if 'google.com' not in u and u.startswith('http') and u not in found_urls:
+                        found_urls.append(u)
+                        if len(found_urls) >= num_results: break
+        
+        # Se non troviamo nulla con BS4, Google potrebbe averci bloccato o cambiato struttura.
+        # Playwright di solito risolve questo.
+        
+        for url in found_urls:
+            async for page in self.forage(url):
+                yield page
 
     def _normalize_url(self, url: str) -> str:
         """Pulisce e normalizza l'URL, rimuovendo caratteri illegali e spazi."""
@@ -269,6 +340,20 @@ class SovereignWebForager:
 
         return ocr_results
 
+    async def _fetch_with_jina(self, url: str) -> Optional[str]:
+        """Utilizza r.jina.ai per estrarre markdown pulito da pagine JS-heavy."""
+        jina_url = f"https://r.jina.ai/{url}"
+        try:
+            # 🚀 [v16.2] High Performance Fallback
+            headers = {"X-Return-Format": "markdown"}
+            async with httpx.AsyncClient(headers=headers, timeout=18.0, follow_redirects=True) as client:
+                resp = await client.get(jina_url)
+                if resp.status_code == 200:
+                    print(f"🚀 [Forager] Jina Reader SUCCESS for {url[:50]}...")
+                    return resp.text
+        except Exception: pass
+        return None
+
     async def _fetch_page(self, url: str) -> Optional[str]:
         """Fetch HTTP con fallback Playwright per SPA/JS-rendered."""
         try:
@@ -295,20 +380,25 @@ class SovereignWebForager:
                     elif "pdf" in ct and HAS_PDF:
                         return self._extract_pdf(resp.content)
                 else:
-                    print(f"⚠️ [Forager] HTTP {resp.status_code} per {url}. Tentativo fallback...")
+                    print(f"⚠️ [Forager] HTTP {resp.status_code} per {url}. Tentativo Jina Reader...")
             
-            # Fallback immediato a Playwright se il primo tentativo fallisce o non è 200
+            # 🚀 [v16.2] Jina Reader Fallback (Fastest JS-Render alternative)
+            jina_content = await self._fetch_with_jina(url)
+            if jina_content: return jina_content
+
+            # Fallback finale a Playwright se tutto il resto fallisce
             if HAS_PLAYWRIGHT:
-                print(f"🎭 [Forager] Avvio Fallback Playwright per {url[:50]}...")
+                print(f"🎭 [Forager] Avvio Fallback Playwright (Last Resort) per {url[:50]}...")
                 return await self._fetch_with_playwright(url)
             return None
 
         except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-            err_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"⚠️ [Forager] Fetch HTTP fallito per {url}: {err_msg}. Provo Playwright...")
-            
-            # Fallback: Playwright per pagine JS-rendered o protette
+            # Provo comunque Jina prima di Playwright
+            jina_content = await self._fetch_with_jina(url)
+            if jina_content: return jina_content
+
             if HAS_PLAYWRIGHT:
+                print(f"🎭 [Forager] HTTP Error. Avvio Playwright per {url[:50]}...")
                 return await self._fetch_with_playwright(url)
             return None
 
@@ -329,15 +419,92 @@ class SovereignWebForager:
         try:
             async with pw.async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                await page.goto(url, timeout=int(self.timeout * 1000))
-                await page.wait_for_load_state("networkidle", timeout=10000)
+                context = await browser.new_context(
+                    viewport={'width': 1280, 'height': 800},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                )
+                page = await context.new_page()
+                
+                # ⚡ [Optimization v16.2] Block useless heavy resources to speed up load
+                async def safe_abort(route):
+                    try:
+                        await route.abort()
+                    except Exception:
+                        pass
+                await page.route("**/*.{png,jpg,jpeg,gif,webp,svg,css,woff,woff2,ttf}", safe_abort)
+                
+                await Stealth().apply_stealth_async(page)
+                
+                # Aumentiamo il timeout a 45s per siti molto lenti
+                await page.goto(url, timeout=45000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except: pass # Se networkidle fallisce, prendiamo quello che c'è
+                
                 html = await page.content()
                 await browser.close()
                 return html
         except Exception as e:
             print(f"⚠️ [Forager] Playwright fallito per {url}: {e}")
             return None
+
+    async def stealth_search(self, query: str, limit: int = 10, zen: bool = False) -> Dict[str, Any]:
+        """
+        [Sovereign Stealth Search v2.0 - Deadlock Immune]
+        Esegue una ricerca web multi-engine nativa e asincrona.
+        Bypassa Playwright per prevenire timeout critici e deadlock su Apple Silicon.
+        """
+        print(f"🕵️ [Forager/Stealth] Avvio ricerca ultra-rapida multi-engine per: '{query}' (limit={limit})")
+        urls = []
+        ai_content = ""
+        
+        fallback_engines = [
+            f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}",
+            f"https://www.startpage.com/do/search?query={urllib.parse.quote(query)}",
+            f"https://www.google.com/search?q={urllib.parse.quote(query)}&gbv=1", # gbv=1 per versione lightweight
+            f"https://search.brave.com/search?q={urllib.parse.quote(query)}&source=web"
+        ]
+        
+        for engine_url in fallback_engines:
+            try:
+                ua = random.choice([
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0"
+                ])
+                headers = {"User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
+                
+                # Timeout esteso a 180s per ricerche profonde e resilienti
+                async with httpx.AsyncClient(headers=headers, timeout=180.0, follow_redirects=True) as client:
+                    resp = await client.get(engine_url)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, "html.parser")
+                        links = soup.find_all("a", href=True)
+                        print(f"   [Forager/Engine] Analisi {len(links)} link da {urllib.parse.urlparse(engine_url).netloc}...")
+                        
+                        for a in links:
+                            href = a["href"]
+                            if "/url?q=" in href:
+                                href = href.split("/url?q=")[1].split("&")[0]
+                            elif "uddg=" in href:
+                                href = href.split("uddg=")[1].split("&")[0]
+                            
+                            try: href = urllib.parse.unquote(href)
+                            except: pass
+                            
+                            if href.startswith("http") and not any(x in href for x in ["google.com", "duckduckgo.com", "gstatic.com", "bing.com", "brave.com", "startpage.com", "w3.org"]):
+                                clean_href = href.split("?")[0] if "?" in href and "url?q=" not in href else href
+                                if clean_href not in urls: urls.append(clean_href)
+                                if len(urls) >= limit * 2: break
+                                
+                    if len(urls) >= 2:
+                        print(f"✅ [Forager/Stealth] Harvested {len(urls)} results from {urllib.parse.urlparse(engine_url).netloc}.")
+                        break # Termina la ricerca se abbiamo abbastanza URL
+            except Exception as e:
+                print(f"⚠️ [Forager/Engine] Failed {urllib.parse.urlparse(engine_url).netloc}: {type(e).__name__}")
+                continue
+                
+        return {"urls": list(dict.fromkeys(urls))[:limit], "ai_content": ai_content}
 
     async def forage(self, start_url: str):
         """

@@ -124,6 +124,19 @@ class DuckDBPrefilter:
             )
         """)
 
+        # 🎭 [v8.2] Persona Kernels (E2P Pipeline)
+        self.con.execute("""
+            CREATE TABLE IF NOT EXISTS persona_kernels (
+                entity_id VARCHAR PRIMARY KEY,
+                canonical_name VARCHAR,
+                roles JSON,
+                behavioral_fingerprint JSON,
+                historical_actions JSON,
+                last_seen TIMESTAMP DEFAULT now(),
+                metadata JSON
+            )
+        """)
+
         try:
             cols = self.con.execute("PRAGMA table_info('vault_metadata')").fetchall()
             col_names = [c[1] for c in cols]
@@ -198,7 +211,7 @@ class DuckDBPrefilter:
     def check_duplicate(self, content_hash: str) -> Optional[str]:
         """Controlla se esiste già un nodo con questo hash. Restituisce l'ID del primo duplicato."""
         if not content_hash: return None
-        res = self.execute("SELECT id FROM vault_metadata WHERE content_hash = ? LIMIT 1", (content_hash,)).fetchone()
+        res = self.fetchone("SELECT id FROM vault_metadata WHERE content_hash = ? LIMIT 1", (content_hash,))
         return res[0] if res else None
 
     def hit_node(self, node_id: str):
@@ -207,6 +220,14 @@ class DuckDBPrefilter:
             "UPDATE vault_metadata SET last_access = now(), access_count = access_count + 1 WHERE id = ?",
             (node_id,)
         )
+
+    def get_cognitive_metadata(self, node_id: str):
+        """Recupera metadati cognitivi in modo thread-safe (v9.0)."""
+        with self._lock:
+            return self.con.execute(
+                "SELECT last_access, access_count, importance FROM vault_metadata WHERE id = ?",
+                (node_id,)
+            ).fetchone()
 
     def log_event(self, event_type: str, node_id: str, topic: str = None, description: str = "", topic_cluster: str = None):
         """[v4.3.0] Registra un evento nel ledger temporale per la Knowledge Timeline."""
@@ -231,14 +252,15 @@ class DuckDBPrefilter:
         try:
             # Query ultra-veloce (DuckDB vince su tutto per analytics locale)
             query = f"SELECT id FROM vault_metadata WHERE {sql_where}"
-            res = self.execute(query).fetchall()
+            res = self.fetchall(query)
             return [r[0] for r in res]
         except Exception as e:
             print(f"⚠️ Errore nel Prefilter SQL: {e}")
             return []
 
     def count(self) -> int:
-        return self.execute("SELECT count(*) FROM vault_metadata").fetchone()[0]
+        res = self.fetchone("SELECT count(*) FROM vault_metadata")
+        return res[0] if res else 0
 
     def query_nodes(self, sql_where: str, limit: int = 100) -> List[Dict]:
         """[v5.1] Esegue una query complessa e restituisce i dati completi del nodo (id, text, metadata)."""
@@ -250,7 +272,7 @@ class DuckDBPrefilter:
                 WHERE {sql_where} 
                 LIMIT {limit}
             """
-            res = self.execute(query).fetchall()
+            res = self.fetchall(query)
             nodes = []
             for r in res:
                 nodes.append({
@@ -287,12 +309,12 @@ class DuckDBPrefilter:
 
     def is_node_protected(self, node_id: str) -> bool:
         """Controlla se un nodo è sotto protezione persistente (Episodic Memory)."""
-        res = self.execute("SELECT node_id FROM episodic_memory WHERE node_id = ?", (node_id,)).fetchone()
+        res = self.fetchone("SELECT node_id FROM episodic_memory WHERE node_id = ?", (node_id,))
         return res is not None
 
     def get_protected_nodes(self) -> List[str]:
         """Restituisce tutti gli ID protetti."""
-        res = self.execute("SELECT node_id FROM episodic_memory").fetchall()
+        res = self.fetchall("SELECT node_id FROM episodic_memory")
         return [r[0] for r in res]
 
     def get_knowledge_sources(self) -> List[Dict]:
@@ -310,7 +332,7 @@ class DuckDBPrefilter:
                 GROUP BY source, title
                 ORDER BY first_seen DESC
             """
-            res = self.execute(query).fetchall()
+            res = self.fetchall(query)
             sources = []
             for r in res:
                 sources.append({
@@ -335,6 +357,16 @@ class DuckDBPrefilter:
         with self._lock:
             return self.con.executemany(query, params)
 
+    def fetchone(self, query: str, params: tuple = ()):
+        """Esegue e recupera il primo risultato in modo thread-safe."""
+        with self._lock:
+            return self.con.execute(query, params).fetchone()
+
+    def fetchall(self, query: str, params: tuple = ()):
+        """Esegue e recupera tutti i risultati in modo thread-safe."""
+        with self._lock:
+            return self.con.execute(query, params).fetchall()
+
     def fetchdf(self, query: str, params: tuple = ()):
         """Recupera un DataFrame in modo thread-safe."""
         with self._lock:
@@ -348,10 +380,10 @@ class DuckDBPrefilter:
     def get_audit_stats(self) -> Dict:
         """Estrae statistiche di integrità e performance dal database analitico."""
         try:
-            total_nodes = self.execute("SELECT COUNT(*) FROM vault_metadata").fetchone()[0]
-            total_events = self.execute("SELECT COUNT(*) FROM knowledge_events").fetchone()[0]
-            last_event = self.execute("SELECT MAX(timestamp) FROM knowledge_events").fetchone()[0]
-            namespaces = self.execute("SELECT COUNT(DISTINCT namespace) FROM vault_metadata").fetchone()[0]
+            total_nodes = self.fetchone("SELECT COUNT(*) FROM vault_metadata")[0]
+            total_events = self.fetchone("SELECT COUNT(*) FROM knowledge_events")[0]
+            last_event = self.fetchone("SELECT MAX(timestamp) FROM knowledge_events")[0]
+            namespaces = self.fetchone("SELECT COUNT(DISTINCT namespace) FROM vault_metadata")[0]
             
             # Calcolo densità (esempio: eventi per nodo)
             density = total_events / total_nodes if total_nodes > 0 else 0

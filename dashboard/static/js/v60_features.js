@@ -186,42 +186,71 @@ window.generateWiki = async () => {
     const input = document.getElementById('floating-query-input');
     if (!input) return;
     const topic = input.value;
+    const mode = window.currentReadingMode || "TECHNICAL";
     
     if (!topic) {
         if (typeof log === 'function') log("⚠️ Inserisci un tema per la Wiki.", "#f59e0b");
         return;
     }
 
-    if (typeof log === 'function') log(`🏛️ [Wiki] Generazione in corso per: ${topic}...`, "#a855f7");
+    if (typeof log === 'function') log(`🏛️ [Wiki Stream] Generazione in corso per: ${topic}...`, "#3b82f6");
     
     const wikiView = document.getElementById('neural-wiki-view');
     if (!wikiView) return;
     
     wikiView.style.display = 'block';
-    wikiView.innerHTML = '<div style="text-align:center; padding:3rem;"><i class="fas fa-book-open fa-spin" style="font-size:2rem; color:#a855f7; margin-bottom:1rem;"></i><br>L\'Archivista sta assemblando la conoscenza...</div>';
+    wikiView.innerHTML = `
+        <div id="wiki-stream-container" class="wiki-container" style="background: rgba(13,17,23,0.8); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(168,85,247,0.2); padding: 2rem; max-width: 900px; margin: 0 auto;">
+            <div id="wiki-stream-header" style="border-bottom: 1px solid rgba(168,85,247,0.3); padding-bottom: 1.5rem; margin-bottom: 2rem;">
+                <h1 style="color: #fff; font-size: 2.2rem; margin: 0; font-weight: 900;">${topic}</h1>
+                <div id="wiki-stream-status" style="font-size: 0.7rem; color: #a855f7; margin-top: 10px; font-weight: 800;">🛰️ INIZIALIZZAZIONE STREAM...</div>
+            </div>
+            <div id="wiki-stream-body" class="wiki-content" style="line-height: 1.8; color: #cbd5e1; font-size: 1rem;"></div>
+        </div>
+    `;
 
-    try {
-        const resp = await fetch('/api/wiki/generate', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-API-KEY': VAULT_KEY
-            },
-            body: JSON.stringify({ topic })
-        });
-        const data = await resp.json();
+    const eventSource = new EventSource(`/api/wiki/generate/stream?topic=${encodeURIComponent(topic)}&mode=${mode}&api_key=${VAULT_KEY}`);
+    
+    let sections = [];
+    
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const statusEl = document.getElementById('wiki-stream-status');
+        const bodyEl = document.getElementById('wiki-stream-body');
         
-        if (data.status === 'success') {
-            if (typeof log === 'function') log(`✅ [Wiki] Pagina generata: ${data.title}`, "#4ade80");
-            renderWiki(data);
-        } else {
-            if (typeof log === 'function') log(`❌ [Wiki Error] ${data.message}`, "#ef4444");
-            wikiView.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center; border:1px solid rgba(239,68,68,0.2); border-radius:12px;">${data.message}</div>`;
+        if (data.status === 'progress') {
+            statusEl.innerText = `🛰️ ${data.step}: ${data.message || ''}`;
+            if (data.sections) {
+                statusEl.innerText += ` (${data.sections.length} sezioni pianificate)`;
+            }
+        } else if (data.status === 'section_ready') {
+            sections.push(data.section);
+            const sectionHtml = `
+                <div class="wiki-section-fadein" style="margin-bottom: 2.5rem; animation: slideIn 0.5s ease-out;">
+                    <h2 style="color:#fff; border-left: 4px solid #a855f7; padding-left: 15px; margin-top:35px; font-weight:800;">${data.section.title}</h2>
+                    <div>${processWikiMarkdown(data.section.content, data.section.citations)}</div>
+                </div>
+            `;
+            bodyEl.insertAdjacentHTML('beforeend', sectionHtml);
+            
+            // Trigger Lazy Mermaid for new content
+            if (window.lazyMermaid) window.lazyMermaid.init();
+        } else if (data.status === 'success') {
+            statusEl.innerHTML = `<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> GENERAZIONE COMPLETATA</span>`;
+            eventSource.close();
+            log(`✅ [Wiki] Pagina completata: ${topic}`, "#4ade80");
+        } else if (data.status === 'error') {
+            statusEl.innerHTML = `<span style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> ERRORE: ${data.message}</span>`;
+            eventSource.close();
         }
-    } catch (e) {
-        if (typeof log === 'function') log(`❌ [Wiki Error] ${e.message}`, "#ef4444");
-        wikiView.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Errore di connessione con il Sovereign Engine.</div>`;
-    }
+    };
+
+    eventSource.onerror = (err) => {
+        console.error("SSE Error:", err);
+        eventSource.close();
+        const statusEl = document.getElementById('wiki-stream-status');
+        if (statusEl) statusEl.innerHTML = `<span style="color:#ef4444;">❌ ERRORE DI CONNESSIONE STREAM</span>`;
+    };
 };
 
 function renderWiki(data) {

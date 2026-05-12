@@ -1,4 +1,6 @@
 import os
+os.environ["MallocStackLogging"] = "0"
+os.environ["MallocStackLoggingNoCompact"] = "0"
 import time
 from typing import Any, Optional
 from pathlib import Path

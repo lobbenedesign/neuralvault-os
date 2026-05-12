@@ -1,0 +1,167 @@
+/* wiki/adaptive_reading.css - v8.4 Optimization */
+
+.reading-mode-transition {
+  transition: 
+    font-size 0.3s ease,
+    line-height 0.3s ease,
+    opacity 0.2s ease,
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Executive Mode: massimo whitespace, minimo dettaglio */
+.mode-executive .wiki-content {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  max-width: 70ch;
+  margin: 0 auto;
+}
+
+.mode-executive .technical-detail,
+.mode-executive .source-citation {
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+
+.mode-executive .executive-summary {
+  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-weight: 500;
+  color: #000;
+}
+
+/* Technical Mode: dettaglio completo, codice espanso */
+.mode-technical .wiki-content {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+}
+
+.mode-technical .code-block {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+
+/* Research Mode: fonti in primo piano, contraddizioni evidenziate */
+.mode-research .source-citation {
+  display: inline-block;
+  margin: 2px 0;
+  padding: 4px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid #3B82F6;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+.mode-research .contradiction-warning {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-left: 4px solid #EF4444;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Lazy Mermaid Placeholders */
+.mermaid-placeholder {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.placeholder-skeleton {
+  width: 100%;
+  height: 100px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.5s infinite;
+}
+
+@keyframes skeleton-wave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.placeholder-text {
+  font-size: 0.7rem;
+  color: #8b949e;
+}
+
+.mermaid-rendered {
+  transition: transform 0.2s ease;
+  overflow: hidden;
+}
+
+/* Modal Shortcut Help */
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+kbd {
+  background: #334155;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: monospace;
+  box-shadow: 0 2px 0 #000;
+}
+/* Causal Click-Through Styles */
+.wiki-entity {
+  color: #FBBF24;
+  border-bottom: 1px dashed rgba(251, 191, 36, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  padding: 0 2px;
+}
+
+.wiki-entity:hover {
+  background: rgba(251, 191, 36, 0.1);
+  border-bottom-style: solid;
+  color: #F59E0B;
+}
+
+.wiki-entity::after {
+  content: ' 🔍';
+  font-size: 0.7em;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.wiki-entity:hover::after {
+  opacity: 0.6;
+}
+
+/* Modal for Causal Preview */
+#causal-preview-modal {
+  z-index: 10000;
+}
+
+.causal-modal-content {
+  background: rgba(13, 17, 23, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  max-width: 600px;
+  width: 90%;
+  padding: 1.5rem;
+}

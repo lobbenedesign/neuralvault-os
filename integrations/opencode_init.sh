@@ -5,7 +5,9 @@
 echo "📡 Inizializzazione NeuralVault Bridge per Opencode..."
 
 # Percorso dello script bridge
-BRIDGE_PATH="/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/integrations/nv-link.py"
+# Determinazione dinamica del percorso dello script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+BRIDGE_PATH="$SCRIPT_DIR/nv-link.py"
 
 # Creazione alias rapidi per il terminale di Opencode
 alias nv="python3 '$BRIDGE_PATH'"

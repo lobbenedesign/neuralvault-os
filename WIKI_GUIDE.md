@@ -1,51 +1,50 @@
-# 📖 Sovereign Wiki & Visual Singularity (v4.3.1)
+# 📖 Sovereign Wiki: Persistent Truth (v9.1)
 
-Benvenuto nel manuale operativo del **NeuralVault Sovereign Wiki**. Questa estensione trasforma il tuo database vettoriale in una enciclopedia dinamica e navigabile in 3D.
-
----
-
-## 🚀 1. Come Generare una Pagina Wiki
-
-Esistono tre modi per popolare la Wiki:
-
-1.  **Dalla Dashboard**: Inserisci un argomento nel campo di ricerca principale e clicca su "Generate Wiki".
-2.  **Tramite API**: Invia una richiesta POST a `/api/wiki/generate` con il corpo:
-    ```json
-    { "topic": "Storia dell'Intelligenza Artificiale", "recursive": true }
-    ```
-3.  **Cross-Linking**: All'interno di una pagina Wiki, le parole evidenziate in **viola** sono link. Cliccandoci, il sistema cercherà o genererà automaticamente una nuova pagina correlata.
+Benvenuto nel manuale operativo del **NeuralVault Sovereign Wiki**. Questa estensione trasforma il tuo database vettoriale in una enciclopedia persistente, sicura e interconnessa.
 
 ---
 
-## 🌌 2. Visual Singularity: Leggere la Nebula
+## 🚀 1. Come Generare e Archiviare Conoscenza
 
-Con l'integrazione del **Cycloscope v4.3**, la nebula non è più solo estetica:
+La Wiki v9.1 non è più solo dinamica; ogni pagina generata viene "cristallizzata" come **Source of Truth**.
 
-### 🕸️ Synaptic Layers (Linee di Luce)
-Quando leggi una pagina Wiki, vedrai apparire delle linee dorate/neon tra i nodi. Queste sono le **Sinapsi Sovrane**: rappresentano le relazioni reali che il sistema ha estratto dai tuoi dati per scrivere quell'articolo.
-*   **Focus**: La telecamera si sposterà automaticamente sul cluster di conoscenza principale.
-
-### 🔥 Temporal Heatmap (Confidence Mapping)
-Attiva il layer Heatmap per vedere la "freschezza" della conoscenza:
-*   **Verde Neon**: Informazioni recenti, verificate e ad alta confidenza.
-*   **Viola/Opaco**: Informazioni vecchie o in decadimento (Cognitive Decay). Il sistema ti avvisa che questi dati potrebbero necessitare di un aggiornamento o di una riflessione critica.
+1.  **Generazione**: Inserisci un argomento nella dashboard. Il sistema estrarrà i dati dal Vault e comporrà un file Markdown canonico.
+2.  **Persistenza**: Tutti i file sono salvati fisicamente in `vault_data/wiki/`. Puoi aprirli con Obsidian, VS Code o qualsiasi editor Markdown.
+3.  **Namespace (Cartelle)**: Organizza la conoscenza in cartelle logiche (es. `General/`, `Research/`, `Agents/`) per mantenere ordine nel Vault.
 
 ---
 
-## 🏛️ 3. Sovereign Ledger & Audit
+## 🛡️ 2. Sovereign Redactor (Sicurezza)
 
-Ogni operazione della Wiki viene registrata nel **Ledger**. Puoi verificare lo stato di integrità del sistema in qualsiasi momento:
-*   **Endpoint**: `/api/system/audit-verify`
-*   **Significato**: Se il `ledger_density` è alto, significa che la tua Wiki è densamente connessa e affidabile.
-
----
-
-## 🧠 4. Riflessione Critica
-
-Sotto ogni articolo Wiki troverai il pulsante **"AVVIA RIFLESSIONE CRITICA"**. 
-Questo attiva la **Triple-Judge Supreme Court**: tre istanze diverse del modello analizzeranno il contenuto per trovare contraddizioni, allucinazioni o lacune nella tua base di conoscenza.
+Per proteggere la tua privacy, la Wiki v9.1 integra un sistema di redazione automatica pre-salvataggio:
+*   **Auto-Sanitize**: API Key, password, token e email vengono oscurati (`[REDACTED]`) prima che il file tocchi il disco.
+*   **Safety First**: Puoi esportare la tua Wiki senza temere leak accidentali di credenziali presenti nei tuoi documenti originali.
 
 ---
 
-> [!TIP]
-> Se la nebula sembra troppo densa, usa lo slider **Nebula Expansion** nelle impostazioni per distanziare i nodi e vedere meglio le sinapsi Wiki.
+## 🔄 3. Agent Session Sync (Cursor & Claude)
+
+Puoi alimentare la Wiki con il lavoro svolto da agenti esterni:
+*   **Sync**: Il sistema può ingerire le cronologie di sessione di **Cursor** e i log di **Claude Code**.
+*   **Agent Intelligence**: Queste sessioni vengono trasformate in pagine Wiki che documentano l'evoluzione del tuo codice e le decisioni architettoniche prese.
+
+---
+
+## 🔌 4. Integrazione AI (llms.txt & MCP)
+
+La Wiki è progettata per essere letta da altre AI:
+*   **llms.txt**: Un unico endpoint (`/api/wiki/llms.txt`) che aggrega tutta la tua Wiki in un formato ottimizzato per gli LLM esterni.
+*   **MCP 2.0**: Usa il protocollo **Model Context Protocol** per permettere a Claude o Cursor di listare, leggere e aggiornare la tua Wiki autonomamente.
+
+---
+
+## 🌌 5. Epistemic HUD & Provenance
+
+Nella visualizzazione Wiki della dashboard troverai due nuovi strumenti critici:
+*   **Causal Graph**: Un mini-grafo interattivo che mappa le relazioni logiche della pagina.
+*   **Provenance**: La lista esatta dei documenti originali (PDF, Link, Note) usati per ogni affermazione, con link cliccabili per il deep-dive.
+
+---
+
+> [!IMPORTANT]
+> Tutte le modifiche fatte manualmente ai file in `vault_data/wiki/` verranno preservate. NeuralVault riconosce i file esistenti e li usa come base per le future riflessioni critiche.

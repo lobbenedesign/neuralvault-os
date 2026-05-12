@@ -25,7 +25,8 @@ class CommunityEngine:
         """
         def _execute_hybrid_clustering():
             import numpy as np
-            from sklearn.cluster import KMeans
+            import torch
+            from index.turboquant import NativeKMeans
             
             # 1. Recupero ID e Metadati (Ottimizzato: Usiamo cache RAM se possibile)
             all_ids = self.engine._prefilter.filter("1=1")
@@ -85,8 +86,11 @@ class CommunityEngine:
                 if orphan_vectors:
                     # Numero dinamico di cluster (1 ogni 50 nodi, max 30)
                     n_clusters = min(max(3, len(orphan_vectors) // 50), 30)
-                    kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-                    labels = kmeans.fit_predict(np.array(orphan_vectors))
+                    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+                    kmeans = NativeKMeans(n_clusters=n_clusters, n_iter=15, device=device)
+                    t_vectors = torch.from_numpy(np.array(orphan_vectors)).float().to(device)
+                    kmeans.fit(t_vectors)
+                    labels = kmeans.assign(t_vectors).cpu().numpy()
                     
                     temp_clusters = {}
                     for idx, label in enumerate(labels):
@@ -126,9 +130,17 @@ class CommunityEngine:
                             "UPDATE vault_metadata SET community_id = ? WHERE id = ?",
                             (comm_id, nid)
                         )
+                    # [v8.4] Generazione Titolo Temporaneo Euristico per visibilità immediata
+                    temp_title = f"GALAXY: {cluster[0][:8]}"
+                    try:
+                        node_data = self.engine.get_node(cluster[0])
+                        if node_data and hasattr(node_data, 'title') and node_data.title:
+                            temp_title = f"NUCLEO: {node_data.title[:25]}"
+                    except: pass
+
                     self.engine._prefilter.execute(
-                        "INSERT INTO neural_communities (id, level, node_count) VALUES (?, 1, ?)",
-                        (comm_id, len(cluster))
+                        "INSERT INTO neural_communities (id, level, title, node_count) VALUES (?, 1, ?, ?)",
+                        (comm_id, temp_title, len(cluster))
                     )
                     created_count += 1
                 
@@ -146,7 +158,7 @@ class CommunityEngine:
     async def generate_community_summaries(self):
         """
         L'Archivista analizza ogni Galassia e genera una sintesi strutturata.
-        [v6.1] Parallel processing with Semaphore to avoid LLM congestion.
+        [v8.4] Robust Fallback: Se l'LLM fallisce, genera titoli basati su parole chiave.
         """
         # Recuperiamo comunità senza riassunto
         pending = self.engine._prefilter.execute(
@@ -157,75 +169,119 @@ class CommunityEngine:
         
         self.logger.info(f"🏛️ [H-RAG] Avvio sintesi per {len(pending)} Galassie...")
         
-        # Limitiamo a 3 sintesi parallele per non saturare l'LLM
-        semaphore = asyncio.Semaphore(3)
+        # Limitiamo a 2 sintesi parallele per maggiore stabilità su macchine locali
+        semaphore = asyncio.Semaphore(2)
         
         async def _summarize_single(comm_id):
             async with semaphore:
-                # Recuperiamo i testi dei nodi in questa comunità
-                nodes = self.engine._prefilter.query_nodes(f"community_id = '{comm_id}'", limit=30)
-                if not nodes: return
+                try:
+                    # Recuperiamo i testi dei nodi in questa comunità
+                    nodes = self.engine._prefilter.query_nodes(f"community_id = '{comm_id}'", limit=20)
+                    if not nodes: return
 
-                # Estrazione sicura del testo
-                texts = []
-                for n in nodes:
-                    m = n.get('metadata', {})
-                    node_text = m.get('text', "")
+                    # Estrazione sicura del testo e dei titoli per fallback
+                    texts = []
+                    fallback_titles = []
+                    for n in nodes:
+                        m = n.get('metadata', {})
+                        node_text = m.get('text', "")
+                        node_title = m.get('title', "")
+                        
+                        if node_title: fallback_titles.append(node_title)
+                        
+                        if not node_text:
+                            full_node = self.engine.get_node(n['id'])
+                            if full_node:
+                                node_text = full_node.text
+                        
+                        if node_text:
+                            texts.append(node_text[:500]) # Ridotto per evitare overflow di contesto
                     
-                    if not node_text:
-                        full_node = self.engine.get_node(n['id'])
-                        if full_node:
-                            node_text = full_node.text
+                    if not texts: return
+                    combined_text = "\n---\n".join(texts)
                     
-                    if node_text:
-                        texts.append(node_text[:600])
-                
-                if not texts: return
-                combined_text = "\n---\n".join(texts)
-                
-                prompt = f"""### TASK: Generate a Sovereign Intelligence Report for this Concept Galaxy.
+                    # Generazione Fallback immediata (in caso di crash LLM)
+                    default_title = fallback_titles[0] if fallback_titles else f"Cluster {comm_id}"
+                    default_summary = "Analisi tematica basata sulla densità di nodi correlati nel Vault."
+                    
+                    prompt = f"""### TASK: Generate a Sovereign Intelligence Report for this Concept Galaxy.
 ### DATA:
 {combined_text}
 
-### OUTPUT FORMAT:
-Respond ONLY with a JSON object:
+### OUTPUT FORMAT (JSON ONLY):
 {{
-  "title": "Short evocative title (max 5 words)",
-  "summary": "Comprehensive summary of the shared knowledge",
+  "title": "Evocative title (max 5 words)",
+  "summary": "1-2 sentences summarizing the core knowledge",
   "key_concepts": ["concept1", "concept2", "concept3"]
 }}
 """
-                try:
-                    # [FIX] chat_model -> chat (Matches SwarmSettingsManager)
-                    model = getattr(self.engine, 'settings', {}).get("chat", "llama3.2:3b")
-                    response = await self.engine.agent007_lab.ask_fast(prompt, model=model)
-                    
-                    if not response:
-                        raise ValueError("LLM response is empty")
+                    response = ""
+                    try:
+                        # [v8.4] Use engine.orchestrator which is the correct reference for the NeuralLabOrchestrator
+                        model = getattr(self.engine, 'settings', {}).get("chat", "llama3.2:3b")
+                        if hasattr(self.engine, 'orchestrator'):
+                            response = await self.engine.orchestrator.ask_fast(prompt, model=model)
+                        else:
+                            # Fallback if orchestrator is not yet linked
+                            self.logger.warning("⚠️ Orchestrator not found, using direct LLM call fallback.")
+                            response = ""
+                    except Exception as llm_err:
+                        self.logger.error(f"⚠️ LLM Error for {comm_id}: {llm_err}")
+                        response = ""
 
-                    # Pulizia della risposta
-                    clean_json = response.strip()
-                    if "```json" in clean_json:
-                        clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-                    elif "{" in clean_json:
-                        # Fallback: cerca la prima parentesi graffa
-                        clean_json = clean_json[clean_json.find("{"):clean_json.rfind("}")+1]
-                    
-                    data = json.loads(clean_json)
-                    
+                    if response:
+                        try:
+                            # Pulizia JSON avanzata
+                            clean_json = response.strip()
+                            if "```json" in clean_json:
+                                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                            elif "{" in clean_json:
+                                clean_json = clean_json[clean_json.find("{"):clean_json.rfind("}")+1]
+                            
+                            try:
+                                data = json.loads(clean_json)
+                            except json.JSONDecodeError:
+                                # Tentativo di riparazione JSON
+                                repaired = clean_json.strip()
+                                if repaired.endswith(','): repaired = repaired[:-1]
+                                open_braces = repaired.count('{') - repaired.count('}')
+                                open_brackets = repaired.count('[') - repaired.count(']')
+                                if repaired.count('"') % 2 != 0: repaired += '"'
+                                repaired += ']' * max(0, open_brackets)
+                                repaired += '}' * max(0, open_braces)
+                                data = json.loads(repaired)
+                            
+                            title = data.get('title', default_title)
+                            summary = data.get('summary', default_summary)
+                            concepts = data.get('key_concepts', ["Vault", "Knowledge"])
+                            
+                            self.engine._prefilter.execute(
+                                "UPDATE neural_communities SET title = ?, summary = ?, key_concepts = ? WHERE id = ?",
+                                (title, summary, json.dumps(concepts), comm_id)
+                            )
+                            self.logger.info(f"🏛️ Galassia '{title}' sintetizzata con successo.")
+                            return
+                        except Exception as parse_err:
+                            self.logger.warning(f"⚠️ JSON Parse error for {comm_id}, using heuristic extraction: {parse_err}")
+                            # Heuristic extraction if JSON fails but response exists
+                            if len(response) > 50:
+                                self.engine._prefilter.execute(
+                                    "UPDATE neural_communities SET title = ?, summary = ? WHERE id = ?",
+                                    (default_title, response[:250] + "...", comm_id)
+                                )
+                                return
+
+                    # SE TUTTO FALLISCE (LLM Offline o Timeout): Fallback Sovrano
+                    self.logger.warning(f"🛡️ [Archivista] Fallback Sovrano attivato per {comm_id}")
                     self.engine._prefilter.execute(
-                        "UPDATE neural_communities SET title = ?, summary = ?, key_concepts = ? WHERE id = ?",
-                        (data['title'], data['summary'], json.dumps(data['key_concepts']), comm_id)
+                        "UPDATE neural_communities SET title = ?, summary = ? WHERE id = ?",
+                        (f"NUCLEO: {default_title[:30]}", default_summary, comm_id)
                     )
-                    self.logger.info(f"🏛️ Galassia '{data['title']}' riassunta.")
 
                 except Exception as e:
-                    self.logger.error(f"❌ Errore nel riassunto comunità {comm_id}: {e}")
-                    # Segnamo come fallito per non riprovare all'infinito nel loop corrente
-                    # Ma lasciamo summary=NULL se vogliamo che il prossimo ciclo riprovi
-                    pass
+                    self.logger.error(f"❌ Errore critico nel riassunto {comm_id}: {e}")
 
-        # Lanciamo tutti i task in parallelo (gestiti dal semaforo)
+        # Lanciamo i task
         tasks = [_summarize_single(cid[0]) for cid in pending]
         await asyncio.gather(*tasks)
         self.logger.info("✅ [H-RAG] Ciclo di sintesi completato.")

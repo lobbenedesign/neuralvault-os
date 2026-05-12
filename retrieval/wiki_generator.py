@@ -12,10 +12,16 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import json
 import re
+from pathlib import Path
 from retrieval.wiki_monitor import WikiFreshnessMonitor
 from retrieval.mesh_consensus import MeshConsensusEngine
 from retrieval.causal_simulator import CausalSimulator
 from retrieval.wiki_visualizer import WikiVisualizer
+from retrieval.entity_linker import EntityLinker
+from retrieval.nl_whatif import NaturalLanguageWhatIf
+from retrieval.decision_journal import SovereignDecisionJournal
+from retrieval.learning_path import LearningPathGenerator
+from utils.redactor import redactor
 
 @dataclass
 class WikiCitation:
@@ -51,10 +57,34 @@ class SovereignWikiGenerator:
         self.monitor = WikiFreshnessMonitor(engine)
         self.consensus_engine = MeshConsensusEngine(engine)
         self.simulator = CausalSimulator(engine)
+        self.nl_whatif = NaturalLanguageWhatIf(engine)
+        self.journal = SovereignDecisionJournal(engine)
+        self.learning_path = LearningPathGenerator(engine)
         self.visualizer = WikiVisualizer(engine)
+        self.linker = EntityLinker(engine) # [v8.1]
         # 🏺 [v8.0] Knowledge Versioning Path
         self.history_dir = Path(engine.data_dir) / "wiki_history"
         self.history_dir.mkdir(exist_ok=True)
+        # 📂 [v9.0] Canonical Persistent Wiki (Source of Truth)
+        self.wiki_dir = Path(engine.data_dir) / "wiki"
+        self.wiki_dir.mkdir(exist_ok=True)
+
+    def save_canonical_page(self, topic: str, markdown: str, namespace: str = "General"):
+        """Salva o aggiorna la versione canonica (Source of Truth) di un argomento con redazione automatica."""
+        # [v9.1] Redazione dati sensibili
+        sanitized_md = redactor.redact(markdown)
+        
+        # [v9.1] Supporto Namespace (Cartelle)
+        safe_ns = "".join([c if c.isalnum() else "_" for c in namespace])
+        ns_dir = self.wiki_dir / safe_ns
+        ns_dir.mkdir(exist_ok=True)
+        
+        safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
+        canonical_file = ns_dir / f"{safe_topic}.md"
+        
+        with open(canonical_file, "w") as f:
+            f.write(sanitized_md)
+        print(f"💾 [Wiki v9.1] Pagina [{namespace}] salvata: {canonical_file.name} (Redacted)")
 
     async def generate_page(self, topic: str, mode: str = "TECHNICAL") -> WikiPage:
         print(f"📖 [Wiki v8.1] Generazione pagina {mode} per: {topic}")
@@ -92,7 +122,7 @@ class SovereignWikiGenerator:
         mode_instructions = {
             "EXECUTIVE": "Sintesi estrema (max 150 parole). Focus su decisioni chiave, rischi e opportunità. Usa bullet points. Niente dettagli tecnici profondi.",
             "TECHNICAL": "Analisi tecnica approfondita. Focus su implementazione, benchmark e meccaniche. Prosa dettagliata con riferimenti specifici.",
-            "RESEARCH": "Ricerca completa e accademica. Includi storia, stato dell'arte, domande aperte e soprattutto CONTRADDIZIONI tra le fonti."
+            "RESEARCH": "Ricerca completa e accademica. Includi storia, stato dell'arte e soprattutto CONTRADDIZIONI tra le fonti. Identifica esplicitamente la 'MAPPA DELL'IGNORANZA' (Knowledge Gaps): cosa non sappiamo ancora e dove mancano i dati."
         }
         
         struct_prompt = f"""
@@ -260,13 +290,8 @@ class SovereignWikiGenerator:
             generated_at=datetime.now()
         )
         # Inseriamo le proposte e la verifica mesh nei metadati per il frontend
-        # [v8.1] Build Semantic Entity Map for Progressive Disclosure
-        entity_map = {}
-        for r in results:
-            t = r.node.metadata.get('title')
-            if t: entity_map[t] = r.node.id
-            for ent in r.node.metadata.get('entities', []):
-                entity_map[ent] = r.node.id
+        # [v8.1] Build Semantic Entity Map using professional EntityLinker
+        entity_map = self.linker.build_anchor_index(results)
 
         page.metadata = {
             "proposals": proposals,
@@ -277,6 +302,77 @@ class SovereignWikiGenerator:
         }
         self.metadata_cache = {} # Reset
         return page
+
+    async def generate_page_stream(self, topic: str, mode: str = "TECHNICAL"):
+        """[v8.4] Generazione asincrona streaming (SSE friendly)."""
+        print(f"📡 [Wiki Stream] Avvio streaming per: {topic} ({mode})")
+        
+        # 1. Recupero iniziale (rapido)
+        results = await self.engine.query(topic, k=25)
+        if not results:
+            yield json.dumps({"status": "error", "message": "No information found."})
+            return
+
+        yield json.dumps({"status": "progress", "step": "PLANNING", "message": "Analisi struttura semantica..."})
+        
+        # 2. Strutturazione (come prima ma con yield)
+        context_data = "\n".join([f"ID:{r.node.id} | Titolo:{r.node.metadata.get('title', 'N/A')} | Contenuto:{r.node.text[:150]}" for r in results])
+        mode_instructions = {
+            "EXECUTIVE": "Sintesi estrema.",
+            "TECHNICAL": "Analisi tecnica approfondita.",
+            "RESEARCH": "Ricerca completa e accademica."
+        }
+        
+        struct_prompt = f"Analizza '{topic}' con profilo {mode}. Restituisci solo un JSON: {{\"sections\": [\"Titolo 1\", ...]}}\n\nDATI:\n{context_data}"
+        wiki_model = self.engine.orchestrator.settings.get("wiki_model", "qwen2.5:7b")
+        struct_raw = await self.engine.orchestrator.get_consensus_response(struct_prompt, "Wiki Structurer", target_model=wiki_model)
+        
+        try:
+            json_match = re.search(r'\{.*\}', struct_raw, re.DOTALL)
+            structure = json.loads(json_match.group(0))
+        except:
+            structure = {"sections": ["Introduzione", "Analisi Detagliata", "Conclusione"]}
+
+        yield json.dumps({"status": "progress", "step": "STRUCTURED", "sections": structure["sections"]})
+
+        # 3. Generazione Progressiva delle Sezioni
+        all_sections = []
+        for i, sec_title in enumerate(structure["sections"]):
+            yield json.dumps({"status": "progress", "step": "GENERATING", "current_section": sec_title, "index": i})
+            
+            sec_results = await self.engine.query(f"{topic} {sec_title}", k=5)
+            sec_context = "\n".join([f"[{r.node.id}] {r.node.text}" for r in sec_results])
+            
+            synth_prompt = f"Scrivi la sezione '{sec_title}' per '{topic}'. Usa solo le fonti: {sec_context}"
+            content = await self.engine.orchestrator.get_consensus_response(synth_prompt, f"Wiki Stream: {sec_title}", target_model=wiki_model)
+            
+            # Citazioni
+            citations = []
+            seen_ids = set(re.findall(r'\[([a-f0-9\-]+)\]', content))
+            for r in sec_results:
+                if r.node.id in seen_ids:
+                    citations.append({
+                        "node_id": r.node.id,
+                        "source_title": r.node.metadata.get('title', 'Documento'),
+                        "excerpt": r.node.text[:100]
+                    })
+
+            section_data = {
+                "title": sec_title,
+                "content": self.linker.link_entities(content, {}), # Entity linking basico
+                "citations": citations
+            }
+            all_sections.append(section_data)
+            
+            yield json.dumps({"status": "section_ready", "section": section_data})
+
+        # 4. Finalizzazione
+        yield json.dumps({
+            "status": "success", 
+            "title": topic,
+            "total_sections": len(all_sections),
+            "complete": True
+        })
 
     async def _find_related_topics(self, topic: str, results) -> List[str]:
         # Estraiamo entità o parole chiave dai metadati dei nodi
@@ -301,16 +397,8 @@ class SovereignWikiGenerator:
         for sec in page.sections:
             md += f"## {sec.title}\n\n"
             
-            # [v8.1] Semantic Entity Wrapping for Progressive Disclosure
-            content = sec.content
-            emap = page.metadata.get("entity_map", {})
-            # Ordina per lunghezza decrescente per evitare match parziali errati
-            sorted_entities = sorted(emap.keys(), key=len, reverse=True)
-            for entity in sorted_entities:
-                if entity.lower() in content.lower() and len(entity) > 3:
-                    # Usiamo una sostituzione case-insensitive ma mantenendo l'originale
-                    pattern = re.compile(re.escape(entity), re.IGNORECASE)
-                    content = pattern.sub(f'<span class="wiki-entity" data-node-id="{emap[entity]}">\\g<0></span>', content)
+            # [v8.1] Semantic Entity Wrapping using specialized EntityLinker
+            content = self.linker.link_entities(sec.content, page.metadata.get("entity_map", {}))
             
             md += f"{content}\n\n"
             if sec.citations:
@@ -354,6 +442,9 @@ class SovereignWikiGenerator:
         
         # 💾 Knowledge Versioning (Phase 7)
         self._archive_wiki_version(page.title, md)
+        
+        # 📂 [v9.0] Canonical Persistence
+        self.save_canonical_page(page.title, md)
         
         return md
 

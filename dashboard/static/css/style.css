@@ -63,7 +63,62 @@ body.full-height-mode {
     background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255,255,255,0.05); padding: 1.5rem;
     display: flex; flex-direction: column;
-    transition: height 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    z-index: 1000;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+    border-right: none;
+}
+
+#main-sidebar-restore {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(59, 130, 246, 0.8);
+    color: white;
+    width: 30px;
+    height: 60px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 10px 10px 0;
+    cursor: pointer;
+    z-index: 10000;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+    transition: 0.3s;
+}
+
+#main-sidebar-restore:hover {
+    background: #3b82f6;
+    width: 40px;
+}
+
+.nav-item { 
+    padding: 6px 12px; 
+    border-radius: 10px; 
+    cursor: pointer; 
+    color: var(--text-dim); 
+    font-size: 0.85rem; 
+    margin-bottom: 2px; 
+    transition: all 0.3s ease;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.nav-item.active { 
+    background: rgba(168, 85, 247, 0.1); 
+    color: #fff; 
+    border-left: 3px solid var(--accent-purple); 
 }
 
 
@@ -328,12 +383,19 @@ body.full-height-mode {
 body.cycloscope-immersion {
     grid-template-rows: 100vh 0vh !important;
 }
-
-body.cycloscope-immersion .sidebar {
+body.cycloscope-immersion .bottom-section {
     display: none !important;
 }
 
-body.cycloscope-immersion .bottom-section {
+body.cycloscope-immersion .top-section,
+body.cycloscope-immersion .main-content-top,
+body.cycloscope-immersion #overview-view,
+body.cycloscope-immersion #memory-graph-container {
+    height: 100vh !important;
+    min-height: 100vh !important;
+}
+
+body.cycloscope-immersion .sidebar {
     display: none !important;
 }
 
@@ -346,6 +408,7 @@ body.cycloscope-immersion .bottom-section {
     gap: 0.8rem;
     height: 100%;
     min-height: 0;
+    overflow: hidden; /* [Fix] Prevent expansion from content growth */
 }
 
 .pulse-dot {
@@ -367,8 +430,9 @@ body.cycloscope-immersion .bottom-section {
 .card {
     background: var(--bg-card); border-radius: 20px;
     padding: 1.2rem; border: 1px solid rgba(255,255,255,0.04);
-    backdrop-filter: blur(12px); overflow: visible;
+    backdrop-filter: blur(12px); overflow: hidden; /* [Fix] Prevent card expansion */
     position: relative; transition: z-index 0s, transform 0.3s;
+    min-height: 0; /* [Fix] Prevent card from expanding grid row */
 }
 
 .card:hover {
@@ -401,7 +465,7 @@ body.cycloscope-immersion .bottom-section {
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-    z-index: 99999;
+    z-index: 9999999; /* Boosted for Memory Overview */
     box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(168, 85, 247, 0.1);
     text-align: left;
 }

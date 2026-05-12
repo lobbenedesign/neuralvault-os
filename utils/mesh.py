@@ -140,11 +140,12 @@ class MeshSyncManager:
                             node_data["text"] = smith.sanitize_data(node_data["text"])
 
                         # Ingestione atomica nel Vault locale
-                        self.engine.add_node(
+                        import asyncio
+                        asyncio.run(self.engine.add_node(
                             node_id=node_data["id"],
                             text=node_data["text"],
                             metadata={**node_data.get("metadata", {}), "mesh_origin": peer.node_id}
-                        )
+                        ))
                         self.known_nodes.add(node_data["id"])
                     
                     self.logger.info(f"✅ Mesh: Sincronizzati {len(new_data)} nodi da {peer.node_id} (Batch {i//batch_size + 1})")

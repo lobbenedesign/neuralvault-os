@@ -120,9 +120,17 @@ class Agent007Intelligence:
                 
                 if not any(selected_model in m for m in installed):
                     print(f"⚠️ [Agent007] Modello configurato '{selected_model}' non trovato. Fallback Ensemble.")
-                    if any("deepseek-v3" in m for m in installed): selected_model = "deepseek-v3"
-                    elif any("llama3.2" in m for m in installed): selected_model = "llama3.2"
-                    else: selected_model = installed[0] if installed else "llama3"
+                    # Cerchiamo un sostituto intelligente tra quelli installati
+                    fallbacks = ["llama3.2", "qwen2.5", "mistral", "phi3", "gemma2"]
+                    found_fallback = False
+                    for f in fallbacks:
+                        match = next((m for m in installed if f in m), None)
+                        if match:
+                            selected_model = match
+                            found_fallback = True
+                            break
+                    if not found_fallback:
+                        selected_model = installed[0] if installed else "llama3.2:3b"
                 
                 base_url = settings.get("ollama_url", "http://localhost:11434")
                 start_time = time.time()

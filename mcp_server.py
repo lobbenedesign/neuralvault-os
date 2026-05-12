@@ -7,10 +7,18 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 from typing import Any, Dict, List, Optional
+from pathlib import Path
+
+# [v1.2] Caricamento dinamico configurazione
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Configurazione Bridge
-API_BASE_URL = "http://127.0.0.1:8001"
-VAULT_KEY = "vault_secret_aura_2026"
+API_BASE_URL = os.getenv("NEURALVAULT_API_URL", "http://127.0.0.1:8001")
+VAULT_KEY = os.getenv("NEURAL_VAULT_KEY", "sovereign_vault_alpha_2026_secure_core")
 
 class NeuralVaultMCPBridge:
     def __init__(self):
@@ -57,6 +65,21 @@ class NeuralVaultMCPBridge:
                     }
                 ),
                 Tool(
+                    name="wiki_list",
+                    description="Elenca tutte le pagine della Wiki organizzate per Namespace.",
+                    inputSchema={"type": "object", "properties": {}}
+                ),
+                Tool(
+                    name="sync_agents",
+                    description="Sincronizza le sessioni di agenti esterni (Cursor, Claude) nel Vault.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "provider": {"type": "string", "enum": ["auto", "cursor", "claude"]}
+                        }
+                    }
+                ),
+                Tool(
                     name="get_vault_status",
                     description="Ritorna statistiche sullo stato di salute e dimensione del NeuralVault.",
                     inputSchema={"type": "object", "properties": {}}
@@ -99,6 +122,21 @@ class NeuralVaultMCPBridge:
                         resp.raise_for_status()
                         wiki_text = resp.json().get("markdown", "Errore nella generazione Wiki.")
                         return [TextContent(type="text", text=wiki_text)]
+
+                    elif name == "wiki_list":
+                        resp = await client.get(f"{API_BASE_URL}/api/wiki/list", headers=headers)
+                        resp.raise_for_status()
+                        pages = resp.json().get("pages", [])
+                        text = "📚 Pagine Wiki Disponibili:\n" + "\n".join([f"- [{p['namespace']}] {p['title']} ({p['file_name']})" for p in pages])
+                        return [TextContent(type="text", text=text)]
+
+                    elif name == "sync_agents":
+                        provider = arguments.get("provider", "auto")
+                        payload = {"provider": provider}
+                        resp = await client.post(f"{API_BASE_URL}/api/sync/agents", json=payload, headers=headers)
+                        resp.raise_for_status()
+                        count = resp.json().get("synced", 0)
+                        return [TextContent(type="text", text=f"🔄 Sincronizzazione {provider} completata: {count} sessioni acquisite.")]
 
                     elif name == "get_vault_status":
                         resp = await client.get(f"{API_BASE_URL}/api/debug/stats", headers=headers)

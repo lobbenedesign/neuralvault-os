@@ -41,7 +41,8 @@ class TestNeuralVaultCore(unittest.TestCase):
         """Testa se il sistema ricorda ciò che ingerisce."""
         node_id = "test_node_001"
         text = "La sovranità digitale è il pilastro di NeuralVault."
-        self.engine.add_node(node_id, text, metadata={"type": "test"})
+        import asyncio
+        asyncio.run(self.engine.add_node(node_id, text, metadata={"type": "test"}))
         
         # Retrieval diretto
         node = self.engine.get_node(node_id)
@@ -56,7 +57,8 @@ class TestNeuralVaultCore(unittest.TestCase):
     def test_node_deletion(self):
         """Testa l'eliminazione atomica (Pillar 2)."""
         node_id = "delete_me"
-        self.engine.add_node(node_id, "Temporary knowledge", metadata={})
+        import asyncio
+        asyncio.run(self.engine.add_node(node_id, "Temporary knowledge", metadata={}))
         self.assertTrue(self.engine.delete_node(node_id))
         
         node = self.engine.get_node(node_id)

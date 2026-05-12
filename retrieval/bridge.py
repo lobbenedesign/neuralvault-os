@@ -57,7 +57,7 @@ class LatentBridge:
             body.append(line)
         return "\n".join(body[:50]) # Limite per evitare nodi giganteschi legati a file enormi
 
-    def ingest_codebase(self):
+    async def ingest_codebase(self):
         """Versione v2.5.1: Ingestione proattiva con re-scan delle signature (Rispettando il Toggle)."""
         if not self.vault or not self.project_root: return
         
@@ -72,7 +72,8 @@ class LatentBridge:
         nodes_created = 0
         nodes_updated = 0
         
-        for name, path in self.code_signatures.items():
+        # Use list to avoid dictionary change size error if something happens
+        for name, path in list(self.code_signatures.items()):
             try:
                 content = path.read_text()
                 lines = content.splitlines()
@@ -88,8 +89,9 @@ class LatentBridge:
                 
                 text_content = f"SOURCE_CODE_SIGNATURE [{name.upper()}]\nFILE: {path.name}\nPATH: {rel_path}\n\n{body}"
                 
+                # Use .get() for thread safety
                 if node_id not in self.vault._nodes:
-                    self.vault.add_node(
+                    await self.vault.add_node(
                         node_id, 
                         text_content, 
                         metadata={
@@ -104,8 +106,8 @@ class LatentBridge:
                     nodes_created += 1
                 else:
                     # 🧬 [v4.1.4] Aggiornamento del contenuto se cambiato (Propriocezione Dinamica)
-                    existing_node = self.vault._nodes[node_id]
-                    if existing_node.text != text_content:
+                    existing_node = self.vault._nodes.get(node_id)
+                    if existing_node and existing_node.text != text_content:
                         existing_node.text = text_content
                         # Innesca la rinfrescata del vettore se necessario (verrà fatto dallo swarm)
                         existing_node.metadata["updated_at"] = time.time()
@@ -118,12 +120,14 @@ class LatentBridge:
     def _bridge_nodes_legacy(self, target_vault) -> int:
         """Fallback: Matching testuale se i vettori non sono disponibili."""
         bridges_created = 0
-        web_nodes = [nid for nid, node in target_vault._nodes.items() if node.metadata.get("origin") == "web_forager"]
-        src_nodes = [nid for nid, node in target_vault._nodes.items() if node.metadata.get("origin") == "local_bridge"]
+        web_nodes = [nid for nid, node in list(target_vault._nodes.items()) if node.metadata.get("origin") == "web_forager"]
+        src_nodes = [nid for nid, node in list(target_vault._nodes.items()) if node.metadata.get("origin") == "local_bridge"]
         for wnid in web_nodes:
-            wnode = target_vault._nodes[wnid]
+            wnode = target_vault._nodes.get(wnid)
+            if not wnode: continue
             for snid in src_nodes:
-                snode = target_vault._nodes[snid]
+                snode = target_vault._nodes.get(snid)
+                if not snode: continue
                 name = snode.metadata.get("name", "").lower()
                 if not name: continue
                 import re
@@ -141,7 +145,7 @@ class LatentBridge:
                         bridges_created += 1
         return bridges_created
 
-    def bridge_nodes(self, vault=None, threshold=0.82) -> int:
+    def bridge_nodes(self, vault=None, threshold=0.75) -> int:
         """🔗 [CB-003 Upgrade] Semantic Bridging: Collega codice e docs tramite similarità vettoriale."""
         target_vault = vault or self.vault
         if not target_vault: return 0
@@ -150,9 +154,10 @@ class LatentBridge:
         if self.settings and not self.settings.get("codebase_bridging", False):
             return 0
 
-        # 1. Triage dei Nodi (Web vs Local Code)
-        web_nodes = [n for n in target_vault._nodes.values() if n.metadata.get("origin") == "web_forager" and n.vector is not None]
-        src_nodes = [n for n in target_vault._nodes.values() if n.metadata.get("origin") == "local_bridge" and n.vector is not None]
+        # 1. Triage dei Nodi (Web vs Local Code) - Use list() for thread safety
+        all_vault_nodes = list(target_vault._nodes.values())
+        web_nodes = [n for n in all_vault_nodes if n.metadata.get("origin") == "web_forager" and n.vector is not None]
+        src_nodes = [n for n in all_vault_nodes if n.metadata.get("origin") == "local_bridge" and n.vector is not None]
         
         if not web_nodes or not src_nodes:
             return self._bridge_nodes_legacy(target_vault)
@@ -165,6 +170,8 @@ class LatentBridge:
         src_vectors = np.array([n.vector for n in src_nodes], dtype=np.float32)
         
         sim_matrix = np.dot(web_vectors, src_vectors.T)
+        max_sim = float(np.max(sim_matrix)) if sim_matrix.size > 0 else 0
+        print(f"📊 [Bridge] Similarità Massima rilevata: {max_sim:.4f} (Threshold: {threshold})")
         matches = np.where(sim_matrix > threshold)
         
         bridges_created = 0
@@ -175,12 +182,15 @@ class LatentBridge:
             snode = src_nodes[s_idx]
             score = float(sim_matrix[w_idx, s_idx])
             
-            # 3. [v4.1.4] Contextual Isolation: Impediamo il bridging tra Codice e Documenti Utente
-            # se appartengono a contesti incompatibili (es. propriocezione vs libri)
+            # 3. [v4.1.5 Fix] Cross-Context Bridging: Permettiamo il legame tra Web e Codice
             w_context = wnode.metadata.get("context", "user")
             s_context = snode.metadata.get("context", "proprioception")
             
-            if w_context != s_context:
+            # Consentiamo il bridge se uno è propriocezione (codice) e l'altro è ricerca esterna
+            is_valid_bridge = (w_context == s_context) or \
+                              (s_context == "proprioception" and w_context in ["user", "yoda_pilgrimage", "SkyWalker-Core"])
+            
+            if not is_valid_bridge:
                 continue
 
             # Evita duplicati

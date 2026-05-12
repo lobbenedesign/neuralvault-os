@@ -103,28 +103,35 @@ class SovereignRecommendationEngine:
 
     def _get_best_installed(self, task: str) -> str:
         """Cerca il miglior match tra i modelli installati."""
-        # Se non ci sono modelli, fallback
         if not self.full_installed: return "Nessuno installato"
         
-        # Logica di filtraggio per parole chiave
+        # Mappiamo le keyword in ordine di preferenza assoluta per ogni task
         keywords = {
-            "audit": ["r1", "reasoning", "llama3.3", "phi3.5"],
-            "coding": ["coder", "code", "qwen2.5-coder"],
-            "vision": ["vision", "llava", "moondream"],
-            "extraction": ["qwen", "llama3.2", "mistral"],
-            "synthesis": ["r1", "synthesis", "llama3.3"]
+            "audit": ["r1", "reasoning", "deepseek", "phi"],
+            "extraction": ["coder", "qwen", "mistral", "llama"],
+            "crossref": ["llama3.2", "qwen2.5:3b", "llama"],
+            "synthesis": ["r1", "qwen", "phi", "deepseek"],
+            "chat": ["llama3.2", "qwen", "llama"],
+            "oracle": ["r1", "phi", "deepseek", "qwen"],
+            "vision": ["moondream", "vision", "llava"],
+            "coding": ["coder", "qwen", "deepseek"],
+            "evolution": ["r1", "phi", "qwen", "llama"],
+            "court": ["r1", "phi", "qwen", "llama"],
+            "wiki": ["phi", "qwen", "r1", "llama"]
         }
         
-        target_keys = keywords.get(task.split("_")[0], ["llama"])
+        task_root = task.split("_")[0]
+        # Se il root non è tra le chiavi, usiamo un fallback generico bilanciato
+        target_keys = keywords.get(task_root, ["qwen", "llama", "phi"])
         
-        # Cerca il primo modello installato che contiene una delle keyword
-        for full_name in self.full_installed:
-            name_lower = full_name.lower()
-            if any(k in name_lower for k in target_keys):
-                return full_name
-                
-        # Se nessun match specifico, ritorna il più pesante (spesso il più intelligente)
-        return self.full_installed[0]
+        # Cerca il miglior modello seguendo l'ordine di importanza delle keyword
+        for key in target_keys:
+            for full_name in self.full_installed:
+                if key in full_name.lower():
+                    return full_name
+                    
+        # Se fallisce tutto, restituisce il primo installato
+        return self.full_installed[-1]
 
     def get_all_recommendations(self) -> Dict[str, Dict[str, str]]:
         tasks = list(self.NEURAL_HUB_BEST.keys())

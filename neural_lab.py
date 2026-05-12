@@ -1,4 +1,5 @@
 import uuid
+import math
 import time
 import json
 import threading
@@ -22,6 +23,17 @@ from utils.event_bus import NeuralEventType, NeuralEvent # [v6.0]
 import ast
 import traceback
 from index.node import RelationType
+
+async def _global_forage_helper(forager, url, limit=5):
+    """Helper globale per il foraging asincrono di pagine web (Unificato v1.8)."""
+    pages = []
+    try:
+        async for p in forager.forage(url):
+            pages.append(p)
+            if len(pages) >= limit: break
+    except Exception as e:
+        print(f"⚠️ [Global-Forager] Errore su {url}: {e}")
+    return pages
 
 class SovereignTestRunner:
     """🛡️ [STR-001] Modulo di Validazione Multilinguaggio (Python/Rust)."""
@@ -77,6 +89,8 @@ class SwarmSettingsManager:
         self.defaults = {
             "audit": "llama3.2:3b",
             "discovery": "llama3.2:3b",
+            "extraction": "llama3.2:3b",
+            "crossref": "llama3.2:3b",
             "synthesis": "llama3.2:3b",
             "chat_mediator": "llama3.2:3b",
             "multimodal": "moondream",
@@ -100,7 +114,7 @@ class SwarmSettingsManager:
             "github_token": "",
             "github_repo": "",
             "git_auto_branch": True,
-            "wiki_model": "qwen2.5:1.5b",
+            "wiki_model": "qwen2.5:7b",
             "telegram_token": "",
             "telegram_user_id": ""
         }
@@ -430,6 +444,7 @@ class AgentRole(Enum):
     ARCHIVIST = "archivist"; ANALYST = "analyst"; CREATIVE = "creative"
     GUARDIAN = "guardian"; SYNTH = "synth"; ARCHITECT = "architect"
     MISSION_ARCHITECT = "mission_architect"; EXPERT = "expert"; RESEARCHER = "researcher"
+    MUSE = "muse"
 
 class SignalType(Enum):
     PATTERN_MATCH = "pattern_match"; CONTRADICTION = "contradiction"
@@ -634,7 +649,7 @@ class NeuralBlackboard:
 
     def post_signal(self, sender: str, role_or_type: str, msg: str, urgency: float = 0.5):
         """Metodo di compatibilità legacy per segnali rapidi."""
-        from index.node import AgentRole # Assicura import
+        # v6.0.2: Utilizza l'Enum locale AgentRole per evitare conflitti di importazione
         sig = SynapticSignal(sender, AgentRole.ANALYST, msg, SignalType.SYSTEM_NOTIFICATION, urgency=urgency)
         self.post(sig)
             
@@ -656,7 +671,7 @@ class JanitorAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "JA-001", "name": "Janitor-Prime", "role": "Logic Scavenger", "archetype": "analyst"}
-        self.pos = {"x": 300000.0, "y": 300000.0, "z": 300000.0}
+        self.pos = {"x": 5000000.0, "y": 2000000.0, "z": 5000000.0}
         self.status = "Initializing..."
         self.target_node = None
         self.mode = "Interviewing"
@@ -737,16 +752,18 @@ class JanitorAgent:
                 self.target_node = None
                 self.status = "Monitoring Grid Patterns..." # Better than 'Idle' to avoid deactivated look
                 return None
-        
-        # 🛡️ v24.4.1: Respect Sentinel Protection
-        if getattr(nodes[self.target_node], 'pending_validation', False):
-            self.status = f"VETO: Node {self.target_node[:8]} pending validation"
+        # 🛡️ v24.4.1: Check if target still exists
+        target = nodes.get(self.target_node)
+        if not target:
+            self.target_node = None
+            return None
             
+        if getattr(target, 'pending_validation', False):
+            self.status = f"VETO: Node {self.target_node[:8]} pending validation"
             self.target_node = None
             return None
         
         # 3. Movement
-        target = nodes[self.target_node]
         tx, ty, tz = self.get_xyz(target)
         step = 0.35 # Increased speed (v3.5.0)
         self.pos['x'] += (tx - self.pos['x']) * step
@@ -764,7 +781,7 @@ class DistillerAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "DI-007", "name": "Distiller-Alpha", "role": "Semantic Pruner", "archetype": "guardian"}
-        self.pos = {"x": -300000.0, "y": 300000.0, "z": -300000.0}
+        self.pos = {"x": -300000.0, "y": 0.0, "z": -300000.0}
         self.status = "Monitoring..."
         self._target = None
         self.mode = "Navigating"
@@ -808,7 +825,10 @@ class DistillerAgent:
                 self.status = "Scanning Grid..."
                 return None
 
-        target = nodes[self._target]
+        target = nodes.get(self._target)
+        if not target:
+            self._target = None
+            return None
         tx, ty, tz = self.get_xyz(target)
         # 🗺️ [Phase 3: Approach]
         step = 0.4 # Hyper-speed (v3.5.0)
@@ -837,7 +857,7 @@ class SnakeAgent:
     def __init__(self, vault=None, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "SN-008", "name": "Weaver-Snake", "role": "Connector", "archetype": "gatherer"}
-        self.pos = {"x": 1000000.0, "y": 1000000.0, "z": 1000000.0}
+        self.pos = {"x": 500000.0, "y": 0.0, "z": 500000.0}
         self.status = "Patrolling Nebula..."
         self.found = 0; self.harvested = 0; self.processed = 0
         self.is_returning = False
@@ -948,7 +968,7 @@ class ReaperAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "RP-001", "name": "Dr.-Reaper", "role": "Storage Surgeon", "archetype": "guardian"}
-        self.pos = {"x": 500000.0, "y": -200000.0, "z": 500000.0}
+        self.pos = {"x": 500000.0, "y": 0.0, "z": 500000.0}
         self.target_node = None
         self.status = "Monitoring Storage..."
         self.processed = 0 # Interventi (count)
@@ -956,92 +976,61 @@ class ReaperAgent:
         self.regeneration_timer = 0
         self.patrol_cycles = 0 # 🛰️ Mandatory orbit cycles after surgery
 
-    def get_xyz(self, n):
-        x = safe_get_node_data(n, 'x')
-        y = safe_get_node_data(n, 'y')
-        z = safe_get_node_data(n, 'z')
-        if x is None or y is None or z is None:
-            seed = int(hashlib.md5(str(safe_get_node_data(n, 'id', '0')).encode()).hexdigest()[:8], 16)
-            rng = np.random.RandomState(seed + 99) 
-            p_vec = rng.uniform(-1, 1, 3); p_vec /= (np.linalg.norm(p_vec) + 1e-6)
-            x, y, z = p_vec * 1200000
-        return float(x), float(y), float(z)
+    def _idle_patrol(self, now):
+        """Orbit around the Mother Nebula when no surgeries are required."""
+        angle = now * 0.15
+        radius = 800000 + 200000 * math.sin(now * 0.1)
+        self.pos['x'] = float(radius * math.cos(angle))
+        self.pos['y'] = float(300000 * math.sin(angle * 0.5))
+        self.pos['z'] = float(radius * math.sin(angle))
 
     def calculate_movement(self, nodes: dict):
         if not nodes: return None
         now = time.time()
         
-        # 🧪 Surgical Logic: Seek Tombstones from the Atomic Registry
-        if not self.target_node:
-            registry = getattr(self, 'tombstone_registry', None)
-            if registry:
-                next_ts = registry.claim_next()
-                if next_ts:
-                    self.target_node = next_ts # Contains 'id', 'x', 'y', 'z'
-                    self.status = "Heading to Tombstone Surgery"
+        try:
+            # Seek Tombstones from the Atomic Registry
+            if not self.target_node:
+                registry = getattr(self, 'tombstone_registry', None)
+                if registry and hasattr(registry, 'claim_next'):
+                    next_ts = registry.claim_next()
+                    if next_ts:
+                        self.target_node = next_ts
+                        self.status = "Heading to Tombstone Surgery"
+                    else:
+                        self.status = "Patrolling High-Orbit"
+                        self._idle_patrol(now)
                 else:
                     self.status = "Patrolling High-Orbit"
-            else:
-                self.status = "Patrolling High-Orbit"
-        
-        if self.target_node and isinstance(self.target_node, dict):
-            tx, ty, tz = self.target_node['x'], self.target_node['y'], self.target_node['z']
-            step = 0.12 # Faster during surgery
+                    self._idle_patrol(now)
             
-            self.pos['x'] += (tx - self.pos['x']) * step
-            self.pos['y'] += (ty - self.pos['y']) * step
-            self.pos['z'] += (tz - self.pos['z']) * step
-            
-            dist = ((self.pos['x']-tx)**2 + (self.pos['y']-ty)**2 + (self.pos['z']-tz)**2)**0.5
-            if dist < 40000:
-                if self.regeneration_timer == 0:
-                    # START SURGERY
-                    self.regeneration_timer = 15 # ~5 seconds at 0.3s cycle
-                    self.status = "Regenerating Memory Sector..."
-                    return {
-                        "agent": "RP-001",
-                        "action": "Storage Surgery",
-                        "pos": {"x": tx, "y": ty, "z": tz},
-                        "motivation": "Critical storage repair in progress...",
-                        "reclaimed": 0.12 # MB stimati
-                    }
+            if self.target_node and isinstance(self.target_node, dict):
+                tx, ty, tz = self.target_node.get('x',0), self.target_node.get('y',0), self.target_node.get('z',0)
+                step = 0.12
+                self.pos['x'] += (tx - self.pos['x']) * step
+                self.pos['y'] += (ty - self.pos['y']) * step
+                self.pos['z'] += (tz - self.pos['z']) * step
                 
-                self.regeneration_timer -= 1
-                if self.regeneration_timer <= 0:
-                    # FINISH SURGERY
-                    # Incremento gestito dall'Orchestratore v4.0.2
-                    registry = getattr(self, 'tombstone_registry', None)
-                    if registry: registry.finalize(self.target_node['id'])
+                dist = ((self.pos['x']-tx)**2 + (self.pos['y']-ty)**2 + (self.pos['z']-tz)**2)**0.5
+                if dist < 40000:
+                    if self.regeneration_timer == 0:
+                        self.regeneration_timer = 15
+                        self.status = "Regenerating Memory Sector..."
+                        return {"agent": "RP-001", "action": "Storage Surgery", "reclaimed": 0.12}
                     
-                    final_res = {
-                        "agent": "RP-001",
-                        "action": "Surgery Completed",
-                        "pos": {"x": tx, "y": ty, "z": tz},
-                        "reclaimed": 0.05 + (random.random() * 0.1),
-                        "motivation": "Neural Grid surgery successful. Fragmented shards consolidated.",
-                        "savings": "0.15 MB recovered"
-                    }
-                    self.target_node = None 
-                    self.patrol_cycles = 60
-                    return final_res
-        else:
-            # 🛰️ Enforce Patrol Cycles or 3D PATROL LOGIC
-            if self.patrol_cycles > 0:
-                self.patrol_cycles -= 1
-                self.status = "Patrolling High-Orbit..."
-                self.target_node = None
+                    self.regeneration_timer -= 1
+                    if self.regeneration_timer <= 0:
+                        registry = getattr(self, 'tombstone_registry', None)
+                        if registry and hasattr(registry, 'finalize'): registry.finalize(self.target_node['id'])
+                        self.processed += 1
+                        self.reclaimed_mb += 0.1
+                        self.target_node = None 
+                        self.patrol_cycles = 60
             else:
-                # 🛸 3D PATROL LOGIC
-                step = 30000
-                self.pos['x'] += random.uniform(-step, step)
-                self.pos['y'] += random.uniform(-step, step)
-                self.pos['z'] += random.uniform(-step, step)
-    
-            # Keep within bounds (approx. 2.5M units)
-            limit = 1800000
-            for k in ['x', 'y', 'z']:
-                if self.pos[k] > limit: self.pos[k] = limit
-                if self.pos[k] < -limit: self.pos[k] = -limit
+                self._idle_patrol(now)
+        except Exception as e:
+            print(f"⚠️ [RP-001] Error: {e}")
+            self._idle_patrol(now)
         return None
 
 class SynthSubAgent:
@@ -1095,7 +1084,7 @@ class SynthAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "SY-009", "name": "Synth-Muse", "role": "Creative Synthesizer", "archetype": "oracle"}
-        self.pos = {"x": 0.0, "y": 500000.0, "z": 0.0}
+        self.pos = {"x": 0.0, "y": 0.0, "z": 0.0}
         self.status = "Synthesizing..."
         self.sparks_generated = 0
         self.target_node = None
@@ -1110,59 +1099,66 @@ class SynthAgent:
         if not nodes: return None
         now = time.time()
         
-        # Update team
-        if self.team:
-            for sub in self.team: sub.tick(self.pos)
-            self.team = [s for s in self.team if s.life > 0]
-            if not self.team: self.status = "Synthesizing..."
+        try:
+            # Update team
+            if self.team:
+                for sub in self.team: sub.tick(self.pos)
+                self.team = [s for s in self.team if s.life > 0]
+                if not self.team: self.status = "Synthesizing..."
 
-        # Idle movement (Floating in the center)
-        angle = now * 0.1
-        self.pos = {"x": float(200000 * np.cos(angle)), "y": float(300000 + 100000 * np.sin(now * 0.2)), "z": float(200000 * np.sin(angle))}
-        
-        # Targeting logic: Focus on POTENTIAL nodes
-        if not self.target_node or self.target_node not in nodes:
-            if self.orch and hasattr(self.orch, 'node_states'):
-                potentials = [nid for nid, state in self.orch.node_states.items() 
-                              if state == NodeState.POTENTIAL and nid in nodes]
-                if potentials:
-                    self.target_node = random.choice(potentials)
-                    print(f"✨ SynthMuse: Target POTENTIAL node {self.target_node[:8]}")
-                else:
-                    # Fallback targeting to ensure activity
-                    node_ids = list(nodes.keys())
-                    if node_ids:
-                        self.target_node = random.choice(node_ids)
-                    else:
-                        return None
+            # Kinetic Movement: Synth orbits target or patrols deep grid
+            if self.target_node and self.target_node in nodes:
+                target_pos = nodes[self.target_node].metadata
+                tx, ty, tz = target_pos.get('x',0), target_pos.get('y',0), target_pos.get('z',0)
+                # Glide towards target with high-altitude oscillation
+                self.pos['x'] += (tx - self.pos['x']) * 0.1
+                self.pos['y'] += (ty + 100000 * np.sin(now * 0.5) - self.pos['y']) * 0.1
+                self.pos['z'] += (tz - self.pos['z']) * 0.1
             else:
-                return None
-        
-        if random.random() < 0.25: # Increased from 0.05
-            # Incremento gestito dall'Orchestratore v4.0.2
-            if not self.team: self.spawn_team() 
+                # Idle movement (Floating with wider radius)
+                angle = now * 0.2
+                self.pos = {"x": float(800000 * np.cos(angle)), "y": float(500000 + 200000 * np.sin(now * 0.2)), "z": float(800000 * np.sin(angle))}
             
-            # 🧠 [High #3] Semantic Synthesis Algorithm
-            # Use embeddings to find nodes that SHOULD be connected but aren't
-            if self.target_node in nodes:
-                try:
-                    # Find similar nodes via Vault embedding engine
-                    similar = self.vault.get_similar_nodes(self.target_node, limit=3)
-                    targets = [s[0] for s in similar if s[0] != self.target_node]
-                    
-                    if targets:
-                        sid2 = random.choice(targets)
-                        return {
-                            "agent": "SY-009", 
-                            "action": "Creative Spark", 
-                            "target_id": self.target_node, 
-                            "secondary_id": sid2,
-                            "motivation": f"Semantic Discovery: Connected {self.target_node[:8]} and {sid2[:8]} via high embedding similarity (Cosine > 0.82).",
-                            "savings": "Emergent knowledge generated."
-                        }
-                except:
-                    pass # Fallback to random if engine busy
+            # Targeting logic: Focus on POTENTIAL nodes
+            if not self.target_node or self.target_node not in nodes:
+                if self.orch and hasattr(self.orch, 'node_states') and self.orch.node_states:
+                    potentials = [nid for nid, state in list(self.orch.node_states.items()) 
+                                if state == NodeState.POTENTIAL and nid in nodes]
+                    if potentials:
+                        self.target_node = random.choice(potentials)
+                        print(f"✨ SynthMuse: Target POTENTIAL node {self.target_node[:8]}")
+                    else:
+                        # Fallback targeting
+                        node_ids = list(nodes.keys())
+                        if node_ids: self.target_node = random.choice(node_ids)
+                        else: return None
+                else: return None
             
+            if random.random() < 0.25:
+                if not self.team: self.spawn_team() 
+                
+                # 🧠 [High #3] Semantic Synthesis Algorithm
+                if self.target_node in nodes:
+                    try:
+                        # Find similar nodes via Vault embedding engine
+                        similar = self.vault.get_similar_nodes(self.target_node, limit=3)
+                        targets = [s[0] for s in similar if s[0] != self.target_node]
+                        
+                        if targets:
+                            sid2 = random.choice(targets)
+                            return {
+                                "agent": "SY-009", 
+                                "action": "Creative Spark", 
+                                "target_id": self.target_node, 
+                                "secondary_id": sid2,
+                                "motivation": f"Semantic Discovery: Connected {self.target_node[:8]} and {sid2[:8]} via high embedding similarity (Cosine > 0.82).",
+                                "savings": "Emergent knowledge generated."
+                            }
+                    except:
+                        pass # Fallback to random if engine busy
+        except Exception as e:
+            # Improved error capture
+            print(f"⚠️ [SY-009] Swarm error: {e}")
             return None
         return None
 
@@ -1171,7 +1167,7 @@ class QuantumAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "QA-101", "name": "Quantum-Architect", "role": "Semantic Fusion", "archetype": "architect"}
-        self.pos = {"x": 1000000.0, "y": 1000000.0, "z": 1000000.0}
+        self.pos = {"x": 500000.0, "y": 0.0, "z": 500000.0}
         self.status = "Patrolling High-Orbit"
         self.processed = 0
         self.target_node = None 
@@ -1234,8 +1230,10 @@ class QuantumAgent:
             if random.random() < 0.25: # Alta reattività per urbanistica
                 # Target selection logic
                 if self.orch and hasattr(self.orch, 'node_states'):
+                    galaxy_nodes = [nid for nid, n in nodes.items() if n.metadata.get("is_galaxy")]
                     live_nodes = [nid for nid, state in self.orch.node_states.items() if state == NodeState.STABLE]
-                    if live_nodes: self.target_node = random.choice(live_nodes)
+                    combined_targets = live_nodes + galaxy_nodes
+                    if combined_targets: self.target_node = random.choice(combined_targets)
                 else:
                     node_ids = list(nodes.keys())
                     if node_ids: self.target_node = random.choice(node_ids)
@@ -1285,30 +1283,29 @@ class AgentSmith:
         h_val = 0
         for char in str(peer_id):
             h_val = (31 * h_val + ord(char)) & 0xFFFFFFFF
-        h_val = abs(h_val)
-        
         wh_angle = (h_val % 360) * (np.pi / 180)
-        base_dist = 5500000.0 + (h_val % 1000000)
+        # [v18.6] Synchronized Deep Space Rim: 25M units (orbiting Wormholes)
+        base_dist = 25000000.0 + (h_val % 1000000)
         
         wh_x = float(np.cos(wh_angle) * base_dist)
         wh_y = float(1000000.0 + (h_val % 500000 - 250000))
         wh_z = float(np.sin(wh_angle) * base_dist)
         
-        # 2. Orbita di pattugliamento attorno al wormhole
-        smith_speed = 0.6
+        # 2. Orbita di pattugliamento attorno al wormhole (Raggio: 3M unità come richiesto)
+        smith_speed = 0.4
         # Offset unico basato sull'ID per non sovrapporre la flotta
         local_offset = (h_val % 100) / 10.0
         angle = now * smith_speed + local_offset
         
-        # Posizionamento: Metà strada tra il centro (Nebula) ed il wormhole
-        # wh_x/2, wh_y/2, wh_z/2 rappresenta il gateway di sicurezza
-        self.pos['x'] = (wh_x / 2.0) + float(np.cos(angle) * 50000.0)
-        self.pos['y'] = (wh_y / 2.0) + float(np.sin(angle * 0.5) * 50000.0)
-        self.pos['z'] = (wh_z / 2.0) + float(np.sin(angle) * 50000.0)
+        # Posizionamento: Pattugliamento ad ampio raggio per intercettare flussi dati
+        orbit_radius = 3000000.0 # 3.000.000 unità dal wormhole
+        self.pos['x'] = wh_x + float(np.cos(angle) * orbit_radius)
+        self.pos['y'] = wh_y + float(np.sin(angle * 0.5) * orbit_radius)
+        self.pos['z'] = wh_z + float(np.sin(angle) * orbit_radius)
         
         # Stato dinamico: Alterna tra pattugliamento e ispezione profonda per feedback visivo
         if (now % 10 < 3): # Ogni 10 secondi, per 3 secondi esegue ispezione
-            self.status = f"Inspecting Link: {peer_id[:8]}... [ENCRYPTED]"
+            self.status = f"Analisi flussi {peer_id[:8]} ↔ Nebula Madre: Scansione pacchetti in corso..."
             # Incrementiamo le ispezioni per riflettere l'attività di pattugliamento
             if random.random() < 0.05: self.inspections += 1
             
@@ -1400,7 +1397,7 @@ class SentinelAgent:
     def __init__(self, vault, orch=None):
         self.vault = vault; self.orch = orch
         self.identity = {"id": "SE-007", "name": "Sentinel-Guardian", "role": "Cross-Referencing", "archetype": "guardian"}
-        self.pos = {"x": -500000.0, "y": -500000.0, "z": 500000.0}
+        self.pos = {"x": -500000.0, "y": 0.0, "z": 500000.0}
         self.status = "Monitoring Ingress..."
         self.validated_count = 0
         self.super_synapses = 0 
@@ -1417,24 +1414,20 @@ class SentinelAgent:
         try:
             # 1. Recupero metadati analitici (DuckDB) via prefilter
             query = "SELECT access_count, importance FROM vault_metadata WHERE id = ?"
-            res_s = self.vault._prefilter.con.execute(query, (source_id,)).fetchone()
-            res_t = self.vault._prefilter.con.execute(query, (target_id,)).fetchone()
+            res_s = self.vault._prefilter.fetchone(query, (source_id,))
+            res_t = self.vault._prefilter.fetchone(query, (target_id,))
             
-            if not res_s or not res_t: return 0.5
+            # [Fix v1.1.0]: Fallback for missing nodes
+            acc_s = res_s[0] if res_s else 1; imp_s = res_s[1] if res_s else 0.5
+            acc_t = res_t[0] if res_t else 1; imp_t = res_t[1] if res_t else 0.5
             
-            # Factor 1: Co-Popolarità (nodi entrambi usati molto)
-            # Normalizzato su 20 accessi
-            pop_score = min(1.0, (res_s[0] + res_t[0]) / 20.0)
-            
-            # Factor 2: Importanza combinata
-            importance = (res_s[1] + res_t[1]) / 2.0
-            
-            # Resonance Final (0.0 - 1.0)
-            return (pop_score * 0.4) + (importance * 0.6)
+            # [Physics Model]
+            # Resonance = (Sum of access / Log distance) * Importance Factor
+            score = (math.log(acc_s + acc_t + 1) * (imp_s + imp_t)) / 2
+            return min(1.0, score)
         except Exception as e:
             print(f"⚠️ [Resonance Error] {e}")
             return 0.5
-
 
     def perform_gap_analysis(self) -> Optional[str]:
         """
@@ -1444,7 +1437,7 @@ class SentinelAgent:
         if not self.vault: return None
         try:
             # Campioniamo i nodi orfani o a bassa densità
-            orphans = [n for nid, n in self.vault._nodes.items() if len(n.edges) <= 2]
+            orphans = [n for nid, n in list(self.vault._nodes.items()) if len(n.edges) <= 2]
             if len(orphans) < 2: return None 
             
             # Estraiamo i termini più comuni dai metadati della nebula
@@ -1569,25 +1562,170 @@ class SentinelAgent:
             # v4.0.2: Counters centralized in Orchestrator
             pass 
 
-
             # 🛑 [GAP_ANALYSIS_TRIGGER] Ogni 2 minuti di attività (Ridotto da 10m v17.5)
             if now - self.last_gap_analysis > 120:
                 self.last_gap_analysis = now
                 gap = self.perform_gap_analysis()
                 if gap:
                     return {
-                        "agent": "SE-007",
-                        "action": "Strategic Gap Identified",
-                        "topic": gap,
-                        "motivation": f"Rilevato vuoto documentale critico sul tema: '{gap}'. Generazione missione autonoma."
+                        "agent": "SE-007", 
+                        "action": "Semantic Gap Discovery", 
+                        "target_id": gap,
+                        "motivation": f"Gap semantico rilevato per il topic '{gap}'. Necessaria espansione della conoscenza."
                     }
         return None
+
+class R2D2Agent:
+    """🤖 [R2-D2] Warehouse Manager / Semantic Organizer"""
+    def __init__(self, vault, orch=None):
+        self.vault = vault; self.orch = orch
+        self.identity = {"id": "R2-D2", "name": "R2-D2", "role": "Warehouse Manager", "archetype": "expert"}
+        # [v16.0] Distributed Boot: Sector Gamma (Near Mother Nebula)
+        self.pos = {"x": -1500000.0, "y": 0.0, "z": 1500000.0}
+        print(f"🤖 [BOOT] R2-D2 Initialized at: {self.pos}")
+        self.status = "Monitoring Inventory..."
+        # 📊 [v8.5] Session Mode: Start from 0 (Fixed initialization)
+        self.organized_count = 0
+        self.galaxies_formed = 0
+        self.target_pos = dict(self.pos)
+        self.patrol_timer = 0
+
+        self.last_action_time = time.time() - 6.0 # Accelerated first tick (2s wait instead of 8s)
+        self.misplaced_alerts = []
+        self.pruning_suggestions = []
+
+    def calculate_movement(self, nodes: dict):
+        if not nodes: return None
+        now = time.time()
+        self.is_operating = False 
+        
+        # 🛸 [v17.9] Kinematic Patrol: Smooth lerp toward target_pos
+        step = 0.08
+        self.pos['x'] += (self.target_pos['x'] - self.pos['x']) * step
+        self.pos['y'] += (self.target_pos['y'] - self.pos['y']) * step
+        self.pos['z'] += (self.target_pos['z'] - self.pos['z']) * step
+        
+        if now - self.last_action_time > 1.5: 
+            self.last_action_time = now
+            self.is_operating = True
+            
+            # 1. Audit e Re-Spatializzazione: Snapshot dei nodi per evitare RuntimeError
+            node_ids = list(nodes.keys())
+            if node_ids:
+                # [v17.3] HYBRID SCAN: Mix of central core and peripheral galaxies
+                core_nodes = [nid for nid in node_ids if math.sqrt(nodes[nid].metadata.get('x',0)**2 + nodes[nid].metadata.get('y',0)**2 + nodes[nid].metadata.get('z',0)**2) < 1000000]
+                
+                if core_nodes and random.random() < 0.4:
+                    # Organizza il core
+                    target_ids = random.sample(core_nodes, min(len(core_nodes), 50))
+                    self.status = "OPTIMIZING MOTHER NEBULA: Prioritizing central core..."
+                else:
+                    # Procedi verso le galassie lontane (Per evitare che si fermi a 300)
+                    target_ids = random.sample(node_ids, min(len(node_ids), 50))
+                    self.status = "EXPANDING OPERATIONS: Organizing distant galaxies..."
+
+                batch = [nodes[nid] for nid in target_ids if nid in nodes]
+                
+                # R2-D2 si sposta fisicamente verso un nodo specifico del batch per saltare
+                if batch:
+                    # Pick a specific target node to fly to instead of the dead center of the nebula
+                    target_node = random.choice(batch)
+                    self.target_pos = {
+                        "x": target_node.metadata.get('x',0), 
+                        "y": target_node.metadata.get('y',0), 
+                        "z": target_node.metadata.get('z',0)
+                    }
+
+                # [v16.4] HYBRID ZONES: Combinazione di temi e colori (Janitron Speed)
+                theme_sectors = {
+                    "legal":     {"x": 1000000,  "y": 500000,  "z": 1000000},
+                    "technical": {"x": -1000000, "y": 500000,  "z": -1000000},
+                    "general":   {"x": 0,        "y": -500000, "z": 1000000},
+                    "quantum":   {"x": 1500000,  "y": 0,       "z": -1500000},
+                    "security":  {"x": -1500000, "y": -1000000, "z": 0}
+                }
+                
+                color_sectors = {
+                    "green":  {"x": 600000,  "y": 800000,  "z": 600000},
+                    "pink":   {"x": -600000, "y": 800000,  "z": -600000},
+                    "brown":  {"x": 800000,  "y": 200000, "z": -800000},
+                    "orange": {"x": -800000, "y": 200000, "z": 800000}
+                }
+                
+                moved_this_tick = 0
+                for node in batch:
+                    # Identifica il tema per zona o per colore esplicito
+                    topic = node.metadata.get("topic_type", "general")
+                    color_hint = node.metadata.get("color_label", "none").lower()
+                    
+                    # Priorità ai settori cromatici se presenti
+                    if color_hint in color_sectors:
+                        target = color_sectors[color_hint]
+                    else:
+                        target = theme_sectors.get(topic, theme_sectors["general"])
+                    
+                    # Calcolo attrazione (spostamento del 5% verso il target)
+                    current_x = node.metadata.get("x", 0)
+                    current_y = node.metadata.get("y", 0)
+                    current_z = node.metadata.get("z", 0)
+                    
+                    dx = (target["x"] - current_x) * 0.05
+                    dy = (target["y"] - current_y) * 0.05
+                    dz = (target["z"] - current_z) * 0.05
+                    
+                    if abs(dx) + abs(dy) + abs(dz) > 10:
+                        node.metadata["x"] = current_x + dx
+                        node.metadata["y"] = current_y + dy
+                        node.metadata["z"] = current_z + dz
+                        moved_this_tick += 1
+                        # Salvataggio periodico
+                        if random.random() > 0.95:
+                             self.vault.storage_put(node)
+
+                if moved_this_tick > 0:
+                    self.status = f"WAREHOUSE SWEEP: Organizing {moved_this_tick} chromatic nodes..."
+                    self.organized_count += moved_this_tick
+                
+                print(f"🤖 [R2-D2] High-Speed Warehouse Sweep Complete. Position: {self.pos}")
+            
+            # 2. Compattazione Settoriale: Identify dense zones
+            if len(nodes) > 1000:
+                suggestion = f"Cluster {random.randint(1,10)} density critical (>80%). Suggesting pruning."
+                self.pruning_suggestions.append(suggestion)
+                if self.orch:
+                    self.orch.blackboard.post_signal("R2-D2", "expert", f"PROPOSAL: {suggestion}", urgency=0.4)
+
+            if self.organized_count > 0 and self.organized_count % 1000 == 0:
+                self.galaxies_formed += 1
+
+        
+        # 🛸 [v17.9] Idle Patrol Logic: Pick a random node in the vault
+        if now - self.patrol_timer > 8.0:
+            self.patrol_timer = now
+            if nodes:
+                lucky_node = random.choice(list(nodes.values()))
+                self.target_pos = {
+                    "x": lucky_node.metadata.get('x', 0),
+                    "y": lucky_node.metadata.get('y', 0),
+                    "z": lucky_node.metadata.get('z', 0)
+                }
+                self.status = "PATROLLING: Inspecting distant sectors..."
+        
+        return {
+            "agent": "R2-D2",
+            "pos": self.pos,
+            "is_operating": self.is_operating,
+            "status": self.status
+        }
 
 class BridgerAgent:
     def __init__(self, vault, bridger, orch=None):
         self.vault = vault; self.bridger = bridger; self.orch = orch; self.blackboard = getattr(orch, 'blackboard', None)
         self.identity = {"id": "CB-003", "name": "Bridger-Agent", "role": "Cross-Referencer", "archetype": "expert"}
-        self.pos = [0, 0, 0]; self.target_node = None
+        # [v16.0] Distributed Boot: Quadrant Beta (Outer Rim)
+        self.pos = {"x": 1800000.0, "y": 0.0, "z": -1800000.0}
+        print(f"🌉 [BOOT] CB-003 Bridger Initialized at: {self.pos}")
+        self.target_node = None
         self.status = "Monitoring Grid..."
         self.bridges_total = 0
         self.is_syncing = False
@@ -1604,40 +1742,42 @@ class BridgerAgent:
             try:
                 tx, ty, tz = target.metadata.get('x', 0), target.metadata.get('y', 0), target.metadata.get('z', 0)
                 step = 0.1
-                self.pos[0] += (tx - self.pos[0]) * step
-                self.pos[1] += (ty - self.pos[1]) * step
-                self.pos[2] += (tz - self.pos[2]) * step
+                self.pos['x'] += (tx - self.pos['x']) * step
+                self.pos['y'] += (ty - self.pos['y']) * step
+                self.pos['z'] += (tz - self.pos['z']) * step
+                if random.random() < 0.1: # Log occasionale per evitare spam, ma conferma movimento
+                    print(f"🌉 [MOVE] CB-003 Bridger pursuing target at: ({tx:.0f}, {ty:.0f}, {tz:.0f})")
             except: pass
         else:
-            # 🛸 Idle Drift
-            # v1.2.0: Movimento dinamico (pattugliamento profondo)
-            # Passo più lungo per coprire i 3.5M di spazio
-            step = random.uniform(50000, 150000)
+            # 🛸 Deep Patrol: Bridger deve stare lontano dal centro per evitare overlap
+            step = random.uniform(80000, 200000)
             direction = [random.uniform(-1, 1) for _ in range(3)]
-            
-            # Bias: se troppo vicino al centro, spingilo fuori. Se troppo fuori, attiralo dentro.
-            dist = np.linalg.norm(self.pos)
-            if dist < 500000: # Troppo al centro
-                direction = [p/dist if dist > 0 else random.uniform(-1,1) for p in self.pos]
+            dist = math.sqrt(self.pos['x']**2 + self.pos['y']**2 + self.pos['z']**2)
+            if dist < 1200000: # [v14.5] Mantieni distanza di sicurezza dal centro
+                direction = [p/dist if dist > 0 else random.uniform(-1,1) for p in [self.pos['x'], self.pos['y'], self.pos['z']]]
             elif dist > 3000000: # Troppo fuori
-                direction = [-p/dist for p in self.pos]
-
-            self.pos = [self.pos[i] + direction[i] * step for i in range(3)]
+                direction = [-p/dist for p in [self.pos['x'], self.pos['y'], self.pos['z']]]
+            
+            self.pos['x'] += direction[0] * step
+            self.pos['y'] += direction[1] * step
+            self.pos['z'] += direction[2] * step
         
-        # Space bounds (Esteso per permettere pattugliamento profondo fuori dal cubo 4M)
+        # Space bounds
         limit = 3500000
-        self.pos = [max(-limit, min(limit, p)) for p in self.pos]
+        self.pos['x'] = max(-limit, min(limit, self.pos['x']))
+        self.pos['y'] = max(-limit, min(limit, self.pos['y']))
+        self.pos['z'] = max(-limit, min(limit, self.pos['z']))
         
-        return {"agent": "CB-003", "pos": self.pos}
+        return {"agent": "CB-003", "pos": dict(self.pos)}
 
-    def sync_codebase(self):
+    async def sync_codebase(self):
         if not self.bridger.project_root:
             self.status = "Idle - No Project Root"
             return
         self.is_syncing = True
         self.status = "Syncing Codebase..."
         try:
-            self.bridger.ingest_codebase()
+            await self.bridger.ingest_codebase()
         finally:
             self.is_syncing = False
             self.status = "Syncing Complete"
@@ -1671,59 +1811,95 @@ class BridgerAgent:
                     for tid in target_ids:
                         if tid != center_id:
                             self.vault.add_relation(tid, center_id, RelationType.SEMANTIC, 0.8)
-                    self.bridges_total += len(target_ids)
+            self.bridges_total += len(target_ids)
         except: pass
         
         await asyncio.sleep(5)
         self.status = "Monitoring Grid..."
         self.blackboard.post(SynapticSignal("CB-003", AgentRole.EXPERT, f"🔗 ANCORAGGIO COMPLETATO: Sinapsi strategiche create per {filter_query}.", SignalType.MISSION_UPDATE))
 
+
 class SkyWalkerAgent:
     """FS-77 File-Sky-Walker: Autonomous High-Altitude Web Interceptor."""
     def __init__(self, engine, orch=None):
         self.vault = engine; self.orch = orch
         self.identity = {"id": "FS-77", "name": "File-Sky-Walker", "role": AgentRole.RESEARCHER}
-        self.pos = {"x": 1100000.0, "y": 800000.0, "z": 1100000.0}
+        # [v16.0] Distributed Boot: Quadrant Alpha (Outer Rim)
+        self.pos = {"x": 8000000.0, "y": 3000000.0, "z": 8000000.0}
+        print(f"🛰️ [BOOT] FS-77 Skywalker Initialized at: {self.pos}")
         self.status = "Scanning Horizon..."
         self.web_hits = 0
         self.nodes_created = 0 # 🛰️ [v4.0.1] New sub-counter
+        self.galaxies_created = 0 # 🌌 [v8.4] Satellite Galaxies
+        
+        # 📊 [v8.4] Session-Only Counters (Baseline handled by Orchestrator)
+        self.nodes_created = 0
+        self.web_hits = 0
+        self.galaxies_created = 0
+
         self.laser_active = False
-        self.laser_target = {'x': 2000000, 'y': 0, 'z': 2000000} # [v8.0]
+        self.laser_target = {'x': 250000, 'y': 0, 'z': 250000} # [v8.0] - Reduced from 2M to 250k (10x closer)
 
     def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
         """Pattugliamento Orbitale Alta Quota (Symmetric Border Patrol)."""
         now = time.time()
-        # 1. Movimento orbitale
+        # 1. Movimento orbitale (Deep Space Patrol)
         angle = now * 0.08
-        rad = 1100000 + 200000 * np.sin(now * 0.1)
+        # [v24.8] Skywalker High-Altitude Patrol (Capped at 10M units)
+        rad = (8500000.0 + 1500000.0 * np.sin(now * 0.05))
         
-        self.pos['x'] = float(rad * np.cos(angle))
-        self.pos['y'] = float(400000 * np.sin(angle * 0.5))
-        self.pos['z'] = float(rad * np.sin(angle))
+        # Wide sinusoidal curves scaled to 10M radius
+        self.pos['x'] = float(rad * np.cos(now * 0.06))
+        self.pos['y'] = float(3500000 * np.sin(now * 0.03)) # Scaled vertical oscillation (3.5M units)
+        self.pos['z'] = float(rad * np.sin(now * 0.06))
         
-        # 2. [PROACTIVE_RESEARCH] Se idle da troppo tempo (> 5 minuti), auto-ingaggia missione
+        # 2. [PROACTIVE_RESEARCH] Forza missione se idle (v8.4)
         if not hasattr(self, 'last_mission_time'): self.last_mission_time = now
         
-        is_idle = self.status == "Scanning Horizon..." or "FAILED" in self.status or "COMPLETE" in self.status
+        is_idle = any(s in self.status for s in ["Scanning", "FAILED", "COMPLETE", "Horizon"])
         
-        if is_idle and (now - self.last_mission_time > 60): # Ridotto a 60 secondi (v8.1)
+        # [DIAGNOSTIC] Log heartbeat every 100 cycles or on state change
+        if random.random() > 0.99:
+            print(f"💓 [FS-77/Heartbeat] Idle: {is_idle}, Since Last: {int(now - self.last_mission_time)}s")
+
+        # Se idle per più di 10 secondi (RIDOTTO da 30 per test), lancia una missione
+        if is_idle and (now - self.last_mission_time > 10):
             self.last_mission_time = now
-            # 🕵️ [v8.1] Weak Node Hunting Logic
+            # 🕵️ [v8.4] Hybrid Exploration Logic
             weak_nodes = [n for n in nodes.values() if len(n.edges) <= 1 and len(n.text) > 20]
             
-            if weak_nodes:
-                target_node = random.choice(weak_nodes)
+            if weak_nodes and random.random() > 0.3:
+                # 🛡️ [v9.0 Hardening] Filter out code snippets
+                valid_nodes = [n for n in weak_nodes if not any(c in n.text for c in ['def ', 'class ', 'import ', 'self.', '()', '{', '_'])]
+                
+                if not valid_nodes:
+                    print(f"🔍 [FS-77] {len(weak_nodes)} weak nodes found, but ALL filtered as code/technical. Falling back to proactive topics.")
+                
+                target_node = random.choice(valid_nodes if valid_nodes else weak_nodes)
                 topic = target_node.text[:40].strip()
+                topic = "".join(c for c in topic if c.isalnum() or c in " -").strip()
+                
+                if len(topic) < 3: topic = "Neural Topology Optimization" 
+                
                 self.status = f"REINFORCING: {topic}..."
-                print(f"📡 [FS-77] Weak synapse detected. Launching reinforcement for: {topic}")
-                # Impostiamo il target laser verso una zona nuova per la futura galassia satellite
-                self.laser_target = {
-                    'x': target_node.metadata.get('x', 0) + random.uniform(500000, 1000000),
-                    'y': random.uniform(-200000, 200000),
-                    'z': target_node.metadata.get('z', 0) + random.uniform(500000, 1000000)
-                }
+                print(f"📡 [FS-77] Debolezza semantica rilevata. Rinforzo per: {topic}")
             else:
-                self.status = "Scanning for Weak Synapses..."
+                # Ricerca proattiva su temi caldi
+                queries = ["latest AI advancements", "autonomous agents architecture", "vector database optimization", "neural implicit compression", "graphRAG best practices", "quantum neural networks", "distributed ledgers"]
+                topic = random.choice(queries)
+                self.status = f"MISSION: {topic}"
+                print(f"📡 [FS-77] Lancio Ricerca Proattiva su: {topic}")
+            
+            # [v17.1] Deep Space Skywalker Projection (6M - 8M units)
+            dist = 6000000.0 + random.uniform(0, 2000000.0)
+            theta = random.uniform(0, 2 * math.pi)
+            phi = random.uniform(0, math.pi)
+            
+            self.laser_target = {
+                'x': dist * math.sin(phi) * math.cos(theta),
+                'y': dist * math.sin(phi) * math.sin(theta),
+                'z': dist * math.cos(phi)
+            }
 
         # 3. [AUTONOMOUS_FORAGING] Se l'agente ha una missione attiva
         is_active_mission = any(self.status.startswith(prefix) for prefix in ["MISSION:", "🚀", "REINFORCING:", "INJECTING:"])
@@ -1746,6 +1922,9 @@ class SkyWalkerAgent:
         urls = await self._search_web(query)
         if not urls: return ""
         
+        # 🛰️ [v8.4.1 Telemetry Anchor]
+        self.web_hits += 1
+        
         intel = []
         for url in urls[:limit]:
             try:
@@ -1762,189 +1941,772 @@ class SkyWalkerAgent:
         is_mission = any(self.status.startswith(prefix) for prefix in ["MISSION:", "🚀", "REINFORCING:"])
         if not is_mission: return
         
-        # Estraiamo la query eliminando i prefissi conosciuti
         query = self.status
         for prefix in ["MISSION:", "🚀", "REINFORCING:"]:
             query = query.replace(prefix, "")
         query = query.strip()
         
-        # 1. THOUGHT: Pianificazione query
-        self.status = "THOUGHT: Analyzing gap..."
-        time.sleep(1) # Simula riflessione
-        
-        # 2. SEARCH: Ricerca Multi-Motore (Google/DDG)
-        self.status = f"SEARCH: Querying Google for '{query}'..."
         try:
-            # Protocollo di emergenza per loop orfani (v8.0)
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            # [v20.1] Autonomous Flight: Skywalker non aspetta più Yoda
+            self.status = "THOUGHT: Analyzing independent gap..."
+            time.sleep(2) 
             
-            urls = loop.run_until_complete(self._search_web(query))
-        except Exception as e:
-            print(f"⚠️ [FS-77] Loop Error in Search: {e}")
-            urls = []
-        
-        if not urls:
-            self.status = "MISSION_FAILED: No Intel Found"
-            time.sleep(10); self.status = "Scanning Horizon..."
-            return
-
-        # 3. FORAGE: Estrazione rapida
-        self.status = f"FORAGE: Scraping {len(urls)} sources..."
-        raw_intel = ""
-        for url in urls:
+            self.status = "Mission searching file..."
             try:
-                # Recuperiamo solo il testo principale per la sintesi
-                async def _get_fast_text(u):
-                    text = ""
-                    async for page in self.orch.forager.forage(u):
-                        text += page.text + "\n"
-                    return text[:4000] # Limite per finestra LLM
-                
-                raw_intel += loop.run_until_complete(_get_fast_text(url))
-                self.web_hits += 1
-            except: continue
+                with self.orch._search_lock:
+                    # [v18.7] Hardened Timeout: Increased to 600s for deep research
+                    search_data = asyncio.run_coroutine_threadsafe(self._search_web(query, limit=10), self.orch.loop).result(timeout=600)
+                urls = search_data.get("urls", [])
+                ai_content = search_data.get("ai_content", "")
+                if urls:
+                    self.web_hits += 1 # 🛰️ Record telemetry hit
+            except Exception as e:
+                err_msg = str(e) if str(e) else type(e).__name__
+                print(f"⚠️ [FS-77] Web search timeout or error: {err_msg}. Falling back to internal synthesis.")
+                urls = []; ai_content = ""
 
-        # 4. SYNTHESIS: L'Agente attende l'AI Mode (System stays active)
-        if raw_intel:
-            self.status = "SYNTHESIS: Waiting for AI Mode..."
+            all_pages = []
+            if not urls and not ai_content:
+                self.status = "MISSION: Internal Insight Synthesis..."
+                context_nodes = random.sample(list(self.orch.engine._nodes.values()), min(len(self.orch.engine._nodes), 5))
+                raw_intel = "INTERNAL NEBULA CONTEXT:\n" + "\n".join([n.text[:1000] for n in context_nodes])
+            else:
+                self.status = f"FORAGE: Scraping {len(urls)} sources..."
+                
+                async def _forage_all_parallel(forager, u_list):
+                    tasks = [_global_forage_helper(forager, u, limit=5) for u in u_list[:2]]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    all_p = []
+                    for r in results:
+                        if isinstance(r, list): all_p.extend(r)
+                        elif isinstance(r, Exception): print(f"⚠️ [FS-77] Parallel forage task error: {r}")
+                    return all_p
+
+                try:
+                    # [v25.0] Parallel Foraging: Skywalker now wait up to 600s
+                    all_pages = asyncio.run_coroutine_threadsafe(_forage_all_parallel(self.orch.forager, urls), self.orch.loop).result(timeout=600)
+                    if all_pages: self.web_hits += 1
+                except Exception as e:
+                    err_msg = str(e) if str(e) else type(e).__name__
+                    print(f"⚠️ [FS-77] Parallel Forage failed or timeout: {err_msg}")
+                    all_pages = []
+
+                raw_intel = "\n".join([p.text[:2000] for p in all_pages])
+
+            self.status = "SYNTH: Distilling Wisdom..."
             synthesis = self._ask_ai_to_synthesize(query, raw_intel)
             
             if synthesis:
-                self.status = "INJECTING: Finalizing Wisdom Node..."
-                # v4.1.6: Pausa per permettere al dashboard di mostrare la Laser Storm
-                time.sleep(3) 
+                self.status = "INJECTING: Knowledge Galaxy..."
+                try:
+                    meta_core = {
+                        "source": "SkyWalker-Core", "topic": query, "timestamp": datetime.now().isoformat(),
+                        "x": self.laser_target['x'], "y": self.laser_target['y'], "z": self.laser_target['z'],
+                        "is_galaxy": True, "galaxy_role": "core",
+                        "lifecycle_state": "protected", "importance": 5.0 # [v13.6] Anti-Decay
+                    }
+                    core_node = asyncio.run_coroutine_threadsafe(self.vault.upsert_text(synthesis, metadata=meta_core), self.orch.loop).result()
+                    
+                    if core_node:
+                        self.nodes_created += 1
+                        self.galaxies_created += 1
+                        
+                        sat_nodes = []
+                        for i, p in enumerate(all_pages[:5]):
+                            try:
+                                sat_meta = {
+                                    "source": "SkyWalker-Source", "url": p.url,
+                                    "x": self.laser_target['x'] + random.uniform(-40000, 40000),
+                                    "y": self.laser_target['y'] + random.uniform(-40000, 40000),
+                                    "z": self.laser_target['z'] + random.uniform(-40000, 40000),
+                                    "is_galaxy": True, "galaxy_role": "source",
+                                    "lifecycle_state": "protected", "importance": 5.0 
+                                }
+                                sat_node = asyncio.run_coroutine_threadsafe(self.vault.upsert_text(f"SOURCE [{i}]: {p.title}\n\n{p.text[:800]}", metadata=sat_meta), self.orch.loop).result()
+                                if sat_node:
+                                    self.vault.add_relation(sat_node.id, core_node.id, "galaxy_internal")
+                                    sat_nodes.append(sat_node)
+                            except Exception as e:
+                                print(f"⚠️ [FS-77/Warn] Ingest satellite {i} failed: {e}")
+                                continue
+                except Exception as e:
+                    print(f"🚨 [FS-77/Error] Fallimento Ingestione Nucleo: {e}")
+                    core_node = None
+                    
+                    try:
+                        # [v18.3] Tethering di precisione: Forza 4 o 8 archi verso la Mother Nebula
+                        mother_nodes = [n for n in self.vault._nodes.values() if not n.metadata.get("is_galaxy")]
+                        if mother_nodes:
+                            from scipy.spatial import distance
+                            my_pos = [self.pos['x'], self.pos['y'], self.pos['z']]
+                            mother_anchor = min(mother_nodes, key=lambda n: distance.euclidean(my_pos, [n.metadata.get('x', 0), n.metadata.get('y', 0), n.metadata.get('z', 0)]))
+                            
+                            all_galaxy_nodes = [core_node] + sat_nodes
+                            num_tethers = 8 if len(all_galaxy_nodes) >= 1000 else 4
+                            tether_step = max(1, len(all_galaxy_nodes) // num_tethers)
+                            
+                            for idx, gn in enumerate(all_galaxy_nodes):
+                                if idx % tether_step == 0:
+                                    self.vault.add_relation(gn.id, mother_anchor.id, "skywalker_anchor")
+                    except: pass
                 
-                # Iniezione del nodo sintetizzato ad alta qualità
-                meta = {"source": "SkyWalker_AI_Synthesis", "query": query, "quality": "HIGH"}
-                self.vault.upsert_text(synthesis, metadata=meta)
-                self.nodes_created += 1
-                
-                self.status = "MISSION_COMPLETE: Wisdom Anchored"
+                self.status = "MISSION_COMPLETE"
                 if self.orch: 
                     self.orch._process_agent_action({
                         "agent": "FS-77", 
                         "action": "MISSION_COMPLETE", 
                         "motivation": f"Synthesized high-quality wisdom for '{query}'.", 
-                        "nodes_added": 1
+                        "nodes_added": 1,
+                        "web_hits": len(all_pages)
                     })
             else:
                 self.status = "MISSION_FAILED: Synthesis Error"
-        else:
-            self.status = "MISSION_FAILED: Empty Data"
-        
-        time.sleep(30)
-        self.status = "Scanning Horizon..."
+
+        except Exception as e:
+            print(f"🚨 [FS-77/Critical] Mission Crash: {e}")
+        finally:
+            self.status = "Scanning Horizon..."
+            self.last_mission_time = time.time()
+            self.laser_active = False
 
     def _ask_ai_to_synthesize(self, topic: str, content: str) -> Optional[str]:
-        """Interpella l'LLM locale per creare una sintesi granulare (Asincrono per l'agente)."""
+        """Interpella l'LLM locale per creare una sintesi granulare."""
         try:
-            # Recuperiamo l'URL di Ollama dai settings dell'orchestratore
             base_url = self.orch.settings.get("ollama_url", "http://localhost:11434")
-            model = self.orch.settings.get_model("synthesis") # v4.1.4: Fixed key from 'chat' to 'synthesis'
-            
-            prompt = f"""
-            Sei l'Agente FS-77 SkyWalker. Hai raccolto queste informazioni su: {topic}.
-            SINTETIZZA queste informazioni in un unico nodo di conoscenza tecnico, denso e privo di rumore.
-            Usa un tono professionale e strutturato (Markdown).
-            
-            DATI RACCOLTI:
-            {content[:6000]}
-            """
-            
-            with httpx.Client(timeout=60.0) as client:
-                try:
-                    resp = client.post(f"{base_url}/api/generate", json={
-                        "model": model,
-                        "prompt": prompt,
-                        "stream": False
-                    })
-                    if resp.status_code == 200:
-                        return resp.json().get("response")
-                    else:
-                        print(f"🚨 [FS-77/AI] Ollama Error {resp.status_code}: {resp.text}")
-                except httpx.ConnectError:
-                    print(f"🚨 [FS-77/AI] Connection Failed to {base_url}. Is Ollama running?")
-                except Exception as e:
-                    print(f"🚨 [FS-77/AI] Request Error: {e}")
-        except Exception as e:
-            print(f"⚠️ [FS-77/AI] Critical Error during synthesis: {e}")
+            model = self.orch.settings.get_model("synthesis")
+            prompt = f"Sei l'Agente FS-77 SkyWalker. Sintetizza: {topic}\nDati:\n{content[:6000]}"
+            with httpx.Client(timeout=300.0) as client:
+                resp = client.post(f"{base_url}/api/generate", json={"model": model, "prompt": prompt, "stream": False})
+                if resp.status_code == 200: return resp.json().get("response")
+        except: pass
         return None
 
-    def _sanitize_query(self, query: str) -> str:
-        """Pulisce la query da nuove righe, caratteri non stampabili e prompt di terminale."""
-        if not query: return ""
-        import re
-        # Rimuove prompt da terminale comuni (es. amk@nyman:~/src/python$)
-        query = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\s*[:~].*?\$', '', query)
-        # Rimuove caratteri non stampabili e ritorni a capo
-        query = "".join(ch for ch in query if ch.isprintable())
-        query = query.replace('\n', ' ').replace('\r', ' ').strip()
-        return query[:200] # Limite prudenziale
+    async def _refine_query_with_llm(self, query: str) -> str:
+        """[v1.6] Usa l'LLM per creare una query di ricerca professionale."""
+        try:
+            base_url = self.orch.settings.get("ollama_url", "http://localhost:11434")
+            model = self.orch.settings.get_model("general_purpose")
+            prompt = f"Trasforma questo frammento tecnico in una query di ricerca Google efficace per trovare documentazione o tutorial. Rispondi SOLO con la query.\nFrammento: {query}"
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(f"{base_url}/api/generate", json={"model": model, "prompt": prompt, "stream": False})
+                if resp.status_code == 200: 
+                    refined = resp.json().get("response", "").strip().strip('"')
+                    if refined: return refined
+        except: pass
+        from retrieval.web_forager import SovereignWebForager
+        return SovereignWebForager.refine_query(query)
 
-    async def _search_web(self, query: str) -> List[str]:
-        """Esegue una ricerca stealth su Google/DuckDuckGo con query sanificata."""
+    def _sanitize_query(self, query: str) -> str:
+        from retrieval.web_forager import SovereignWebForager
+        return SovereignWebForager.refine_query(query)
+
+    async def _search_web(self, query: str, limit: int = 10) -> Dict[str, Any]:
         import urllib.parse
         clean_query = self._sanitize_query(query)
-        if not clean_query: return []
+        if not clean_query: return {"urls": [], "ai_content": ""}
         
-        enriched_query = urllib.parse.quote(f"{clean_query} technical documentation")
-        simple_query = urllib.parse.quote(clean_query)
+        # 🛡️ [v11.0] Stealth Upgrade: Usa il forager centrale se disponibile
+        if self.orch and self.orch.forager:
+            refined = await self._refine_query_with_llm(query)
+            res = await self.orch.forager.stealth_search(refined, limit=limit)
+            if res and res.get("urls"):
+                self.web_hits += 1
+            return res
+
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         urls = []
         
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-        }
-        
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            # --- TRY GOOGLE (ENRICHED) ---
-            try:
-                resp = await client.get(f"https://www.google.com/search?q={enriched_query}", headers=headers)
+        # 1. Google Fallback (Regex)
+        try:
+            search_url = f"https://www.google.com/search?q={urllib.parse.quote(clean_query)}"
+            async with httpx.AsyncClient(headers=headers, timeout=180.0, follow_redirects=True) as client:
+                resp = await client.get(search_url)
                 if resp.status_code == 200:
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    for a in soup.select('a'):
-                        href = a.get('href', '')
-                        if href.startswith('/url?q='):
-                            url = href.split('/url?q=')[1].split('&')[0]
-                            if 'google.com' not in url and url.startswith('http'):
-                                urls.append(url)
-                                if len(urls) >= 3: break
+                    import re
+                    # Improved regex for Google
+                    found = re.findall(r'href="/url\?q=(https?://[^&"]+)', resp.text)
+                    if not found:
+                        found = re.findall(r'href="(https?://[^&"]+)"', resp.text)
+                    urls.extend([f for f in found if "google.com" not in f and "gstatic.com" not in f])
+        except: pass
+        
+        # 2. DuckDuckGo Fallback (Lite/HTML)
+        if not urls:
+            try:
+                ddg_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(clean_query)}"
+                async with httpx.AsyncClient(headers=headers, timeout=180.0) as client:
+                    resp = await client.get(ddg_url)
+                    if resp.status_code == 200:
+                        import re
+                        found = re.findall(r'href="(https?://[^&"]+)"', resp.text)
+                        urls.extend([f for f in found if "duckduckgo.com" not in f])
             except: pass
 
-            # --- TRY DUCKDUCKGO (SIMPLE FALLBACK) ---
-            if not urls:
-                try:
-                    resp = await client.get(f"https://html.duckduckgo.com/html/?q={simple_query}", headers=headers)
-                    if resp.status_code == 200:
-                        from bs4 import BeautifulSoup
-                        soup = BeautifulSoup(resp.text, "html.parser")
-                        links = soup.select(".result__a")
-                        for link in links[:3]:
-                            url = link.get("href")
-                            if url and url.startswith('http'): urls.append(url)
-                except: pass
-        
-        # 📊 [v4.1.5] Incrementa hits se abbiamo trovato link, anche prima del foraging
-        if urls:
-            self.web_hits += 1
-        return urls
+        if urls: self.web_hits += 1
+        return {"urls": list(dict.fromkeys(urls))[:limit], "ai_content": ""}
 
     def get_status_report(self):
         return {
             "identity": self.identity,
             "pos": self.pos,
             "status": self.status,
-            "web_hits": self.web_hits,
-            "hits": self.web_hits,
-            "nodes_created": self.nodes_created,
+            "web_hits_session": self.web_hits,
+            "nodes_introduced_session": self.nodes_created,
+            "galaxies_session": self.galaxies_created
+        }
+
+class YodaAgent:
+    """YO-001 Yoda-File-Searcher: Deep Semantic Pilgrim."""
+    def __init__(self, engine, orch=None):
+        self.vault = engine; self.orch = orch
+        self.identity = {"id": "YO-001", "name": "Yoda-File-Searcher", "role": "DEEP_SURVEYOR"}
+        # [v16.0] Distributed Boot: Quadrant Sigma (Outer Rim Deep)
+        self.pos = {"x": -9000000.0, "y": -4000000.0, "z": -9000000.0}
+        print(f"🟢 [BOOT] YO-001 Yoda Initialized at: {self.pos}")
+        self.status = "Meditating in the Nebula..."
+        self.nodes_examined = 0
+        self.galaxies_created = 0
+        self.web_hits = 0 # 📊 [v8.4.1 Fix]
+        
+        # 📊 [v8.4] Session-Only Counters (Baseline handled by Orchestrator)
+        self.nodes_examined = 0
+        self.galaxies_created = 0
+        self.web_hits = 0 
+        self.nodes_introduced_session = 0
+        self.last_galaxy_name = ""
+        self.last_galaxy_dist = 0.0
+        self.nodes_in_last_galaxy = 0
+
+        self.laser_active = False
+        self.laser_target = {"x": 0, "y": 0, "z": 0}
+        self.last_pilgrimage_time = time.time() - 35.0 # Accelerated first mission (10s wait instead of 45s)
+
+    def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
+        now = time.time()
+        exp = getattr(self.orch, 'nebula_expansion_factor', 1.0) if self.orch else 1.0
+        
+        # 🛸 [v17.8] Jedi Pilgrimage Dynamics
+        is_on_mission = "PILGRIMAGE" in self.status or "EXPANSION" in self.status or "Researching" in self.status
+        
+        if is_on_mission and hasattr(self, 'galaxy_anchor'):
+            # Fly toward the deep space galaxy (up to 35M units)
+            target = self.galaxy_anchor
+            lerp_factor = 0.02 # Majestic approach
+            self.pos['x'] += (target['x'] - self.pos['x']) * lerp_factor
+            self.pos['y'] += (target['y'] - self.pos['y']) * lerp_factor
+            self.pos['z'] += (target['z'] - self.pos['z']) * lerp_factor
+        else:
+            # Fly back to Deep Space Pilgrimage Zone (40M - 55M range)
+            base_radius = (47500000.0 + 7500000.0 * math.sin(now * 0.008)) * exp
+            target_x = base_radius * math.cos(now * 0.005)
+            target_y = 1000000 * math.sin(now * 0.002)
+            target_z = base_radius * math.sin(now * 0.005)
+            
+            lerp_factor = 0.05
+            self.pos['x'] += (target_x - self.pos['x']) * lerp_factor
+            self.pos['y'] += (target_y - self.pos['y']) * lerp_factor
+            self.pos['z'] += (target_z - self.pos['z']) * lerp_factor
+        
+        # 🕒 Check for next mission
+        is_idle = "Meditating" in self.status or "COMPLETE" in self.status
+        if is_idle and (now - self.last_pilgrimage_time > 45):
+            self.last_pilgrimage_time = now
+            self.status = "PILGRIMAGE: Gathering 1000 Nodes..."
+            threading.Thread(target=self._execute_yoda_mission, args=(list(nodes.values()),), daemon=True).start()
+
+        return {"agent": "YO-001", "pos": dict(self.pos), "laser": self.laser_active, "laserTarget": self.laser_target}
+
+    async def _yoda_search_web(self, query: str, limit: int = 5) -> Dict[str, Any]:
+        # 🛡️ [v11.0] Stealth Upgrade: Yoda usa la Forza (e Playwright)
+        if self.orch and self.orch.forager:
+            # [v1.6] Refine query with LLM if possible
+            refined = await self._refine_query_with_llm(query)
+            try:
+                return await self.orch.forager.stealth_search(refined, limit=limit, zen=True)
+            except Exception as e:
+                print(f"⚠️ [YO-001] Stealth Search Exception: {e}")
+                return {"urls": [], "ai_content": ""}
+            
+        return {"urls": [], "ai_content": ""}
+
+    async def _internal_insight_synthesis(self, topic: str) -> List[Dict[str, Any]]:
+        """[v8.5] Fallback: Crea conoscenza sintetica basata sui dati esistenti nel Vault."""
+        print(f"🔮 [YO-001] Initiating Internal Insight Synthesis for: {topic}")
+        try:
+            # 1. Recupera frammenti correlati dalla Nebula Madre
+            nodes = await self.vault.query(topic, k=10)
+            if not nodes: return []
+            
+            context = "\n---\n".join([n.node.text[:500] for n in nodes])
+            
+            # 2. Usa l'LLM per generare una sintesi strutturata
+            base_url = self.orch.settings.get("ollama_url", "http://localhost:11434")
+            model = self.orch.settings.get_model("synthesis")
+            
+            prompt = (
+                f"Agisci come Yoda, il Gran Maestro della Conoscenza. Basandoti solo sui seguenti frammenti estratti dalla nostra Nebula Madre, "
+                f"genera un trattato filosofico e tecnico sul tema '{topic}'. "
+                f"Crea 3 paragrafi distinti che esplorino connessioni nascoste.\n\n"
+                f"FRAMMENTI:\n{context}"
+            )
+            
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                resp = await client.post(f"{base_url}/api/generate", json={"model": model, "prompt": prompt, "stream": False})
+                if resp.status_code == 200:
+                    synthesis = resp.json().get("response", "")
+                    return [{
+                        "url": "internal://nebula/synthesis",
+                        "title": f"Internal Resonance: {topic}",
+                        "text": synthesis
+                    }]
+        except Exception as e:
+            err_msg = str(e) if str(e) else type(e).__name__
+            print(f"⚠️ [YO-001] Internal Synthesis Exception: {err_msg}")
+            return []
+            print(f"❌ [YO-001] Internal Synthesis Failed: {e}")
+        return []
+
+    async def _refine_query_with_llm(self, query: str) -> str:
+        """[v1.6.5] Crea una query bilingue professionale per fonti accreditate."""
+        try:
+            base_url = self.orch.settings.get("ollama_url", "http://localhost:11434")
+            model = self.orch.settings.get_model("general_purpose")
+            prompt = (
+                f"Trasforma questo concetto in una query di ricerca Google bilingue (Italiano e Inglese) "
+                f"mirata a trovare documentazione tecnica, paper o fonti accreditate. "
+                f"Rispondi SOLO con la query ottimizzata.\nConcetto: {query}"
+            )
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(f"{base_url}/api/generate", json={"model": model, "prompt": prompt, "stream": False})
+                if resp.status_code == 200: 
+                    refined = resp.json().get("response", "").strip().strip('"')
+                    if refined: return refined
+        except: pass
+        return f"{query} official documentation technical papers"
+
+    def _execute_yoda_mission(self, all_nodes):
+        if not all_nodes: return
+        
+        # 🎯 [v20.0] Mission Planning: Se la coda è vuota, chiediamo consiglio ad Ollama
+        if not hasattr(self, 'mission_queue'): self.mission_queue = []
+        
+        if not self.mission_queue:
+            self.status = "PLANNING: Consulting the Oracle..."
+            sample = random.sample(all_nodes, min(len(all_nodes), 50))
+            context_summary = "\n".join([n.text[:200] for n in sample])
+            
+            try:
+                base_url = self.orch.settings.get("ollama_url", "http://localhost:11434")
+                model = self.orch.settings.get_model("general_purpose")
+                prompt = (
+                    f"In base ai temi trattati nel vault (nella nebula che abbiamo creato foraggiando la conoscenza con dati, file e url), "
+                    f"che argomenti mi consigli di approfondire? Stila una lista di 10 argomenti tecnici o scientifici brevi (2-4 parole). "
+                    f"Rispondi SOLO con la lista numerata, un argomento per riga.\n\nCONTESTO:\n{context_summary}"
+                )
+                import httpx
+                with httpx.Client(timeout=120.0) as client:
+                    resp = client.post(f"{base_url}/api/generate", json={"model": model, "prompt": prompt, "stream": False})
+                    if resp.status_code == 200:
+                        lines = resp.json().get("response", "").splitlines()
+                        for line in lines:
+                            clean = "".join(c for c in line if not c.isdigit() and c not in ['.', '-', ')']).strip()
+                            if clean and len(clean.split()) >= 1:
+                                self.mission_queue.append(clean)
+            except Exception as e:
+                err_msg = str(e) if str(e) else type(e).__name__
+                print(f"⚠️ [YO-001] Planning failed: {err_msg}")
+            
+            if not self.mission_queue: # Fallback
+                self.mission_queue = ["Sovereign Intelligence", "Neural Mesh Optimization", "Distributed Consensus"]
+
+        # Prendi il prossimo argomento dalla coda
+        common_topic = self.mission_queue.pop(0)
+        self.nodes_examined += len(all_nodes) # Statistica simbolica
+        
+        # Cerchiamo il nodo più vicino al centroide per l'ancoraggio fisico
+        closest_node = None
+        valid_vectors = [n.vector for n in all_nodes if n.vector is not None and len(n.vector) > 0]
+        if valid_vectors:
+            avg_v = np.mean(valid_vectors, axis=0)
+            min_d = float('inf')
+            for n in all_nodes:
+                if n.vector is not None:
+                    d = np.linalg.norm(n.vector - avg_v)
+                    if d < min_d: min_d = d; closest_node = n
+
+        self.status = f"EXPANSION: Researching {common_topic}..."
+        self.laser_active = True
+        
+        try:
+            with self.orch._search_lock:
+                import math
+                theta = random.uniform(0, 2 * math.pi)
+                phi = random.uniform(0, math.pi)
+                # [v18.6] Deep Frontier Yoda Projection (35M - 45M units)
+                distance = 35000000.0 + random.uniform(0, 10000000.0)
+                
+                galaxy_x = distance * math.sin(phi) * math.cos(theta)
+                galaxy_y = distance * math.sin(phi) * math.sin(theta)
+                galaxy_z = distance * math.cos(phi)
+                
+                self.laser_target = {"x": galaxy_x, "y": galaxy_y, "z": galaxy_z}
+                self.galaxy_anchor = {"x": galaxy_x, "y": galaxy_y, "z": galaxy_z}
+                
+                try:
+                    # [v25.1] Increased Timeout to 600s and depth limited to 2
+                    search_data = asyncio.run_coroutine_threadsafe(self._yoda_search_web(common_topic, limit=2), self.orch.loop).result(timeout=600) 
+                    urls = search_data.get("urls", [])
+                except Exception as e:
+                    err_msg = str(e) if str(e) else type(e).__name__
+                    print(f"⚠️ [YO-001] Web search TIMEOUT (600s) or ERROR for '{common_topic}': {err_msg}")
+                    urls = []
+                
+                if not urls:
+                    print(f"⚠️ [YO-001] External search failed. Activating Internal Insight Synthesis for '{common_topic}'...")
+                    self.status = "SYNTHESIS: Reclaiming internal insights..."
+                    # Chiamata al nuovo fallback
+                    try:
+                        synthetic_pages = asyncio.run_coroutine_threadsafe(self._internal_insight_synthesis(common_topic), self.orch.loop).result(timeout=600)
+                    except Exception as e:
+                        err_msg = str(e) if str(e) else type(e).__name__
+                        print(f"❌ [YO-001] Timeout or Error during Internal Synthesis execution: {err_msg}")
+                        synthetic_pages = []
+                    
+                    if synthetic_pages:
+                        print(f"✨ [YO-001] Internal Synthesis successful. Forging Synthetic Galaxy.")
+                        all_created_nodes = []
+                        for p in synthetic_pages:
+                            # Adattamento per simulare l'oggetto 'page' di Playwright
+                            from dataclasses import dataclass
+                            @dataclass
+                            class MockPage:
+                                url: str
+                                title: str
+                                text: str
+                            
+                            pages = [MockPage(p['url'], p['title'], p['text'])]
+                            
+                            for page_obj in pages:
+                                try:
+                                    synthesis_text = f"🌌 YODA SYNTHETIC NODE:\nTopic: {common_topic}\nOrigin: Internal Resonance\n\n{page_obj.text}"
+                                    local_x = galaxy_x + random.uniform(-30000, 30000)
+                                    local_y = galaxy_y + random.uniform(-30000, 30000)
+                                    local_z = galaxy_z + random.uniform(-30000, 30000)
+                                    
+                                    meta = {
+                                        "source": "internal_synthesis", "topic": common_topic, "agent": "YO-001",
+                                        "x": local_x, "y": local_y, "z": local_z,
+                                        "color": "#facc15", "is_galaxy": True, # Giallo per distinguere le galassie sintetiche
+                                        "lifecycle_state": "protected", "importance": 4.0 
+                                    }
+                                    new_n = asyncio.run_coroutine_threadsafe(self.vault.upsert_text(synthesis_text, metadata=meta), self.orch.loop).result()
+                                    if new_n: all_created_nodes.append(new_n)
+                                except: continue
+                    else:
+                        print(f"⚠️ [YO-001] Internal Synthesis also failed or no context found. Skipping.")
+                        self.status = "MEDITATION: Seeking new paths..."
+                        return 
+
+                else:
+                    print(f"🟢 [YO-001] Yoda forging Galaxy from EXTERNAL wisdom: {common_topic}")
+                    all_created_nodes = []
+                    
+                async def _forage_yoda_parallel(forager, u_list):
+                    tasks = [_global_forage_helper(forager, u, limit=5) for u in u_list[:2]]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    all_p = []
+                    for r in results:
+                        if isinstance(r, list): all_p.extend(r)
+                    return all_p
+
+                try:
+                    # [v25.2] Parallel Forage per Yoda
+                    all_external_pages = asyncio.run_coroutine_threadsafe(_forage_yoda_parallel(self.orch.forager, urls), self.orch.loop).result(timeout=160)
+                    if all_external_pages: self.web_hits += 1
+                except Exception as e:
+                    print(f"⚠️ [YO-001] External Forage failed: {e}")
+                    all_external_pages = []
+
+                for p in all_external_pages:
+                    try:
+                        synthesis = f"🌌 YODA GALAXY NODE:\nTopic: {common_topic}\nTitle: {p.title}\nSource: {p.url}\n\n{p.text[:1000]}"
+                        local_x = galaxy_x + random.uniform(-30000, 30000)
+                        local_y = galaxy_y + random.uniform(-30000, 30000)
+                        local_z = galaxy_z + random.uniform(-30000, 30000)
+                        
+                        meta = {
+                            "source": "yoda_pilgrimage", "topic": common_topic, "agent": "YO-001",
+                            "x": local_x, "y": local_y, "z": local_z,
+                            "color": "#00ff41", "is_galaxy": True,
+                            "lifecycle_state": "protected", "importance": 5.0 
+                        }
+                        new_n = asyncio.run_coroutine_threadsafe(self.vault.upsert_text(synthesis, metadata=meta), self.orch.loop).result()
+                        if new_n: all_created_nodes.append(new_n)
+                    except: continue
+
+                if all_created_nodes:
+                    self.galaxies_created += 1
+                    self.nodes_introduced_session = getattr(self, 'nodes_introduced_session', 0) + len(all_created_nodes)
+                    self.last_galaxy_name = common_topic
+                    self.last_galaxy_dist = distance
+                    self.nodes_in_last_galaxy = len(all_created_nodes)
+                    self.orch.yoda_galaxy_ready = True
+                    
+                    for i in range(len(all_created_nodes)):
+                        if i < len(all_created_nodes) - 1:
+                            self.vault.add_relation(all_created_nodes[i].id, all_created_nodes[i+1].id, "galaxy_internal")
+                        if i % 4 == 0 and closest_node:
+                            self.vault.add_relation(all_created_nodes[i].id, closest_node.id, "yoda_anchor")
+
+                self.status = "MISSION_COMPLETE"
+        except Exception as e:
+            print(f"🚨 [YO-001] Error: {e}")
+            self.status = "MISSION_FAILED"
+        finally:
+            self.laser_active = False
+            time.sleep(3)
+            self.status = "Meditating in the Nebula..."
+
+        return {
+            "identity": self.identity,
+            "pos": self.pos,
+            "status": self.status,
+            "web_hits_session": self.web_hits,
+            "nodes_examined_session": self.nodes_examined,
+            "galaxies_session": self.galaxies_created,
+            "nodes_introduced_session": getattr(self, 'nodes_introduced_session', 0),
+            "last_galaxy_name": getattr(self, 'last_galaxy_name', ""),
+            "last_galaxy_dist": getattr(self, 'last_galaxy_dist', 0.0),
+            "nodes_in_last_galaxy": getattr(self, 'nodes_in_last_galaxy', 0),
             "laser_active": self.laser_active,
             "smith_fleet": len(getattr(self.orch, 'smiths', {}))
+        }
+
+class MandalorianAgent:
+    """DN-099 Mandalorian: Semantic Herder & Galaxy Weaver."""
+    def __init__(self, engine, orch=None):
+        self.vault = engine; self.orch = orch
+        self.identity = {"id": "DN-099", "name": "Mandalorian", "role": "GALAXY_HERDER"}
+        # [v16.1] Deep Space Deployment: 20M-35M units from center
+        self.pos = {"x": 25000000.0, "y": 0.0, "z": -25000000.0}
+        print(f"🛰️ [BOOT] DN-099 Mandalorian Initialized at: {self.pos}")
+        self.status = "Patrolling the Outer Rim..."
+        self.herds_completed = 0
+        self.last_herd_nodes = 0
+        self.last_herd_time = 0 # Innesco immediato al boot se esistono galassie
+        self.laser_active = False
+        self.laser_target = {"x": 0, "y": 0, "z": 0}
+
+    def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
+        now = time.time()
+        
+        if getattr(self, 'target_pos', None):
+            # 🚀 LERP Smooth Navigation towards target
+            step = 0.04
+            self.pos['x'] += (self.target_pos['x'] - self.pos['x']) * step
+            self.pos['y'] += (self.target_pos['y'] - self.pos['y']) * step
+            self.pos['z'] += (self.target_pos['z'] - self.pos['z']) * step
+        else:
+            # 🛸 Deep Space Patrol: 50M units (Outer Rim Frontier)
+            # Gigantic elliptical orbit to patrol deep galaxies
+            self.pos['x'] = (45000000 + 5000000 * math.cos(now * 0.005)) * math.cos(now * 0.008) 
+            self.pos['y'] = 8000000 * math.sin(now * 0.004)
+            self.pos['z'] = (45000000 + 5000000 * math.sin(now * 0.005)) * math.sin(now * 0.008)
+            
+            # Stato dinamico se non in missione intensiva
+            if not self.status.startswith("HERDING") and not self.status.startswith("MISSION_COMPLETE"):
+                self.status = "Patrolling Deep Galaxies (Outer Rim)..."
+        
+        if now - self.last_herd_time > 60: # Ogni minuto raggruppa
+            self.last_herd_time = now
+            threading.Thread(target=self._execute_mando_mission, daemon=True).start()
+
+        return {"agent": "DN-099", "pos": dict(self.pos), "laser": self.laser_active, "laserTarget": self.laser_target}
+
+    def _execute_mando_mission(self):
+        try:
+            # 1. Trova tutti i nodi "is_galaxy" e raggruppali per topic
+            all_nodes = list(self.vault._nodes.values())
+            galaxy_nodes = [n for n in all_nodes if n.metadata.get("is_galaxy")]
+            
+            if len(galaxy_nodes) < 5: 
+                self.status = "Idle: Monitoring Deep Space."
+                return
+
+            galaxies = {}
+            for n in galaxy_nodes:
+                t = n.metadata.get("topic", "Unknown")
+                if t not in galaxies: galaxies[t] = []
+                galaxies[t].append(n)
+
+            if not galaxies: return
+
+            # 2. Scegli una galassia target a caso per variare la missione
+            target_topic = random.choice(list(galaxies.keys()))
+            nodes = galaxies[target_topic]
+            
+            # Calcola centro galassia target
+            tx = sum(n.metadata.get('x', 0) for n in nodes) / len(nodes)
+            ty = sum(n.metadata.get('y', 0) for n in nodes) / len(nodes)
+            tz = sum(n.metadata.get('z', 0) for n in nodes) / len(nodes)
+            
+            # 🚀 PHASE 1: TRAVEL (Visual interpolation towards galaxy)
+            self.status = f"TRAVELING: Heading to {target_topic} Galaxy at high speed..."
+            self.target_pos = {"x": tx + 100000, "y": ty + 50000, "z": tz + 100000} 
+            time.sleep(6) # Wait for LERP to physically reach the galaxy
+            
+            # 🔦 PHASE 2: SCANNING
+            self.status = f"SCANNING: Analyzing {len(nodes)} nodes in {target_topic}..."
+            self.laser_active = True
+            self.laser_target = {"x": tx, "y": ty, "z": tz}
+            time.sleep(8) # Tempo per l'animazione scanner celeste
+            
+            # 🧬 PHASE 3: SEMANTIC MERGE
+            merge_candidate = None
+            for other_topic, other_nodes in galaxies.items():
+                if other_topic == target_topic: continue
+                # Similarità basata su prefisso o keyword comune (Logica euristica)
+                if target_topic[:3].lower() == other_topic[:3].lower() or random.random() < 0.2:
+                    merge_candidate = other_topic
+                    break
+            
+            if merge_candidate:
+                self.status = f"MERGING: Unifying {target_topic} and {merge_candidate} galaxies..."
+                target_nodes = galaxies[merge_candidate]
+                # Simula processo di attrazione gravitazionale per l'utente (20s totali)
+                time.sleep(12) 
+                for n in target_nodes:
+                    n.metadata["topic"] = target_topic # Unifica il topic
+                nodes.extend(target_nodes)
+            
+            # 🕸️ PHASE 4: CONNECTING ARCS
+            self.status = "CONNECTING: Tethering unified formation to Mother Nebula..."
+            
+            # Recalcola centro aggiornato (dopo eventuale merge)
+            tx = sum(n.metadata.get('x', 0) for n in nodes) / len(nodes)
+            ty = sum(n.metadata.get('y', 0) for n in nodes) / len(nodes)
+            tz = sum(n.metadata.get('z', 0) for n in nodes) / len(nodes)
+            
+            dist = math.sqrt(tx**2 + ty**2 + tz**2)
+            # [v17.1] Unified Galaxy Range (20M - 35M units)
+            target_dist = 20000000.0 + random.uniform(0, 15000000.0) 
+            scale = target_dist / dist if dist > 0 else 1.0
+            new_center_x = tx * scale
+            new_center_y = ty * scale
+            new_center_z = tz * scale
+
+            # Global Anchor Scaling (Logic from previous turn)
+            max_galaxy_arcs = 8 if len(nodes) >= 1000 else 4
+            current_galaxy_arcs = []
+            for n in nodes:
+                rels = self.vault.get_relations(n.id)
+                for r in rels:
+                    if r.relation in ["yoda_anchor", "skywalker_anchor", "galaxy_anchor"]:
+                        current_galaxy_arcs.append((n.id, r.target_id))
+            
+            if len(current_galaxy_arcs) > max_galaxy_arcs:
+                to_remove = current_galaxy_arcs[max_galaxy_arcs:]
+                for node_id, target_id in to_remove:
+                    self.vault.remove_relation(node_id, target_id)
+
+            # [v16.6] Sovereign Ring Geometry: Horizontal (XZ) + 15deg Tilt
+            # Aumentiamo il raggio per allontanare i nodi (richiesta utente)
+            radius = 180000.0 
+            tilt_angle = math.radians(15) 
+            
+            # Trova l'ancora migliore (nodo più vicino al centro reale (0, 1M, 0))
+            mother_nodes = [n for n in all_nodes if not n.metadata.get("is_galaxy")]
+            mother_anchor = None
+            if mother_nodes:
+                def dist_from_center(node):
+                    nx = node.metadata.get('x', 0)
+                    ny = node.metadata.get('y', 1000000)
+                    nz = node.metadata.get('z', 0)
+                    return math.sqrt(nx**2 + (ny-1000000)**2 + nz**2)
+                mother_anchor = min(mother_nodes, key=dist_from_center)
+
+            for i, n in enumerate(nodes):
+                angle = (i / len(nodes)) * 2 * math.pi
+                
+                # Base horizontal ring (XZ)
+                lx = radius * math.cos(angle)
+                lz = radius * math.sin(angle)
+                ly = random.uniform(-15000, 15000) # Spessore nebula
+                
+                # Apply 15 degree Tilt on X axis to make it "distesa" but angled
+                # y' = y*cos(tilt) - z*sin(tilt)
+                # z' = y*sin(tilt) + z*cos(tilt)
+                final_y = ly * math.cos(tilt_angle) - lz * math.sin(tilt_angle)
+                final_z = ly * math.sin(tilt_angle) + lz * math.cos(tilt_angle)
+                
+                n.metadata['x'] = new_center_x + lx
+                n.metadata['y'] = new_center_y + final_y
+                n.metadata['z'] = new_center_z + final_z
+                n.metadata['lifecycle_state'] = 'protected'
+                
+                # 🕸️ Super-Galaxy Web: Connetti al precedente
+                if i > 0: 
+                    self.vault.add_relation(n.id, nodes[i-1].id, "super_galaxy")
+                
+            # 🏠 PHASE 4: RETURN TO MOTHER NEBULA
+            self.status = "RETURNING: Navigating back to Mother Nebula to anchor..."
+            self.laser_active = False
+            self.target_pos = {"x": 800000, "y": 200000, "z": 800000} # Bordo della Mother Nebula
+            time.sleep(8) # Wait for LERP back to the center
+            
+            # 🕸️ PHASE 5: CONNECTING ARCS (Tethering)
+            self.status = "CONNECTING: Tethering unified formation to Mother Nebula..."
+            
+            # ⚓ Tethering alla Nebula Madre: Forza 4 o 8 archi verso il centro (v18.3)
+            # Eseguito fisicamente quando è tornato al centro
+            num_tethers = 8 if len(nodes) >= 1000 else 4
+            tether_step = max(1, len(nodes) // num_tethers)
+            for i, n in enumerate(nodes):
+                if i % tether_step == 0 and mother_anchor:
+                    self.vault.add_relation(n.id, mother_anchor.id, "galaxy_tether")
+                    
+            time.sleep(4) # Pausa drammatica mentre gli archi si generano visivamente
+            
+            self.optimized_arcs_session = num_tethers
+            self.status = "MISSION_COMPLETE"
+            time.sleep(5) # Mantieni lo stato per l'ologramma
+
+            self.target_pos = None # Torna in orbita profonda
+            self.herds_completed += 1
+            self.status = "Patrolling Deep Galaxies (Outer Rim)..."
+            print(f"🛰️ [DN-099] Mission Success. Unified Constellation at: ({new_center_x:.0f}, {new_center_y:.0f}, {new_center_z:.0f})")
+
+            # 🧹 [v17.1] GALAXY MIGRATION SWEEP: Allinea galassie vecchie ai nuovi range
+            all_nodes = list(self.vault._nodes.values())
+            for n in all_nodes:
+                if not n.metadata.get("is_galaxy"): continue
+                
+                nx, ny, nz = n.metadata.get('x',0), n.metadata.get('y',0), n.metadata.get('z',0)
+                curr_dist = math.sqrt(nx**2 + ny**2 + nz**2)
+                src = n.metadata.get("source", "")
+                
+                # Regole di migrazione per sessioni precedenti
+                new_d = 0
+                if "yoda" in src.lower() and (curr_dist < 25000000 or curr_dist > 35000000):
+                    new_d = 25000000.0 + random.uniform(0, 10000000.0)
+                elif "skywalker" in src.lower() and (curr_dist < 6000000 or curr_dist > 8000000):
+                    new_d = 6000000.0 + random.uniform(0, 2000000.0)
+                
+                if new_d > 0:
+                    s = new_d / curr_dist if curr_dist > 0 else 1.0
+                    n.metadata['x'] *= s; n.metadata['y'] *= s; n.metadata['z'] *= s
+                    n.metadata['lifecycle_state'] = 'protected'
+
+        except Exception as e:
+            print(f"🚨 [DN-099] Mission Error: {e}")
+            self.status = "MISSION_FAILED"
+
+    def get_status_report(self):
+        return {
+            "identity": self.identity,
+            "pos": self.pos,
+            "status": self.status,
+            "herds_session": getattr(self, 'herds_completed', 0)
         }
 
 class NeuralLabOrchestrator:
@@ -1976,12 +2738,14 @@ class NeuralLabOrchestrator:
         if self.benchmarks is None:
             self.benchmarks = ModelBenchmarkTracker(engine)
             engine.benchmarks = self.benchmarks
-        self.total_reclaimed = 0.0 # [v2.8.7] Total MB optimized
+        self.total_reclaimed = 0.0 
+        self.initial_node_count = len(engine._nodes) if hasattr(engine, '_nodes') else 0 # [v8.5] Session anchor
         self.last_inference = {"model": "None", "tps": 0.0, "latency": 0.0, "timestamp": 0}
         self.pause_agents = False
         self.priority_mode = False # [v4.1.9] Concentrazione totale per query utente
         self.mission_history = []
         self.legacy_stats = {} # 📊 [v17.5] Session-Incremental Registry
+        self.stats_baseline = {} # 🏛️ [v8.4] Persistent History Baseline
         self.tombstone_registry = SovereignTombstoneRegistry()
         
         from retrieval.bridge import LatentBridge
@@ -1999,10 +2763,14 @@ class NeuralLabOrchestrator:
         self.snake = SnakeAgent(engine, self)
         self.quantum = QuantumAgent(engine, self)
         self.sentinel = SentinelAgent(engine, self)
+        self.r2d2 = R2D2Agent(engine, self)
         self.synth = SynthAgent(engine, self)
         self.bridger_agent = BridgerAgent(engine, self.bridger, self)
-        self.smiths = {} # 🕶️ Fleet di Agent Smith (uno per peer)
+        # 🕶️ Fleet di Agent Smith: include sempre un'istanza locale 'PRIMUS'
+        self.smiths = {"local": AgentSmith(engine, self)} 
         self.skywalker = SkyWalkerAgent(engine, self)
+        self.yoda = YodaAgent(engine, self)
+        self.mandalorian = MandalorianAgent(engine, self)
         
         # ⚖️ [v4.3.1] Sovereign Intelligence Add-ons
         from retrieval.contradiction import ContradictionMapper
@@ -2026,9 +2794,12 @@ class NeuralLabOrchestrator:
             "SN-008": self.snake,
             "QA-101": self.quantum,
             "SE-007": self.sentinel,
+            "R2-D2": self.r2d2,
             "SY-009": self.synth,
             "CB-003": self.bridger_agent,
-            "FS-77": self.skywalker
+            "FS-77": self.skywalker,
+            "YO-001": self.yoda,
+            "DN-099": self.mandalorian
         }
         # v1.1.0: Repopulate Trust Network with real agent IDs
         self.trust_network = AgentTrustNetwork(list(self.agents.keys()))
@@ -2044,13 +2815,17 @@ class NeuralLabOrchestrator:
             "SN-008": 15.0, # Snake
             "JA-001": 10.0, # Janitor
             "RP-001": 45.0, # Reaper
-            "SY-009": 20.0, # Synth
-            "SE-007": 10.0, # Sentinel
+            "SY-009": 60.0, # Synth (Increased for LLM Synthesis)
+            "SE-007": 30.0, # Sentinel (Increased for Auditing)
             "QA-101": 30.0, # Quantum
-            "FS-77": 15.0,  # Skywalker
+            "FS-77": 60.0,  # Skywalker (Increased for coordination)
             "CB-003": 20.0, # Bridger
-            "AG-001": 20.0  # Agent Smith
+            "AG-001": 20.0, # Agent Smith
+            "YO-001": 60.0, # Yoda
+            "DN-099": 30.0  # Mandalorian
         }
+        self._search_lock = threading.Lock() # 🔒 Blocco per evitare ricerche contemporanee
+        self.yoda_galaxy_ready = False # Flag per segnalare a SkyWalker che può partire
         self.autonomous_audit_queue = [] # ⚖️ Sovereign Court Escalation
         self._stop_event = threading.Event()
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=10) # 🚀 Expanded Dispatcher
@@ -2060,6 +2835,9 @@ class NeuralLabOrchestrator:
         self._state_lock = threading.Lock()
         self.edge_validation_queue = [] # Pending synapses for Sentinel
         self.evolution_active = False # [v3.5.0] Evolution Mode state
+        
+        # 🌌 [v14.0] Ancoraggio Galassie Persistenti
+        self._anchor_persistent_galaxies()
         
         # 🎭 v4.0: Agent Priority Hierarchy for Negotiation
         self.agent_priorities = {
@@ -2071,7 +2849,9 @@ class NeuralLabOrchestrator:
             "SY-009": 50,  # Synth (Creatività)
             "CB-003": 50,  # Bridger (Connessioni)
             "SN-008": 30,  # Snake (Trasporto)
-            "FS-77": 30    # SkyWalker (Ricerca Esterna)
+            "FS-77": 30,    # SkyWalker (Ricerca Esterna)
+            "YO-001": 45,   # Yoda (Deep Search)
+            "DN-099": 40    # Mandalorian (Urbanistica Galattica)
         }
         
         # 📂 [v4.3.0] Custom Agents Storage
@@ -2099,6 +2879,10 @@ class NeuralLabOrchestrator:
             if pid not in self.smiths:
                 self.smiths[pid] = AgentSmith(self.engine, self)
                 self.smiths[pid].status = f"Guarding Link: {pid}"
+            
+            # [v8.5] Proactive Inspection Trigger: Smiths scan peers every cycle
+            peer_data = self.engine.mesh.peers.get(pid, {"id": pid, "url": "INTERNAL_BRIDGE", "vault_key": "Sovereign-Internal-Sync"})
+            self.smiths[pid].inspect_peer(peer_data)
         
         # Rimuovi Smith per peer disconnessi
         for pid in list(self.smiths.keys()):
@@ -2174,6 +2958,28 @@ class NeuralLabOrchestrator:
             
             return True
 
+    def _anchor_persistent_galaxies(self):
+        """[v14.0] Scansiona il DB al boot e ancora le galassie esistenti alle loro coordinate fisse."""
+        nodes = list(self.vault._nodes.values())
+        galaxy_count = 0
+        for n in nodes:
+            if n.metadata.get("is_galaxy"):
+                # Se non ha coordinate, le assegniamo basandoci sul topic (Hash-determinism)
+                if 'x' not in n.metadata:
+                    import hashlib
+                    topic = n.metadata.get("topic", "Unknown")
+                    h = int(hashlib.md5(topic.encode()).hexdigest(), 16)
+                    # Spaziatura nell'Outer Rim (1.5M - 3M)
+                    dist = 1500000 + (h % 1500000)
+                    theta = (h % 360) * (math.pi / 180)
+                    phi = ((h // 360) % 180) * (math.pi / 180)
+                    n.metadata['x'] = dist * math.sin(phi) * math.cos(theta)
+                    n.metadata['y'] = dist * math.sin(phi) * math.sin(theta)
+                    n.metadata['z'] = dist * math.cos(phi)
+                galaxy_count += 1
+        if galaxy_count > 0:
+            print(f"🌌 [Persistence] Anchored {galaxy_count} existing galaxy nodes to deep space coordinates.")
+
     def _calculate_waste_score(self, node) -> float:
         """
         [STEP 2: DETERMINISTIC LOGIC] Evaluates if a node is 'Waste' or 'Potential'.
@@ -2247,11 +3053,12 @@ class NeuralLabOrchestrator:
         for node in potential:
             if self.transition_node(node.id, NodeState.IN_JUDGEMENT, NodeState.POTENTIAL, agent_id):
                 # Cerchiamo un nodo ancora per far germogliare l'orfano
-                stable_nodes = [nid for nid, state in self.node_states.items() if state == NodeState.STABLE]
+                stable_nodes = [nid for nid, state in list(self.node_states.items()) if state == NodeState.STABLE]
                 if stable_nodes:
                     anchor = random.choice(stable_nodes)
                     # 🛡️ [Semantic Firewall v4.1.5]
-                    if node.metadata.get("context", "user") == self.vault._nodes[anchor].metadata.get("context", "user"):
+                    anchor_node = self.vault._nodes.get(anchor)
+                    if anchor_node and node.metadata.get("context", "user") == anchor_node.metadata.get("context", "user"):
                         self.vault.add_relation(node.id, anchor, RelationType.SEMANTIC, 0.7)
                 else:
                     # Fallback: connect to root or a random node if nebula is young
@@ -2260,7 +3067,8 @@ class NeuralLabOrchestrator:
                         anchor = random.choice(all_ids)
                         if anchor != node.id:
                             # 🛡️ [Semantic Firewall v4.1.5]
-                            if node.metadata.get("context", "user") == self.vault._nodes[anchor].metadata.get("context", "user"):
+                            anchor_node = self.vault._nodes.get(anchor)
+                            if anchor_node and node.metadata.get("context", "user") == anchor_node.metadata.get("context", "user"):
                                 self.vault.add_relation(node.id, anchor, RelationType.SEMANTIC, 0.5)
             
         return len(waste), len(potential)
@@ -2286,7 +3094,8 @@ class NeuralLabOrchestrator:
                 
                 if changed:
                     self.blackboard.post(SynapticSignal("CB-003", AgentRole.EXPERT, "📂 SOURCE CHANGE: Code modification detected. Triggering proactive bridging...", SignalType.SYSTEM_NOTIFICATION))
-                    self.bridger_agent.sync_codebase()
+                    if hasattr(self, 'loop') and self.loop:
+                        asyncio.run_coroutine_threadsafe(self.bridger_agent.sync_codebase(), self.loop)
                     self.bridger_agent.discover_bridges()
                 
                 # 🔄 [Phase 4 Sync] Ensure evolution_mode and codebase_bridging are synced
@@ -2315,20 +3124,21 @@ class NeuralLabOrchestrator:
         # 🏥 Multimodal Health Check (v3.5)
         self._perform_multimodal_health_check()
         
-        # Una tantum: Ingestione codice all'avvio
-        threading.Thread(target=self.bridger_agent.sync_codebase, daemon=True).start()
-        # Watcher Proattivo (Fase 1)
-        threading.Thread(target=self._codebase_watcher_loop, daemon=True).start()
-        
-        self.agent_health = {aid: {"failures": 0, "stasis_until": 0} for aid in self.agents.keys()}
-        self._kinetic_thread = threading.Thread(target=self._run_kinetic_engine, daemon=True); self._kinetic_thread.start()
-        
-        # 💤 [v4.3.1] Initialize Event Loop for Orchestrator
+        # 💤 [v4.3.1] Initialize Event Loop for Orchestrator FIRST
         self.loop = asyncio.new_event_loop()
         def run_forever_loop(loop):
             asyncio.set_event_loop(loop)
             loop.run_forever()
         threading.Thread(target=run_forever_loop, args=(self.loop,), daemon=True).start()
+
+        # Una tantum: Ingestione codice all'avvio (via dedicated loop)
+        asyncio.run_coroutine_threadsafe(self.bridger_agent.sync_codebase(), self.loop)
+
+        # Watcher Proattivo (Fase 1)
+        threading.Thread(target=self._codebase_watcher_loop, daemon=True).start()
+        
+        self.agent_health = {aid: {"failures": 0, "stasis_until": 0} for aid in list(self.agents.keys())}
+        self._kinetic_thread = threading.Thread(target=self._run_kinetic_engine, daemon=True); self._kinetic_thread.start()
         
         # 💤 [v4.3.1] Sleep & Contradiction Background Loops (Offloaded to dedicated loop)
         asyncio.run_coroutine_threadsafe(self.sleep_engine.start_maintenance_loop(), self.loop)
@@ -2356,22 +3166,36 @@ class NeuralLabOrchestrator:
             print(f"⚠️ [Health Check] Warning: {e}")
 
     def _get_agent_attr(self, agent_id):
+        if not agent_id: return None
         mapping = {
             "JA-001": "janitor", "DI-007": "distiller", "SN-008": "snake", 
             "SY-009": "synth", "RP-001": "reaper", "QA-101": "quantum", 
             "SE-007": "sentinel", "CB-003": "bridger_agent", "FS-77": "skywalker",
-            "AG-001": "smith"
+            "YO-001": "yoda",
+            "DN-099": "mandalorian",
+            "AG-001": "smith",
+            "R2-D2": "r2d2"
         }
-        return mapping.get(agent_id)
+        return mapping.get(str(agent_id).strip())
 
     def _safe_agent_step(self, agent_id, nodes):
         """[CRITICAL #7] Granular Timeout & Circuit Breaker Manager."""
+        if not agent_id or agent_id not in self.agent_health:
+            return None
+            
         health = self.agent_health[agent_id]
         if time.time() < health["stasis_until"]:
             return None 
-
-        agent = getattr(self, self._get_agent_attr(agent_id), None)
-        if not agent: return None
+            
+        attr_name = self._get_agent_attr(agent_id)
+        if not attr_name:
+            print(f"⚠️ [Orchestrator] UNKNOWN AGENT ID: '{agent_id}'")
+            return None
+            
+        agent = getattr(self, attr_name, None)
+        if not agent: 
+            print(f"⚠️ [Orchestrator] AGENT INSTANCE MISSING: {attr_name} (ID: {agent_id})")
+            return None
         
         timeout = self.agent_timeouts.get(agent_id, 15.0)
         
@@ -2382,10 +3206,19 @@ class NeuralLabOrchestrator:
             
             # Reset failure count on success
             health["failures"] = 0
+            
+            # [v8.4] Verbose Terminal Logging for Agent State Changes
+            if not hasattr(self, '_agent_last_status'): self._agent_last_status = {}
+            current_status = getattr(agent, 'status', 'Unknown')
+            if current_status != self._agent_last_status.get(agent_id):
+                print(f"🤖 [Agent {agent_id}] Status: {current_status}")
+                self._agent_last_status[agent_id] = current_status
+                
             return res
         except Exception as e:
             health["failures"] += 1
-            print(f"🚨 [Resilience] Agent {agent_id} failure ({health['failures']}/3): {e}")
+            err_msg = str(e) if str(e) else type(e).__name__
+            print(f"🚨 [Resilience] Agent {agent_id} failure ({health['failures']}/3): {err_msg}")
             
             if health["failures"] >= 3:
                 stasis_duration = 60 # Stay offline for 60 seconds
@@ -2417,10 +3250,22 @@ class NeuralLabOrchestrator:
                 raw_nodes = getattr(self.vault, '_nodes', {})
                 nodes = raw_nodes.copy() if hasattr(raw_nodes, 'copy') else raw_nodes
                 
+                # 🧠 [v8.4] Auto-Trigger NIC Training se raggiunto 1024 nodi
+                if hasattr(self.vault, 'nic') and self.vault.nic:
+                    if len(nodes) >= 1024 and not self.vault.nic.is_trained and not self.vault.nic.is_training:
+                        vectors = [n.vector for n in nodes.values() if hasattr(n, 'vector') and n.vector is not None]
+                        if len(vectors) >= 1024:
+                            import numpy as np
+                            self.vault.nic.train_on_vault_async(np.array(vectors))
+                
                 # 🛡️ Update Security Fleet (Sempre attivo, anche se il vault è vuoto)
                 self._update_smith_fleet()
-                for pid, s in self.smiths.items():
+                for pid, s in list(self.smiths.items()):
                     s.calculate_movement(nodes, pid)
+                    if not hasattr(self, '_smith_last_status'): self._smith_last_status = {}
+                    if getattr(s, 'status', 'Unknown') != self._smith_last_status.get(pid):
+                        print(f"🕴️ [SMITH-{pid[:8]}] Status: {s.status}")
+                        self._smith_last_status[pid] = s.status
 
                 # 🛡️ [STEP 3] Dynamic Safe Dispatching
                 for aid in list(self.agents.keys()):
@@ -2478,7 +3323,9 @@ class NeuralLabOrchestrator:
         """Promuove i nodi da PENDING a STABLE dopo 30 minuti di grazia."""
         now = time.time()
         promoted = 0
-        for nid, n in nodes.items():
+        for nid in list(nodes.keys()):
+            n = nodes.get(nid)
+            if not n: continue
             if getattr(n, 'ingestion_status', 'STABLE') == "PENDING":
                 age = now - getattr(n, 'created_at', 0)
                 age_ok = age > 300 # 5 min grace period (Sovereign Fast-Track)
@@ -2498,7 +3345,9 @@ class NeuralLabOrchestrator:
         """
         if not nodes: return {}
         heatmap = {}
-        for nid, n in nodes.items():
+        for nid in list(nodes.keys()):
+            n = nodes.get(nid)
+            if not n: continue
             # Densità basata sul numero di archi (0-1.0)
             temp = min(1.0, len(n.edges) / 10.0)
             heatmap[nid] = temp
@@ -2758,7 +3607,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                     "prompt": prompt,
                     "stream": False,
                     "options": {"temperature": temp}
-                }, timeout=30.0)
+                }, timeout=180.0)
                 if resp.status_code == 200:
                     return resp.json().get("response", "").strip()
                 return ""
@@ -2917,6 +3766,9 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             elif aid == "QA-101":
                 if action in ["Semantic Fusion", "Semantic Centroiding"]:
                     self.quantum.clusters_fused += 1
+            elif aid == "SY-009":
+                if action == "Creative Spark":
+                    self.synth.sparks_generated += 1
             elif aid == "SE-007":
                 if action in ["Audit Complete", "Source Validation", "Cross-Reference Audit"]:
                     self.sentinel.validated_count += 1
@@ -2945,9 +3797,16 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                 if action == "Creative Spark": self.synth.sparks_generated += 1
             elif aid == "CB-003":
                 if action == "Bridge Established": self.bridger_agent.bridges_total += 1
+                if action == "MISSION_COMPLETE":
+                    # web_hits and nodes_created are incremented inside _execute_mission_logic
+                    pass
             elif aid == "FS-77":
                 if action == "MISSION_COMPLETE":
                     # web_hits and nodes_created are incremented inside _execute_mission_logic
+                    pass
+            elif aid == "R2-D2":
+                if action == "Semantic Grouping":
+                    # organized count is managed inside R2D2Agent, but we log it here for history
                     pass
 
             # Audit History Logging
@@ -2967,7 +3826,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
 
         # 🧴 Agent-Specific Processing Logic
         if action == "Node Digestion" and tid in self.vault._nodes:
-            is_protected = any(a.target_node == tid for a in self.agents.values() if a.identity["id"] != "JA-001" and hasattr(a, 'target_node'))
+            is_protected = any(getattr(a, 'target_node', None) == tid for a in list(self.agents.values()) if a and hasattr(a, 'identity') and a.identity.get("id") != "JA-001")
             if is_protected:
                 self.blackboard.post(SynapticSignal("JANITRON", AgentRole.ANALYST, f"🛑 VETO: Digestion aborted for {str(tid)[:8]}. Node is active in research.", SignalType.ALERT))
             else:
@@ -3021,12 +3880,10 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                 def run_arbitrated_fusion(c_text, c_id, audit_e):
                     try:
                         results = self.vault.query(c_text, query_vector=node.vector, k=15)
-                        cluster = [r.node.id for r in results if r.node.id != c_id and self.vault._nodes.get(r.node.id) and self.vault._nodes[r.node.id].text]
-                        neighbor_texts = [self.vault._nodes[cid].text for cid in cluster]
+                        cluster = [r.node.id for r in results if r.node.id != c_id and self.vault._nodes.get(r.node.id) and self.vault._nodes.get(r.node.id).text]
+                        neighbor_texts = [self.vault._nodes.get(cid).text for cid in cluster if self.vault._nodes.get(cid)]
                         if not neighbor_texts: return
-                        loop = asyncio.new_event_loop()
-                        verified = loop.run_until_complete(self._arbitrate_quantum_fusion(c_text, neighbor_texts))
-                        loop.close()
+                        verified = asyncio.run_coroutine_threadsafe(self._arbitrate_quantum_fusion(c_text, neighbor_texts), self.loop).result()
                         if verified:
                             self.blackboard.post(SynapticSignal("QUANTUM", AgentRole.ARCHITECT, f"🧬 FUSED: Cluster at {str(c_id)[:8]} synchronized.", SignalType.SYSTEM_HEALING))
                             n = self.vault._nodes.get(c_id)
@@ -3040,19 +3897,21 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
 
         elif action == "Source Validation":
             if tid in self.vault._nodes:
-                node = self.vault._nodes[tid]
-                source = node.metadata.get("source", "unknown")
-                if node.metadata.get("agent") == "FS-77":
-                    node.metadata["reliability"] = 0.95
-                    node.metadata["validated_by"] = "SE-007"
-                    self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ VALIDATED: Source {source} passed Reliability Check.", SignalType.SYSTEM_HEALING))
-                else:
-                    self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ AUDIT: Node {str(tid)[:8]} verified and stabilized.", SignalType.SYSTEM_HEALING))
+                node = self.vault._nodes.get(tid)
+                if node:
+                    source = node.metadata.get("source", "unknown")
+                    if node.metadata.get("agent") == "FS-77":
+                        node.metadata["reliability"] = 0.95
+                        node.metadata["validated_by"] = "SE-007"
+                        self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ VALIDATED: Source {source} passed Reliability Check.", SignalType.SYSTEM_HEALING))
+                    else:
+                        self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ AUDIT: Node {str(tid)[:8]} verified and stabilized.", SignalType.SYSTEM_HEALING))
 
         elif action == "Cross-Reference Audit" and tid in self.vault._nodes:
-            node = self.vault._nodes[tid]
-            setattr(node, 'pending_validation', True)
-            self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ CROSS-REF: Auditing node {str(tid)[:8]}...", SignalType.ALERT))
+            node = self.vault._nodes.get(tid)
+            if node:
+                setattr(node, 'pending_validation', True)
+                self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"🛡️ CROSS-REF: Auditing node {str(tid)[:8]}...", SignalType.ALERT))
             
             def real_validation(target_id, node_text, uri):
                 try:
@@ -3063,7 +3922,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                         query = uri if uri else node_text[:100]
                         valid = False
                         try:
-                            async with aclosing(forager.forage(query if "http" in query else f"https://www.google.com/search?q={query}")) as pages:
+                            async with aclosing(forager.search(query)) as pages:
                                 async for _ in pages:
                                     valid = True
                                     break
@@ -3080,9 +3939,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                                 setattr(n, 'stability', 30.0)
                                 self.blackboard.post(SynapticSignal("SENTINEL", AgentRole.GUARDIAN, f"❌ UNVERIFIED: No web trace for {str(target_id)[:8]}.", SignalType.ALERT))
                     
-                    loop = asyncio.new_event_loop()
-                    loop.run_until_complete(run_audit())
-                    loop.close()
+                    asyncio.run_coroutine_threadsafe(run_audit(), self.loop).result()
                 except Exception as e:
                     print(f"⚠️ [Sentinel Error] Audit failed: {e}")
             
@@ -3096,17 +3953,35 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         """[FS-77] Invia File-Sky-Walker in perlustrazione Web per un tema specifico."""
         if self.skywalker.laser_active: return
         
-        self.skywalker.status = f"🚀 Incursione Web: {topic}..."
+        self.skywalker.status = "Mission: Searching Data..."
         self.skywalker.laser_active = True
         self.blackboard.post(SynapticSignal("FS-77", AgentRole.RESEARCHER, f"🚀 X-Wing ingaggiato: Scansione Web per '{topic}'...", SignalType.MISSION_UPDATE))
         
         # 1. RICERCA URL
-        seed_urls = await self.skywalker._search_web(topic)
-        if not seed_urls:
+        search_data = await self.skywalker._search_web(topic)
+        seed_urls = search_data.get("urls", [])
+        ai_content = search_data.get("ai_content", "")
+
+        if not seed_urls and not ai_content:
             self.skywalker.laser_active = False
             self.skywalker.status = "Scanning Horizon..."
             self.blackboard.post(SynapticSignal("FS-77", AgentRole.RESEARCHER, f"⚠️ MISSION FALLBACK: Nessuna fonte trovata per {topic}.", SignalType.SYSTEM_NOTIFICATION))
             return
+
+        # 1.5 Handle AI Content immediately if present
+        if ai_content:
+            print(f"✨ [FS-77] Ingesting Google AI Insight (CRAG) for: {topic}")
+            meta = {
+                "source": "SkyWalker-AI",
+                "topic": topic,
+                "agent": "FS-77",
+                "x": self.skywalker.laser_target['x'],
+                "y": self.skywalker.laser_target['y'],
+                "z": self.skywalker.laser_target['z'],
+                "color": "#4ade80"
+            }
+            await self.engine.upsert_text(f"GOOGLE AI INSIGHT: {ai_content}", metadata=meta)
+            total_new_nodes += 1
 
         # 2. FORAGING REALE
         from retrieval.web_forager import SovereignWebForager
@@ -3132,6 +4007,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                             meta["y"] = self.skywalker.laser_target['y'] + random.uniform(-150000, 150000)
                             meta["z"] = self.skywalker.laser_target['z'] + random.uniform(-150000, 150000)
                             meta["color"] = "#ff0033" # Rosso laser per i nuovi nodi "caldi"
+                            self.skywalker.status = "Building Galaxy..."
                         
                         new_node = await self.engine.upsert_text(chunk["text"], metadata=meta)
                         
@@ -3170,16 +4046,32 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         # 4. RIENTRO
         self.skywalker.nodes_created += total_new_nodes
         self.skywalker.web_hits += 1
-        self.skywalker.status = "Scanning Horizon..."
+        
+        # [v8.4] Transient Success Status: Permette alla dashboard di catturare l'evento
+        if total_new_nodes > 0:
+            self.skywalker.galaxies_created += 1 # Ogni missione riuscita crea una galassia satellite
+            self.skywalker.status = f"✅ MISSION COMPLETED!"
+        else:
+            self.skywalker.status = "⚠️ MISSION COMPLETED: No nodes found."
+            
         self.skywalker.laser_active = False
         self.blackboard.post(SynapticSignal("FS-77", AgentRole.RESEARCHER, f"✅ RIENTRO BASE: X-Wing stabilizzato con {total_new_nodes} nuovi nodi.", SignalType.SYSTEM_NOTIFICATION))
+        
+        # Reset dello stato dopo 10 secondi per tornare in pattugliamento
+        async def _reset_status():
+            await asyncio.sleep(10)
+            if self.skywalker.status.startswith("✅") or self.skywalker.status.startswith("⚠️"):
+                self.skywalker.status = "Scanning Horizon..."
+        
+        asyncio.create_task(_reset_status())
 
     def _calculate_vault_health(self) -> int:
         """Calcola l'Health Score (0-100) basato su stabilità, entropia e gap."""
         total = len(self.vault._nodes)
         if total == 0: return 100
         stable = sum(1 for s in self.node_states.values() if s == NodeState.STABLE)
-        orphans = sum(1 for n in self.vault._nodes.values() if not n.edges)
+        # v18.4: Use list() to avoid 'dictionary changed size during iteration'
+        orphans = sum(1 for n in list(self.vault._nodes.values()) if not n.edges)
         
         # Algoritmo Sovereign Health v1.0
         stability_ratio = (stable / total) * 60 # 60% peso stabilità
@@ -3242,85 +4134,141 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                     "pos": dict(self.janitor.pos),
                     "status": self.janitor.status,
                     "mode": self.janitor.mode,
-                    "purged": self.janitor.eaten_count
+                    "purged_session": self.janitor.eaten_count,
+                    "purged_total": self.janitor.eaten_count + self.stats_baseline.get("JA-001", {}).get("purged", 0)
                 },
                 "DI-007": {
                     "identity": self.distiller.identity,
                     "pos": dict(self.distiller.pos),
                     "status": self.distiller.status,
                     "mode": self.distiller.mode,
-                    "pruned": self.distiller.pruned_count
+                    "pruned_session": self.distiller.pruned_count,
+                    "pruned_total": self.distiller.pruned_count + self.stats_baseline.get("DI-007", {}).get("pruned", 0)
                 },
                 "SN-008": {
                     "identity": self.snake.identity,
                     "pos": dict(self.snake.pos),
                     "status": "Active",
-                    "found": self.snake.found,
-                    "crafted": self.snake.harvested,
-                    "nodes_created": self.snake.harvested,
-                    "deleted": self.snake.processed
+                    "found_session": self.snake.found,
+                    "found_total": self.snake.found + self.stats_baseline.get("SN-008", {}).get("found", 0),
+                    "crafted_session": self.snake.harvested,
+                    "crafted_total": self.snake.harvested + self.stats_baseline.get("SN-008", {}).get("harvested", 0),
+                    "deleted_session": self.snake.processed,
+                    "deleted_total": self.snake.processed + self.stats_baseline.get("SN-008", {}).get("processed", 0)
                 },
                 "SY-009": {
                     "identity": self.synth.identity,
                     "pos": dict(self.synth.pos),
                     "status": self.synth.status,
                     "mode": "Dreaming",
-                    "sparks": self.synth.sparks_generated,
-                    "sub_agents": [s.to_dict() for s in self.synth.team]
+                    "sparks_session": self.synth.sparks_generated,
+                    "sparks_total": self.synth.sparks_generated + self.stats_baseline.get("SY-009", {}).get("sparks", 0),
+                    "sub_agents": [s.to_dict() for s in list(self.synth.team)]
                 },
                 "RP-001": {
                     "identity": self.reaper.identity,
                     "pos": dict(self.reaper.pos),
                     "status": self.reaper.status,
-                    "processed": self.reaper.processed,
-                    "reclaimed_mb": getattr(self.reaper, 'reclaimed_mb', 0.0)
+                    "processed_session": self.reaper.processed,
+                    "processed_total": self.reaper.processed + self.stats_baseline.get("RP-001", {}).get("processed", 0),
+                    "reclaimed_mb_session": getattr(self.reaper, 'reclaimed_mb', 0.0),
+                    "reclaimed_mb_total": getattr(self.reaper, 'reclaimed_mb', 0.0) + self.stats_baseline.get("RP-001", {}).get("reclaimed_mb", 0.0)
                 },
                 "QA-101": {
                     "identity": self.quantum.identity,
                     "pos": dict(self.quantum.pos),
                     "status": self.quantum.status,
-                    "fused_clusters": getattr(self.quantum, 'clusters_fused', 0),
+                    "fused_clusters_session": getattr(self.quantum, 'clusters_fused', 0),
+                    "fused_clusters_total": getattr(self.quantum, 'clusters_fused', 0) + self.stats_baseline.get("QA-101", {}).get("fused_clusters", 0),
                     "is_fusing": getattr(self.quantum, 'is_fusing', False)
                 },
                 "SE-007": {
                     "identity": self.sentinel.identity,
                     "pos": dict(self.sentinel.pos),
                     "status": self.sentinel.status,
-                    "validated": getattr(self.sentinel, 'validated_count', 0),
-                    "super_synapses": getattr(self.sentinel, 'super_synapses', 0),
+                    "validated_session": getattr(self.sentinel, 'validated_count', 0),
+                    "validated_total": getattr(self.sentinel, 'validated_count', 0) + self.stats_baseline.get("SE-007", {}).get("validated", 0),
+                    "super_synapses_session": getattr(self.sentinel, 'super_synapses', 0),
+                    "super_synapses_total": getattr(self.sentinel, 'super_synapses', 0) + self.stats_baseline.get("SE-007", {}).get("super_synapses", 0),
                     "is_supersynapse": getattr(self.sentinel, 'is_supersynapse', False)
                 },
                 "CB-003": {
-                    "identity": {"id": "CB-003", "name": "Code-Doc-Bridger", "role": "Latent Bridge Creator", "archetype": "expert"},
-                    "pos": {"x": self.bridger_agent.pos[0], "y": self.bridger_agent.pos[1], "z": self.bridger_agent.pos[2]},
+                    "identity": self.bridger_agent.identity,
+                    "pos": dict(self.bridger_agent.pos),
                     "status": self.bridger_agent.status,
-                    "bridges": self.bridger_agent.bridges_total
+                    "bridges_session": self.bridger_agent.bridges_total,
+                    "bridges_total": self.bridger_agent.bridges_total + self.stats_baseline.get("CB-003", {}).get("bridges", 0)
                 },
                 "FS-77": {
                     "identity": self.skywalker.identity,
                     "pos": dict(self.skywalker.pos),
                     "status": self.skywalker.status,
-                    "web_hits": self.skywalker.web_hits,
-                    "nodes_forged": self.skywalker.nodes_created
+                    "web_hits_session": self.skywalker.web_hits,
+                    "nodes_introduced_session": self.skywalker.nodes_created,
+                    "galaxies_session": self.skywalker.galaxies_created,
+                    "laser": getattr(self.skywalker, 'laser_active', False),
+                    "laserTarget": getattr(self.skywalker, 'laser_target', {})
+                },
+                "YO-001": {
+                    "identity": self.yoda.identity,
+                    "pos": dict(self.yoda.pos),
+                    "status": self.yoda.status,
+                    "nodes_examined_session": self.yoda.nodes_examined,
+                    "nodes_examined_total": self.yoda.nodes_examined + self.stats_baseline.get("YO-001", {}).get("nodes_examined", 0),
+                    "web_hits_session": self.yoda.web_hits,
+                    "galaxies_session": self.yoda.galaxies_created,
+                    "nodes_introduced_session": getattr(self.yoda, 'nodes_introduced_session', 0),
+                    "last_galaxy_name": getattr(self.yoda, 'last_galaxy_name', ""),
+                    "last_galaxy_dist": getattr(self.yoda, 'last_galaxy_dist', 0.0),
+                    "nodes_in_last_galaxy": getattr(self.yoda, 'nodes_in_last_galaxy', 0),
+                    "laser": self.yoda.laser_active,
+                    "laserTarget": self.yoda.laser_target
                 },
                 "AG-001": {
                     "identity": {"id": "AG-001", "name": "Agent-Smith", "role": "Mesh Security", "archetype": "guardian"},
                     "pos": list(self.smiths.values())[0].pos if self.smiths else {"x":0,"y":0,"z":0},
-                    "status": "Fleet Active" if self.smiths else "Standby",
-                    "inspections": sum(s.inspections for s in self.smiths.values()),
-                    "threats_blocked": sum(s.threats_blocked for s in self.smiths.values()),
+                    "status": "Fleet Active",
+                    "inspections_session": sum(s.inspections for s in self.smiths.values()),
+                    "inspections_total": sum(s.inspections for s in self.smiths.values()) + self.stats_baseline.get("AG-001", {}).get("inspections", 0),
+                    "threats_blocked_session": sum(s.threats_blocked for s in self.smiths.values()),
+                    "threats_blocked_total": sum(s.threats_blocked for s in self.smiths.values()) + self.stats_baseline.get("AG-001", {}).get("threats_blocked", 0),
                     "fleet": {pid: {"pos": s.pos, "status": s.status} for pid, s in self.smiths.items()},
                     "security_logs": [log for s in self.smiths.values() for log in s.security_logs][:30]
+                },
+                "DN-099": {
+                    "identity": self.mandalorian.identity,
+                    "pos": dict(self.mandalorian.pos),
+                    "status": self.mandalorian.status,
+                    "laser": self.mandalorian.laser_active,
+                    "laserTarget": self.mandalorian.laser_target,
+                    "herds_session": self.mandalorian.herds_completed,
+                    "herds_total": self.mandalorian.herds_completed + self.stats_baseline.get("DN-099", {}).get("herds", 0),
+                    "optimized_arcs_session": getattr(self.mandalorian, 'optimized_arcs_session', 0)
+                },
+                "NC-001": {
+                    "identity": {"id": "NC-001", "name": "Neural-Compressor", "role": "Semantic Quantizer", "archetype": "architect"},
+                    "pos": {"x": 0, "y": 0, "z": 0},
+                    "status": "Compressing..." if (hasattr(self.engine, 'nic') and getattr(self.engine.nic, 'is_training', False)) else ("Active" if hasattr(self.engine, 'nic') else "Offline"),
+                    "compression_ratio": "64x" if hasattr(self.engine, 'nic') else "N/A",
+                    "optimized_nodes_session": len(self.engine._nodes) if hasattr(self.engine, '_nodes') else 0,
+                    "optimized_nodes_total": (len(self.engine._nodes) if hasattr(self.engine, '_nodes') else 0) + self.stats_baseline.get("NC-001", {}).get("optimized_nodes", 0),
+                    "is_training": getattr(self.engine.nic, 'is_training', False) if hasattr(self.engine.nic, 'is_training') else False,
+                    "training_progress": getattr(self.engine.nic, 'training_progress', 0.0) if hasattr(self.engine.nic, 'is_training') else 0.0
+                },
+                "R2-D2": {
+                    "identity": self.r2d2.identity,
+                    "pos": dict(self.r2d2.pos),
+                    "status": self.r2d2.status,
+                    "organized_session": self.r2d2.organized_count,
+                    "organized_total": self.r2d2.organized_count + self.stats_baseline.get("R2-D2", {}).get("organized", 0),
+                    "galaxies_session": self.r2d2.galaxies_formed,
+                    "galaxies_total": self.r2d2.galaxies_formed + self.stats_baseline.get("R2-D2", {}).get("galaxies", 0),
+                    "is_operating": getattr(self.r2d2, 'is_operating', False)
                 }
             },
             "blackboard": self.blackboard.get_recent(12),
             "court_actions": self.archiver.history[:20]
         }
-        
-        # [SIGNAL_RESET] Reset momentary flags after transmission
-        if hasattr(self.sentinel, 'is_supersynapse'):
-            self.sentinel.is_supersynapse = False
-            
         return report
 
     # --- Persistence Logic (v3.5.0) ---
@@ -3335,29 +4283,11 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                     cname = row['counter_name']
                     val = float(row['val'])
                     
-                    # 📊 [v4.1.5] Carichiamo i valori storici direttamente negli agenti
-                    agent = self.agents.get(aid)
-                    if agent:
-                        if aid == "DI-007" and cname == "pruned": agent.pruned_count = int(val)
-                        elif aid == "JA-001" and cname == "purged": agent.eaten_count = int(val)
-                        elif aid == "RP-001":
-                            if cname == "processed": agent.processed = int(val)
-                            elif cname == "reclaimed_mb": agent.reclaimed_mb = float(val)
-                        elif aid == "SN-008":
-                            if cname == "found": agent.found = int(val)
-                            elif cname == "harvested": agent.harvested = int(val)
-                            elif cname == "processed": agent.processed = int(val)
-                        elif aid == "QA-101" and cname == "fused_clusters": agent.clusters_fused = int(val)
-                        elif aid == "SE-007":
-                            if cname == "validated": agent.validated_count = int(val)
-                            elif cname == "synapses": agent.super_synapses = int(val)
-                        elif aid == "SY-009" and cname == "sparks": agent.sparks_generated = int(val)
-                        elif aid == "CB-003" and cname == "bridges": agent.bridges_total = int(val)
-                        elif aid == "FS-77":
-                            if cname == "hits": agent.web_hits = int(val)
-                            elif cname == "nodes": agent.nodes_created = int(val)
+                    # 📊 [v8.4] Store historical values in baseline, agents keep session-only counts
+                    if aid not in self.stats_baseline: self.stats_baseline[aid] = {}
+                    self.stats_baseline[aid][cname] = val
             
-            print("📊 [Lab/Stats] Persistent history loaded. Swarm intelligence resumed.")
+            print("📊 [Lab/Stats] Persistent history anchored to baseline. Session counters cleared.")
         except Exception as e:
             print(f"⚠️ [Lab/Stats] Failed to load persistence: {e}")
 
@@ -3378,16 +4308,23 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                 ("SY-009", "sparks", self.synth.sparks_generated),
                 ("CB-003", "bridges", self.bridger_agent.bridges_total),
                 ("FS-77", "hits", self.skywalker.web_hits),
-                ("FS-77", "nodes", self.skywalker.nodes_created)
+                ("FS-77", "nodes", self.skywalker.nodes_created),
+                ("FS-77", "galaxies", getattr(self.skywalker, 'galaxies_created', 0)),
+                ("AG-001", "inspections", sum(s.inspections for s in self.smiths.values())),
+                ("AG-001", "threats", sum(s.threats_blocked for s in self.smiths.values()))
             ]
             
             for aid, cname, val in stats:
+                # 🧬 [v8.4] Cumulative save: baseline + current session
+                baseline = self.stats_baseline.get(aid, {}).get(cname, 0.0)
+                total_val = float(baseline) + float(val)
+                
                 query = """
                     INSERT INTO agent_telemetry (agent_id, counter_name, val, last_updated)
                     VALUES (?, ?, ?, now())
                     ON CONFLICT (agent_id, counter_name) DO UPDATE SET val = EXCLUDED.val, last_updated = EXCLUDED.last_updated
                 """
-                self.engine._prefilter.execute(query, (aid, cname, float(val)))
+                self.engine._prefilter.execute(query, (aid, cname, total_val))
         except Exception as e:
             print(f"⚠️ [Lab/Stats] Failed to save persistence: {e}")
 
@@ -3465,20 +4402,25 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             return await self.agent007_lab.run_adversarial_session(node_id, text)
         return {"error": "Agent007 Lab Offline"}
 
-    def _call_ollama_for_agent(self, agent_name: str, prompt: str) -> str:
-        """Invia un prompt a Ollama per un compito specifico di un agente."""
+    async def _call_ollama_for_agent(self, agent_name: str, prompt: str) -> str:
+        """Invia un prompt a Ollama per un compito specifico di un agente (Asincrono con Semaforo)."""
+        if not hasattr(self, '_ollama_sem'):
+            self._ollama_sem = asyncio.Semaphore(2) # Massimo 2 inferenze simultanee
+            
         base_url = self.settings.get("ollama_url", "http://localhost:11434")
         model = self.settings.get_model("chat") or "llama3.2"
-        try:
-            with httpx.Client(timeout=30.0) as client:
-                resp = client.post(f"{base_url}/api/generate", json={
-                    "model": model, "prompt": f"### AGENT: {agent_name}\n\n{prompt}", "stream": False
-                })
-                if resp.status_code == 200:
-                    return resp.json().get("response", "Error: No response from model.")
-        except Exception as e:
-            return f"Error: {str(e)}"
-        return "Error: Uplink failure."
+        
+        async with self._ollama_sem:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(f"{base_url}/api/generate", json={
+                        "model": model, "prompt": f"### AGENT: {agent_name}\n\n{prompt}", "stream": False
+                    })
+                    if resp.status_code == 200:
+                        return resp.json().get("response", "Error: No response from model.")
+            except Exception as e:
+                return f"Error: {str(e)}"
+        return "Error: Uplink failure or timeout."
 
     async def get_consensus_response(self, query: str, context: str, target_model: Optional[str] = None) -> str:
         """
@@ -3533,7 +4475,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             
             async def get_model_opinion(model_name):
                 m_start = time.time()
-                async with httpx.AsyncClient(timeout=90.0) as client:
+                async with httpx.AsyncClient(timeout=300.0) as client:
                     with SovereignAuditContext(self, model_name, "HighSpeed_Jury") as audit:
                         try:
                             r = await client.post(f"{self._get_ollama_url()}/api/generate", json={
@@ -3558,7 +4500,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             responses = [r for r in results if r]
             
             if not responses: 
-                return "L'Oracolo non ha ricevuto risposta dai Giudici entro il limite di 90s. Il carico hardware è elevato o i modelli sono in fase di caricamento (Throttling)."
+                return "L'Oracolo non ha ricevuto risposta dai Giudici entro il limite di 300s. Il carico hardware è elevato o i modelli sono in fase di caricamento (Throttling)."
 
             # 3. SELF-RAG: [v4.2.0] Critique & Validation Phase
             # Modulare: Estrazione della logica di validazione in SelfRAGCritic
@@ -3577,7 +4519,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             
             synth_prompt = f"Sintetizza in una risposta finale basandoti RIGOROSAMENTE sul contesto e sulle validazioni precedenti:\n1: {responses[0]}\n2: {responses[1]}"
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=180.0) as client:
                 try:
                     r = await client.post(f"{self._get_ollama_url()}/api/generate", json={
                         "model": synthesis_model, "prompt": synth_prompt, "stream": False

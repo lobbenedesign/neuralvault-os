@@ -16,15 +16,48 @@ class NeuralImplicitCompressor:
         self.codebook = None
         self.logger = logging.getLogger("NIC")
         self.is_trained = False
+        self.is_training = False
+        self.training_progress = 0.0
+
+    def train_on_vault_async(self, vectors: np.ndarray, on_complete=None):
+        """Addestra il codebook neurale in background aggiornando il progresso."""
+        if len(vectors) < self.codebook_size or self.is_training:
+            return
+
+        self.is_training = True
+        self.training_progress = 0.0
+
+        def _train():
+            self.logger.info(f"🧠 [NIC] Inizio addestramento su {len(vectors)} vettori...")
+            import time
+            from sklearn.cluster import MiniBatchKMeans
+            
+            # Use partial_fit to simulate training epochs and provide progress updates
+            kmeans = MiniBatchKMeans(n_clusters=self.codebook_size, random_state=42, batch_size=256, max_iter=1, n_init=1)
+            total_epochs = 20
+            
+            for i in range(total_epochs):
+                kmeans.partial_fit(vectors)
+                self.training_progress = ((i + 1) / total_epochs) * 100
+                time.sleep(0.3) # Ritardo per feedback visivo fluido
+                
+            self.codebook = kmeans.cluster_centers_.astype(np.float32)
+            self.is_trained = True
+            self.is_training = False
+            self.training_progress = 100.0
+            self.logger.info("✅ [NIC] Addestramento completato. Compressione attiva.")
+            if on_complete: on_complete()
+            
+        import threading
+        threading.Thread(target=_train, daemon=True).start()
 
     def train_on_vault(self, vectors: np.ndarray):
-        """Addestra il codebook neurale sulla distribuzione specifica del Vault dell'utente."""
+        """Addestra il codebook neurale in sincrono."""
         if len(vectors) < self.codebook_size:
             self.logger.warning("Vault troppo piccolo per NIC. Richiesto almeno 1024 nodi.")
             return
 
         self.logger.info(f"🧠 [NIC] Inizio addestramento su {len(vectors)} vettori...")
-        # Utilizziamo un approccio K-Means per simulare la quantizzazione neurale (VQ-VAE style)
         from sklearn.cluster import MiniBatchKMeans
         kmeans = MiniBatchKMeans(n_clusters=self.codebook_size, random_state=42, batch_size=256)
         kmeans.fit(vectors)

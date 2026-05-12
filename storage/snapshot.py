@@ -47,8 +47,8 @@ class SnapshotEngine:
                 
             # 2. Parquet Export (Eliminazione WAL)
             pq_path = tmpdir / "vault_metadata.parquet"
-            if hasattr(self.engine._prefilter, "con") and self.engine._prefilter.con:
-                self.engine._prefilter.con.execute(f"COPY vault_metadata TO '{pq_path}' (FORMAT PARQUET)")
+            if hasattr(self.engine._prefilter, "execute"):
+                self.engine._prefilter.execute(f"COPY vault_metadata TO '{pq_path}' (FORMAT PARQUET)")
                 
             # 3. Pacchetto snapshot compresso su file temporaneo
             temp_snapshot = self.snapshot_dir / f"latest_{uuid.uuid4().hex}.tar.gz"
@@ -89,11 +89,11 @@ class SnapshotEngine:
                     
             # Ripristino Parquet in memoria o su DuckDB
             pq_path = Path(tmpdir) / "vault_metadata.parquet"
-            if pq_path.exists() and hasattr(self.engine._prefilter, "con"):
+            if pq_path.exists() and hasattr(self.engine._prefilter, "execute"):
                 # Clean tabelle vecchie per rigenerare senza WAL
                 try:
-                    self.engine._prefilter.con.execute("TRUNCATE vault_metadata")
-                    self.engine._prefilter.con.execute(f"INSERT INTO vault_metadata SELECT * FROM read_parquet('{pq_path}')")
+                    self.engine._prefilter.execute("TRUNCATE vault_metadata")
+                    self.engine._prefilter.execute(f"INSERT INTO vault_metadata SELECT * FROM read_parquet('{pq_path}')")
                 except:
                     pass
                     

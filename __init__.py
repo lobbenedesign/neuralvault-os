@@ -66,6 +66,8 @@ from retrieval.community_engine import CommunityEngine # [v6.0]
 from security.shadow_sandbox import SovereignShadowSandbox # [v6.0]
 from utils.event_bus import NeuralEventBus, NeuralEventType # [v6.0]
 from utils.neural_compression import NeuralImplicitCompressor # [v8.0]
+from retrieval.vault_twin import SovereignVaultTwin # [v8.4]
+from retrieval.aegis_bus import aegis_bus # [v9.0]
 
 class QueryIntent:
     SEMANTIC = "semantic"
@@ -141,6 +143,8 @@ class NeuralVaultEngine:
         self._tiers = MemoryTierManager(data_dir=self.data_dir, dim=dim)
         self._nodes = {}
         self.nic = NeuralImplicitCompressor() # [v8.0]
+        self.nic_lru_cache = {} # [v8.1] Phase 7.4 Optimization
+        self._nic_cache_limit = 50000 
         self._sessions = SessionManager(data_dir=self.data_dir)
         storage_get_fn = lambda nid: self._tiers.get(nid)
         self._hnsw = AdaptiveHNSW(dim=dim, use_rust=use_rust, storage_get_fn=storage_get_fn)
@@ -197,9 +201,10 @@ class NeuralVaultEngine:
         self.communities = CommunityEngine(self) # [v6.0]
         self.sandbox = SovereignShadowSandbox(self) # [v6.0]
         self.events = NeuralEventBus() # [v6.0]
+        self.twin = SovereignVaultTwin(self) # [v8.4]
         self.last_routing = None
         
-        print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v6.0.1 Sovereign Maturity...")
+        print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")
         self._tq_search = TwoStageTurboSearch(dim=dim)
             
         # v0.4.0 Pillars
@@ -345,14 +350,14 @@ class NeuralVaultEngine:
         try:
             print("🔍 [Deep Recovery] Analisi strutturale vault_metadata...")
             # 1. Identifichiamo le colonne disponibili
-            cols = [c[1] for c in self._prefilter.con.execute("PRAGMA table_info('vault_metadata')").fetchall()]
+            cols = [c[1] for c in self._prefilter.fetchall("PRAGMA table_info('vault_metadata')")]
             
             # 2. Query dinamica basata sul campo JSON 'metadata'
             id_col = "id" if "id" in cols else "metadata->>'$.id'"
             text_query = "metadata->>'$.text'"
             
             query = f"SELECT {id_col}, {text_query}, metadata FROM vault_metadata LIMIT 5000"
-            res = self._prefilter.con.execute(query).fetchall()
+            res = self._prefilter.fetchall(query)
             
             if res:
                 print(f"✨ [Deep Recovery] Individuati {len(res)} nodi potenziali. Innesco ricostruzione mesh...")
@@ -481,7 +486,14 @@ class NeuralVaultEngine:
         
         # 3. [v8.0] Neural Implicit Reconstruction
         if node and (node.vector is None or len(node.vector) == 0):
-            node.vector = self.nic.reconstruct(node_id)
+            # [v8.1] Check NIC LRU Cache
+            if node_id in self.nic_lru_cache:
+                node.vector = self.nic_lru_cache[node_id]
+            else:
+                node.vector = self.nic.reconstruct(node_id)
+                # Update Cache
+                if len(self.nic_lru_cache) < self._nic_cache_limit:
+                    self.nic_lru_cache[node_id] = node.vector
             
         return node
 
@@ -565,7 +577,7 @@ class NeuralVaultEngine:
             with self._lock:
                 self._nodes[node_id] = node
                 self._tiers.put(node, tier=MemoryTier.WORKING)
-                self._prefilter.add_node(node)
+                self._prefilter.add_node(node.id, node.collection, node.metadata)
             
             print(f"♻️ [Limbo] Nodo {node_id[:8]} ripristinato con successo nella memoria attiva.")
             return True
@@ -617,6 +629,26 @@ class NeuralVaultEngine:
             return True
         return False
 
+    def get_relations(self, node_id: str) -> List:
+        """[v16.3] Synaptic Retrieval: Restituisce tutti gli archi in uscita dal nodo."""
+        node = self.get_node(node_id)
+        return node.edges if node else []
+
+    def remove_relation(self, source_id: str, target_id: str, relation: Optional[str] = None):
+        """[v16.3] Synaptic Pruning: Rimuove un arco specifico tra due nodi."""
+        node = self.get_node(source_id)
+        if node:
+            original_len = len(node.edges)
+            if relation:
+                node.edges = [e for e in node.edges if not (e.target_id == target_id and e.relation == relation)]
+            else:
+                node.edges = [e for e in node.edges if e.target_id != target_id]
+            
+            if len(node.edges) < original_len:
+                self.storage_put(node)
+                return True
+        return False
+
 
     def rollback_node(self, node_id: str) -> bool:
         """
@@ -646,7 +678,7 @@ class NeuralVaultEngine:
                 try:
                     # Se DuckDB ha la riga ancora (magari è stato solo cancellato fisicamente l'indice), facciamo finta
                     # In realtà DuckDB non ha rollback facile, ma possiamo re-inserire metadati minimi se necessario
-                    self._prefilter.add_node(node)
+                    self._prefilter.add_node(node.id, node.collection, node.metadata)
                 except: pass
                 
                 print(f"♻️ [Engine] Rollback completato: Nodo {node_id[:8]} ripristinato con successo.")
@@ -720,6 +752,13 @@ class NeuralVaultEngine:
         node = VaultNode(id=node_id or f"node_{uuid.uuid4().hex[:6]}", collection=coll, text=text, vector=vector, metadata=meta)
         await self.upsert(node)
         
+        # [v9.0] Shadow Logging
+        aegis_bus.emit("NODE_CREATED", {
+            "id": node.id,
+            "text_preview": text[:100],
+            "source": meta.get("source", "upsert")
+        })
+        
         # Se era SUPERSEDED, colleghiamo al predecessore
         if diff_result.action == "SUPERSEDED":
             self.add_relation(node.id, diff_result.existing_node_id, RelationType.SUPERSEDES)
@@ -747,6 +786,13 @@ class NeuralVaultEngine:
         
         # Ingestione core (HNSW + Persistenza + Mesh)
         await self.upsert(node)
+
+        # [v9.0] Shadow Logging
+        aegis_bus.emit("NODE_CREATED", {
+            "id": node.id,
+            "text_preview": text[:100],
+            "source": meta.get("source", "add_node")
+        })
             
         # 🧪 JANITRON LAB: Propagazione Tensione
         if hasattr(self, 'agent007_lab'):
@@ -842,7 +888,6 @@ class NeuralVaultEngine:
                 topic=node.metadata.get("topic_type", "general"),
                 description=f"Nuova conoscenza acquisita: {node.text[:50]}..."
             )
-            
             # [v5.1] Peer-to-Peer Gossip Broadcast
             if hasattr(self, 'gossip') and self.gossip:
                 # Usiamo create_task per non bloccare il kernel durante il broadcast
@@ -857,7 +902,11 @@ class NeuralVaultEngine:
                         "created_at": node.created_at
                     }))
                 except: pass
-            
+        
+        # 🛡️ [CRITICAL FIX v12.1] Indicizzazione DuckDB (per visibilità 3D e NIC)
+        prefilter_data = [(n.id, n.collection, n.metadata) for n in nodes]
+        self._prefilter.add_nodes_batch(prefilter_data)
+        
         # v14.3: Async Agent007 (Non-blocking ingestion)
         def run_agent007_tasks(node_list):
             # [v4.1.9] Priority Shift: Wait if active
@@ -880,8 +929,9 @@ class NeuralVaultEngine:
         print(f"✅ [Kernel] Engine now contains {len(self._nodes)} active nodes.")
         
         # v2.2.0: Active Decay Trigger (Expanded to 100k for High-Density Storage)
-        if len(self._nodes) > 100000:
-            self.apply_cognitive_decay(max_nodes=100000)
+        if len(self._nodes) > 20000:
+            # v1.1.0: Cognitive Decay Engine - Manteniamo la memoria snella
+            self.apply_cognitive_decay(max_nodes=20000)
             
         # v1.3.0: Autonomous Synaptic Discovery Trigger
         self.discover_synapses()
@@ -918,6 +968,48 @@ class NeuralVaultEngine:
             loop.close()
             
         threading.Thread(target=_bg_broadcast, daemon=True).start()
+
+    async def sync_agent_sessions(self, provider: str = "auto"):
+        """
+        [v9.1] Sovereign Sync: Ingerisce automaticamente le cronologie di sessione degli agenti.
+        Supporta: Cursor (history), Claude Code (logs), e prompt locali.
+        """
+        import os
+        import glob
+        from pathlib import Path
+        
+        synced_count = 0
+        
+        # 1. Cursor Support (macOS Path)
+        if provider in ["auto", "cursor"]:
+            cursor_db_path = Path.home() / "Library/Application Support/Cursor/User/workspaceStorage"
+            if cursor_db_path.exists():
+                print(f"🕵️ [Sync] Rilevato storage Cursor. Scansione in corso...")
+                # Nota: Cursor usa SQLite per la history, qui simuliamo l'ingestione di file .json/logs se presenti
+                # In una versione futura potremmo leggere direttamente state.vscdb
+        
+        # 2. Claude Code Support (CLAUDE.md & logs)
+        if provider in ["auto", "claude"]:
+            # Cerca file di log o documentazione generata da agenti nel workspace attuale
+            agent_files = glob.glob("**/CLAUDE.md", recursive=True) + glob.glob("**/.claude_logs/*.json", recursive=True)
+            for f_path in agent_files:
+                try:
+                    with open(f_path, "r") as f:
+                        content = f.read()
+                        if len(content) > 100:
+                            meta = {"source": f"agent_sync:{provider}", "file": f_path, "agent": "ClaudeCode"}
+                            await self.upsert_text(content, metadata=meta)
+                            synced_count += 1
+                except: continue
+                
+        # 3. [v9.1] Export to Wiki Namespace: 'Agents'
+        if synced_count > 0:
+            print(f"✅ [Sync] Sincronizzate {synced_count} sessioni agentiche.")
+            # Triggeriamo la rigenerazione della Wiki per la sezione Agents
+            if hasattr(self, 'wiki'):
+                await self.wiki.generate_page("Agent Intelligence", mode="TECHNICAL")
+        
+        return synced_count
 
     def evolve_graph(self):
         """
@@ -1040,11 +1132,8 @@ class NeuralVaultEngine:
         # v0.5.0 Cognitive Scoring (Ebbinghaus Decay)
         now = time.time()
         for res in results:
-            # Recupera metadati cognitivi dal prefilter
-            meta = self._prefilter.con.execute(
-                "SELECT last_access, access_count, importance FROM vault_metadata WHERE id = ?",
-                (res.node.id,)
-            ).fetchone()
+            # Recupera metadati cognitivi dal prefilter in modo thread-safe
+            meta = self._prefilter.get_cognitive_metadata(res.node.id)
             
             if meta:
                 # Conversione sicura: DuckDB potrebbe restituire datetime o float
@@ -1081,9 +1170,10 @@ class NeuralVaultEngine:
 
         # [v4.2.0] CORRECTIVE RAG (CRAG)
         # Se i risultati sono poveri (< 0.4 score) o assenti, attiviamo il recupero correttivo
+        # [v8.4.3] Evitiamo di triggerare CRAG per query vuote (es. da Semantic Diff)
         is_context_poor = not results or results[0].final_score < 0.45
         
-        if is_context_poor and hasattr(self, 'orchestrator'):
+        if is_context_poor and hasattr(self, 'orchestrator') and len(query_text.strip()) > 3:
             print(f"📡 [CRAG] Low confidence retrieval ({results[0].final_score if results else 0:.2f}). Triggering knowledge expansion...")
             try:
                 # Incursione rapida via Skywalker Agent (FS-77)
@@ -1128,10 +1218,6 @@ class NeuralVaultEngine:
         if now - self._stats_cache["time"] < 1.0 and self._stats_cache["data"]:
             return self._stats_cache["data"]
 
-        nodes = list(self._nodes.values())
-        sample_size = min(len(nodes), 10000)
-        all_nodes = nodes[:sample_size]
-        
         point_cloud = []
         all_edges = []
         node_positions = {}
@@ -1139,9 +1225,33 @@ class NeuralVaultEngine:
         heat_zones_acc = {} # [v4.1.4] Accumulatore densità
         next_zone_idx = 0
 
-        # ── Campionamento Sicuro ──────────────────────────────────────────
+        # ── Campionamento Sicuro & Priorità Galassie ─────────────────────
+        # [v13.6] Garantiamo che le galassie e i loro ANCORAGGI siano SEMPRE inclusi
+        all_nodes_dict = self._nodes
+        galaxy_nodes = [n for n in all_nodes_dict.values() if n.metadata.get("is_galaxy")]
+        
+        # Identifichiamo gli ancoraggi (nodi della nebula madre a cui le galassie sono connesse)
+        anchor_ids = set()
+        for gn in galaxy_nodes:
+            for edge in (gn.edges or []):
+                anchor_ids.add(str(edge.target_id))
+        
+        anchor_nodes = [all_nodes_dict[aid] for aid in anchor_ids if aid in all_nodes_dict]
+        
+        # Limitiamo i nodi totali per performance ma preserviamo galassie + ancoraggi
         raw = self.scan_recent(limit=limit)
-        all_nodes = [item[0] if isinstance(item, (tuple, list)) else item for item in raw]
+        recent_nodes = [item[0] if isinstance(item, (tuple, list)) else item for item in raw]
+        
+        # Unione set (senza duplicati)
+        # Priorità: Galassie > Ancoraggi > Recenti
+        combined_nodes = {n.id: n for n in (galaxy_nodes + anchor_nodes + recent_nodes)}
+        all_nodes = list(combined_nodes.values())
+        
+        if len(all_nodes) > limit:
+            # Se superiamo il limite, cerchiamo di non tagliare galassie e ancoraggi
+            critical = galaxy_nodes + anchor_nodes
+            non_critical = [n for n in all_nodes if n.id not in [c.id for c in critical]]
+            all_nodes = critical + non_critical[:max(0, limit - len(critical))]
 
         # ── Proiezione PCA/SVD (campionata per prestazioni) ───────────────
         nodes_with_vectors = [n for n in all_nodes if n.vector is not None]
@@ -1166,7 +1276,7 @@ class NeuralVaultEngine:
         # ── Costruzione Point Cloud ───────────────────────────────────────
         for n in all_nodes:
             try:
-                cluster_key = n.metadata.get("source", n.collection or "default")
+                cluster_key = n.metadata.get("cluster_id") or n.metadata.get("topic") or n.metadata.get("source", n.collection or "default")
                 c_hash = hashlib.md5(cluster_key.encode()).hexdigest()
                 r1 = int(c_hash[0:2], 16) % 200 + 55
                 g1 = int(c_hash[2:4], 16) % 200 + 55
@@ -1236,12 +1346,28 @@ class NeuralVaultEngine:
                 final_dir = (p_dir * 0.7 + rand_dir * 0.3)
                 final_dir /= np.linalg.norm(final_dir) + 1e-6
 
-                x = float(np.real(cx + final_dir[0] * r_scatter))
-                y = float(np.real(cy + final_dir[1] * r_scatter))
-                z = float(np.real(cz + final_dir[2] * r_scatter))
-
-                # v11.6: Persist spatial metadata for agent navigation
-                n.metadata['x'], n.metadata['y'], n.metadata['z'] = x, y, z
+                # 🧬 [CRITICAL v12.2] Supporto Galassie Autonome:
+                if n.metadata.get("is_galaxy"):
+                    x = float(n.metadata.get("x", 0))
+                    y = float(n.metadata.get("y", 0))
+                    z = float(n.metadata.get("z", 0))
+                    
+                    # [v13.6] Agent-Specific Galaxy Coloring
+                    src = n.metadata.get("source", "").lower()
+                    if "skywalker" in src:
+                        node_color = "#ff0000" # Rosso Imperiale
+                    elif "yoda" in src:
+                        node_color = "#00ff40" # Verde Yoda
+                    else:
+                        node_color = "#22c55e" # Verde Galaxy Standard
+                    
+                    node_opacity = 1.0
+                else:
+                    x = float(np.real(cx + final_dir[0] * r_scatter))
+                    y = float(np.real(cy + final_dir[1] * r_scatter))
+                    z = float(np.real(cz + final_dir[2] * r_scatter))
+                    # v11.6: Persist spatial metadata for agent navigation
+                    n.metadata['x'], n.metadata['y'], n.metadata['z'] = x, y, z
 
                 node_positions[str(n.id)] = (x, y, z)
                 point_cloud.append({
@@ -1272,13 +1398,18 @@ class NeuralVaultEngine:
                     target_id = str(edge.target_id)
                     if target_id in node_positions:
                         edge_is_aura = getattr(edge, 'is_aura', False)
+                        # [v12.2] Priorità per le sinapsi galattiche
+                        # [v13.6] Extended Galaxy Support
+                        is_galaxy_edge = edge.relation in ["galaxy_anchor", "galaxy_internal", "reflection_anchor", "skywalker_anchor", "yoda_anchor", "galaxy_tether", "super_galaxy"]
+                        
                         edge_data = {
                             "source": str(n.id),
                             "target": target_id,
+                            "relation": str(edge.relation), # [CRITICAL] Fix for dashboard colors
                             "source_pos": list(node_positions[str(n.id)]),
                             "target_pos": list(node_positions[target_id]),
-                            "color": "rainbow" if edge_is_aura else "#ffffff",
-                            "is_aura": edge_is_aura,
+                            "color": "#22c55e" if is_galaxy_edge else ("rainbow" if edge_is_aura else "#475569"),
+                            "is_aura": edge_is_aura or is_galaxy_edge,
                             "created_at": edge.created_at
                         }
                         
@@ -1329,7 +1460,7 @@ class NeuralVaultEngine:
             "nodes_count": len(self._nodes),
             "edges_count": len(all_edges),
             "point_cloud": point_cloud,
-            "edge_sample": all_edges[:3000], # Incrementato da 1000 a 3000
+            "edge_sample": all_edges[:30000], # [v13.6] Increased to 30k to show all connections
             "heatmap": final_heat_zones
         }
         self._stats_cache = {"time": now, "data": res}
@@ -1341,26 +1472,39 @@ class NeuralVaultEngine:
         v1.2.0: Cognitive Decay Engine
         Prunes least relevant nodes to prevent active memory saturation.
         """
-        if len(self._nodes) <= max_nodes: return
-        
-        print(f"🛡️ [Decay] Threshold reached. Pruning {len(self._nodes) - max_nodes} nodes...")
-        
-        # Ordiniamo per accesso recente (se implementato) o semplicemente per ordine di inserimento (FIFO fallback)
-        all_ids = list(self._nodes.keys())
-        to_prune = all_ids[:(len(self._nodes) - max_nodes)]
-        
-        for nid in to_prune:
-            # 🏺 [v5.1] Semantic Trash Bin Logic
-            # Invece di rimuoverli e basta, li marchiamo come WASTE_PENDING (Limbo)
-            node = self._nodes.pop(nid, None)
-            if node:
-                node.metadata["lifecycle_state"] = "waste_pending"
-                node.metadata["decayed_at"] = time.time()
-                # Lo spostiamo nel tier persistente (Episodic) ma rimane accessibile per il recupero
-                self._tiers.put(node, tier=MemoryTier.EPISODIC)
-                self._prefilter.add_node(node) # Aggiorna lo stato nel database metadati
+        with self._lock:
+            if len(self._nodes) <= max_nodes: return
             
-        print(f"✅ [Decay] Memory optimized. Current active: {len(self._nodes)}")
+            # [v13.6] Sovereign Decay: Prioritize pruning while protecting critical structures
+            # We filter out protected nodes and galaxies before calculating what to prune
+            eligible_ids = [
+                nid for nid, n in self._nodes.items() 
+                if not n.metadata.get("is_galaxy") 
+                and n.metadata.get("lifecycle_state") != "protected"
+            ]
+            
+            # Se dopo il filtro non abbiamo abbastanza nodi da prunare, alziamo il limite temporaneamente
+            if len(self._nodes) - len(eligible_ids) > max_nodes:
+                print("⚠️ [Decay] Vault is saturated with protected nodes/galaxies. Pushing threshold...")
+                return
+
+            num_to_prune = len(self._nodes) - max_nodes
+            print(f"🛡️ [Decay] Threshold reached. Pruning {num_to_prune} eligible nodes...")
+            
+            # Pruniamo i più vecchi tra quelli eleggibili (FIFO)
+            to_prune = eligible_ids[:num_to_prune]
+            
+            for nid in to_prune:
+                # 🏺 [v5.1] Semantic Trash Bin Logic
+                node = self._nodes.pop(nid, None)
+                if node:
+                    node.metadata["lifecycle_state"] = "waste_pending"
+                    node.metadata["decayed_at"] = time.time()
+                    # Lo spostiamo nel tier persistente (Episodic) ma rimane accessibile per il recupero
+                    self._tiers.put(node, tier=MemoryTier.EPISODIC)
+                    self._prefilter.update_lifecycle_state(node.id, "waste_pending") # [v4.3.1] Thread-safe update
+                
+            print(f"✅ [Decay] Memory optimized. Current active: {len(self._nodes)}")
 
     def discover_synapses(self, threshold: float = 0.88):
         """
@@ -1526,7 +1670,7 @@ class NeuralVaultEngine:
         with self._lock:
             # Calcolo hit rate reale basato sugli accessi agli ultimi 100 nodi
             try:
-                res = self._prefilter.con.execute("""
+                res = self._prefilter.fetchall("""
                     SELECT 
                         count(*) filter (where access_count > 0) * 100.0 / count(*) as hit_rate,
                         avg(access_count) as avg_reuse

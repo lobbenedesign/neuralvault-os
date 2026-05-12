@@ -32,7 +32,17 @@ class NeuralLogger:
         self.log_event("system_info", {"message": message})
 
     def log_event(self, event_type: str, data: dict):
-        """Registra un evento strutturato."""
+        """Registra un evento strutturato con rotazione automatica (v4.2.0)."""
+        if not self.log_file: return
+        
+        # 🔄 [LOG ROTATION] Se il file supera i 100MB, lo rinominiamo
+        try:
+            if self.log_file.exists() and self.log_file.stat().st_size > 100 * 1024 * 1024:
+                backup = self.log_file.with_suffix(f".{int(time.time())}.jsonl")
+                self.log_file.rename(backup)
+                print(f"🔄 [NeuralLogger] Log ruotato: {backup.name}")
+        except: pass
+
         raw_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         mem_mb = raw_mem / (1024 * 1024) if os.uname().sysname == 'Darwin' else raw_mem / 1024
         
@@ -45,12 +55,11 @@ class NeuralLogger:
             }
         }
         
-        if self.log_file:
-            try:
-                with open(self.log_file, "a") as f:
-                    f.write(json.dumps(log_entry) + "\n")
-            except Exception:
-                pass
+        try:
+            with open(self.log_file, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception:
+            pass
 
     def log_query(self, intent: str, duration_ms: float, results_count: int):
         self.log_event("query_execution", {

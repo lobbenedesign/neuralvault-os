@@ -35,14 +35,14 @@ class Agent007Lab:
     """
     def __init__(self, engine):
         self.engine = engine
-        # Usiamo la connessione DuckDB dell'engine
-        self.con = engine.agent007.con if hasattr(engine, 'agent007') else engine._prefilter.con
+        # Usiamo l'engine prefilter per le query persistenti (v9.0 thread-safe)
+        self.prefilter = engine._prefilter
         self._init_db()
         self.agents = ["Prosecutor", "Defender", "Arbitrator"] # Per analytics report
 
     def _init_db(self):
         """Prepara le tabelle per la tensione e i dibattiti."""
-        self.con.execute("""
+        self.prefilter.execute("""
             CREATE TABLE IF NOT EXISTS semantic_tension (
                 source_id VARCHAR,
                 target_id VARCHAR,
@@ -51,7 +51,7 @@ class Agent007Lab:
                 timestamp DOUBLE
             )
         """)
-        self.con.execute("""
+        self.prefilter.execute("""
             CREATE TABLE IF NOT EXISTS debate_history (
                 session_id VARCHAR,
                 node_id VARCHAR,
@@ -88,7 +88,7 @@ class Agent007Lab:
             tensions.append(t_node)
             
             # Persistenza
-            self.con.execute(
+            self.prefilter.execute(
                 "INSERT INTO semantic_tension VALUES (?, ?, ?, ?, ?)",
                 (source_node_id, res.node.id, float(tension), relation, time.time())
             )
@@ -103,11 +103,11 @@ class Agent007Lab:
         session_id = str(uuid.uuid4())
         
         # 1. Recupero evidenze contrastanti reali
-        contradictions = self.con.execute("""
+        contradictions = self.prefilter.fetchall("""
             SELECT target_id, tension FROM semantic_tension 
             WHERE source_id = ? AND relation = 'contradicts' 
             ORDER BY tension DESC LIMIT 3
-        """, (node_id,)).fetchall()
+        """, (node_id,))
         
         # Recuperiamo il contenuto delle evidenze
         evidence_texts = []
@@ -154,7 +154,7 @@ class Agent007Lab:
             "debate_log": [p_arg, d_arg]
         }
         
-        self.con.execute(
+        self.prefilter.execute(
             "INSERT INTO debate_history VALUES (?, ?, ?, ?)",
             (session_id, node_id, json.dumps(verdict), time.time())
         )
@@ -252,10 +252,10 @@ class Agent007Lab:
 
     def get_weakness_report(self, node_id: str) -> Optional[Dict]:
         """Recupera l'ultimo report di vulnerabilità."""
-        res = self.con.execute(
+        res = self.prefilter.fetchone(
             "SELECT verdict FROM debate_history WHERE node_id = ? ORDER BY timestamp DESC LIMIT 1",
             (node_id,)
-        ).fetchone()
+        )
         return json.loads(res[0]) if res else None
 
     def _compute_semantic_heatmap(self, nodes):

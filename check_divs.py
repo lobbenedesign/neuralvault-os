@@ -1,5 +1,5 @@
 
-with open('/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/dashboard/index.html', 'r') as f:
+with open('dashboard/index.html', 'r') as f:
     lines = f.readlines()
 
 depth = 0

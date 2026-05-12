@@ -1,20 +1,27 @@
 import os
+os.environ["MallocStackLogging"] = "0"
+os.environ["MallocStackLoggingNoCompact"] = "0"
 import sys
-import traceback
+import logging
 
-# 🛡️ [Mac/Sovereign] Aggressive Environment Stabilization
+# 🛡️ [Mac/Sovereign] Aggressive Environment Stabilization (Core #1)
+# Must be set before ANY other imports (especially cv2, torch, transformers)
 os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["AV_LOG_LEVEL"] = "quiet"
-os.environ["OPENCV_LOG_LEVEL"] = "OFF"
-os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "AVFOUNDATION" # 🛡️ Fixed macOS FFmpeg conflict
-os.environ["PYAV_SKIP_DLOPEN_CHECK"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-# Supporto per HF_TOKEN da ambiente
-if os.getenv("HF_TOKEN"):
-    os.environ["HUGGING_FACE_HUB_TOKEN"] = os.getenv("HF_TOKEN")
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["AV_LOG_LEVEL"] = "quiet"
+os.environ["OPENCV_VIDEOIO_PRIORITY_AVFOUNDATION"] = "1"
+os.environ["OPENCV_VIDEOIO_PRIORITY_BACKEND"] = "AVFOUNDATION"
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+os.environ["PYAV_SKIP_DLOPEN_CHECK"] = "1"
 
-import logging
+# [v13.6] Silence "Unauthenticated requests" warning - MUST BE BEFORE ANY HF IMPORTS
+os.environ["HF_TOKEN"] = "sovereign_local_boot_shield_v8"
+os.environ["HUGGING_FACE_HUB_TOKEN"] = "sovereign_local_boot_shield_v8"
+os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
+
+# Centralized Logging Silence
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
@@ -22,7 +29,9 @@ logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("uvicorn").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
+import traceback
 import json
 import uuid
 import time
@@ -41,27 +50,13 @@ from datetime import datetime, date
 from contextlib import asynccontextmanager
 from typing import List, Dict, Optional, Any
 
-import sys
+from retrieval.aegis_bus import aegis_bus
 
-# v2.6.0: Environment Stabilization & Warning Suppression
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false" # Evita warning di deadlock in f-strings
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" # Per librerie Intel/OpenMP
-
-# Silenzia i warning di caricamento di sentence-transformers / transformers
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
-
-# v21.2: Suppress OBJC Duplicate warnings for cleaner log
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+import uvicorn
+os.environ["PYSPARK_PYTHON"] = sys.executable # Just in case
 
 import uvicorn
 import httpx
-import os
-
-# 🛡️ [Mac Fix] Suppress FFmpeg duplicate implementation warnings
-os.environ["KINETIC_FFMPEG_FIX"] = "1"
-
 import torch
 from fastapi import FastAPI, UploadFile, File, Request, Depends, HTTPException, BackgroundTasks, Header, Form
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -72,6 +67,28 @@ import httpx
 
 # Centralized Agentic Fabric Imports
 from neural_lab import SynapticSignal, AgentRole, SignalType, NeuralLabOrchestrator, AgentSmith
+
+# --- 🧠 [v8.4] Verbose LLM Interceptor ---
+_original_async_post = httpx.AsyncClient.post
+async def _patched_async_post(self, url, *args, **kwargs):
+    if "/api/generate" in str(url) or "/api/chat" in str(url):
+        if "json" in kwargs:
+            model = kwargs["json"].get("model", "unknown")
+            prompt_preview = str(kwargs["json"].get("prompt", kwargs["json"].get("messages", "")))[:100].replace("\n", " ")
+            print(f"🧠 [LLM Intercept] Modello: {model} | Azione: {prompt_preview}...")
+    return await _original_async_post(self, url, *args, **kwargs)
+httpx.AsyncClient.post = _patched_async_post
+
+_original_post = httpx.Client.post
+def _patched_post(self, url, *args, **kwargs):
+    if "/api/generate" in str(url) or "/api/chat" in str(url):
+        if "json" in kwargs:
+            model = kwargs["json"].get("model", "unknown")
+            prompt_preview = str(kwargs["json"].get("prompt", kwargs["json"].get("messages", "")))[:100].replace("\n", " ")
+            print(f"🧠 [LLM Intercept] Modello: {model} | Azione: {prompt_preview}...")
+    return _original_post(self, url, *args, **kwargs)
+httpx.Client.post = _patched_post
+# ----------------------------------------
 
 class QueryRequest(BaseModel):
     query: str
@@ -105,6 +122,11 @@ app.state.boot_time = datetime.now()
 def report_threat(request: Request, severity: int = 1):
     """Segnala una minaccia al Sentinel (Agent Smith)."""
     ip = request.client.host
+    
+    # [v13.6] Whitelist Localhost (Swarm Agents)
+    if ip in ["127.0.0.1", "localhost", "::1"]:
+        return
+
     THREAT_LEVELS[ip] = THREAT_LEVELS.get(ip, 0) + severity
     
     if THREAT_LEVELS[ip] >= MAX_THREAT_SCORE:
@@ -121,41 +143,148 @@ def report_threat(request: Request, severity: int = 1):
             "duration": 45
         }))
 
-@app.middleware("http")
-async def smith_firewall_middleware(request: Request, call_next):
-    ip = request.client.host
-    
-    # 1. Verifica se l'IP è sotto ritorsione (Lock)
-    if ip in RETALIATION_LOCKS:
-        if time.time() < RETALIATION_LOCKS[ip]:
-            remaining = int(RETALIATION_LOCKS[ip] - time.time())
-            return JSONResponse(
-                status_code=403, 
-                content={"detail": f"🛡️ [Agent Smith] Access Denied. Retaliation Lock active for {remaining}s."}
-            )
-        else:
-            del RETALIATION_LOCKS[ip] # Lock scaduto
+class SmithFirewallMiddleware:
+    def __init__(self, app):
+        self.app = app
 
-    response = await call_next(request)
-    
-    # [v7.0] Reset Idle Timer on interaction
-    try:
-        if 'engine' in globals() and engine and hasattr(engine, 'sleep'):
-            engine.sleep.touch()
-    except: pass
-    
-    return response
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Get IP from client info
+        client = scope.get("client")
+        ip = client[0] if client else "unknown"
+
+        # [v13.6] Whitelist Localhost
+        if ip in ["127.0.0.1", "localhost", "::1"]:
+            await self.app(scope, receive, send)
+            return
+
+        # 1. Verification: IP under Retaliation Lock
+        if ip in RETALIATION_LOCKS:
+            if time.time() < RETALIATION_LOCKS[ip]:
+
+                remaining = int(RETALIATION_LOCKS[ip] - time.time())
+                print(f"🛡️ [Agent Smith] BLOCKED: {ip} for {remaining}s")
+                response_content = json.dumps({"detail": f"🛡️ [Agent Smith] Access Denied. Retaliation Lock active for {remaining}s."}).encode("utf-8")
+                await send({
+                    "type": "http.response.start",
+                    "status": 403,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(response_content)).encode("ascii")),
+                    ],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": response_content,
+                })
+                return
+            else:
+                del RETALIATION_LOCKS[ip]
+
+        # 2. Reset Idle Timer on interaction
+        try:
+            if 'engine' in globals() and engine and hasattr(engine, 'sleep'):
+                engine.sleep.touch()
+        except: pass
+
+        await self.app(scope, receive, send)
+
+app.add_middleware(SmithFirewallMiddleware)
 
 @app.on_event("startup")
 async def startup_event():
-    """🚀 [v8.4.2] Hijack signals after Uvicorn setup to ensure instant Ctrl+C."""
-    import signal
+    global engine, voice_engine
+    
+    # 1. Initialize Signal Hijack for instant shutdown
     try:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         print("🛡️ [System] Signal Hijack ACTIVE: Ctrl+C will force exit.")
     except Exception as e:
         print(f"⚠️ [System] Signal Hijack Warning: {e}")
+
+    storage_dir = os.getenv("NEURALVAULT_DATA_DIR", "./vault_data")
+    engine = NeuralVaultEngine(data_dir=storage_dir)
+    
+    # 2. Load Swarm Settings
+    from neural_lab import SwarmSettingsManager
+    settings_manager = SwarmSettingsManager(storage_dir)
+    engine.settings = settings_manager # Shared access
+    base_url = settings_manager.get("ollama_url")
+    
+    # 3. Initialize Multimodal Engine
+    app.state.mm_processor = MultimodalSynapseProcessor(ollama_url=base_url, settings=settings_manager)
+    engine.mm_processor = app.state.mm_processor
+    
+    # 🕵️ Ollama Health
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{base_url}/api/tags")
+            if resp.status_code == 200:
+                print(f"Ollama Uplink: {base_url} ... ✅ READY")
+            else:
+                print(f"Ollama Uplink: {base_url} ... ⚠️ UNRESPONSIVE")
+    except:
+        print(f"Ollama Uplink: {base_url} ... ❌ OFFLINE")
+
+    # 4. Initialize Forager & Neural Lab (Orchestrator)
+    engine.forager = SovereignWebForager(max_depth=3, max_pages=50, same_domain_only=False)
+    app.state.lab = NeuralLabOrchestrator(engine)
+    engine.orchestrator = app.state.lab
+    
+    # 🚀 Start Swarm
+    app.state.lab.start_orchestra()
+
+    # 8. Mesh Discovery & Crypto Handshake (v4.0.0)
+    def on_peer_found(node_id, address, public_key):
+        if engine and engine.gossip:
+            engine.gossip.add_peer(node_id, address, public_key)
+
+    if engine and engine.crypto:
+        from network.discovery import SovereignDiscovery
+        pub_key = engine.crypto.get_public_key_base64()
+        engine.discovery = SovereignDiscovery(
+            node_id=engine.node_id,
+            port=8001, 
+            public_key=pub_key,
+            on_peer_found_callback=on_peer_found
+        )
+        import threading
+        threading.Thread(target=engine.discovery.start, daemon=True).start()
+        print(f"📡 [Mesh] Discovery Online. PubKey: {pub_key[:10]}...")
+
+    # 9. [v8.0] Neural Implicit Compression (NIC) Load
+    if hasattr(engine, 'nic'):
+        from pathlib import Path
+        nic_path = Path(storage_dir) / "nic_codebook.npy"
+        if nic_path.exists():
+            engine.nic.load(str(nic_path))
+            print("🦾 [NIC] Codebook Neurale caricato correttamente.")
+        else:
+            print("🦾 [NIC] Codebook non trovato. In attesa di prima ottimizzazione.")
+
+    # 10. Database Schema Evolution
+    try:
+        engine.agent007.execute("ALTER TABLE agent007_entities ADD COLUMN attributes JSON")
+        engine.agent007.execute("ALTER TABLE agent007_entities ADD COLUMN relevance FLOAT")
+    except: pass
+    
+    # 11. Pre-load UI settings
+    try:
+        settings = await get_system_settings()
+        app.state.auto_evolve_active = settings.get("auto_evolve_active", False)
+    except: pass
+    
+    # 12. [v7.0] Neural Sleep Engine integration
+    if hasattr(app.state, 'lab'):
+        engine.sleep = app.state.lab.sleep_engine
+
+    # 13. Start background loops
+    asyncio.create_task(shard_maintenance_loop())
+    print("🚀 [System] Neural Lab Orchestrator READY.")
 
 def json_serializer(obj):
     if hasattr(obj, 'tolist'): return obj.tolist()
@@ -201,6 +330,9 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # Setup CORS
 app.add_middleware(
     CORSMiddleware,
@@ -213,7 +345,29 @@ app.add_middleware(
 engine = None
 voice_engine = None # [v5.1]
 engine_lock = asyncio.Lock()
-VAULT_KEY = "vault_secret_aura_2026"
+# [v9.2] Hardened Security: VAULT_KEY is now environment-driven
+VAULT_KEY = os.getenv("NEURAL_VAULT_KEY")
+
+if not VAULT_KEY:
+    VAULT_KEY = "vault_secret_aura_2026" # Legacy Fallback
+    print("⚠️  [SECURITY WARNING] No NEURAL_VAULT_KEY found in .env. Using legacy default.")
+elif VAULT_KEY == "vault_secret_aura_2026":
+    print("🛡️  [Security] Sovereign Key detected. (Default signature active)")
+else:
+    print("🔒 [Security] Custom Sovereign Key ACTIVE.")
+
+def get_api_key(request: Request):
+    key = request.headers.get("X-API-KEY")
+    if not key and request.query_params.get("api_key"):
+        key = request.query_params.get("api_key")
+    if key == VAULT_KEY or key == "AURA-ADMIN-77":
+        return key
+    raise HTTPException(status_code=403, detail="Invalid Neural Vault Key")
+
+def check_api_key(key: str):
+    if key == VAULT_KEY or key == "AURA-ADMIN-77":
+        return True
+    return False
 
 def get_custom_models_path():
     storage_dir = Path(os.getenv("NEURALVAULT_DATA_DIR", "./vault_data"))
@@ -278,12 +432,12 @@ install_progress = {} # { "model_name": { "percentage": 0, "status": "idle" } }
 
 # settings tracking
 @app.get("/api/swarm/config")
-async def get_swarm_config_alias():
+async def get_swarm_config_alias(api_key: str = Depends(get_api_key)):
     """Alias di compatibilità per il vecchio endpoint config."""
     return await get_system_settings()
 
 @app.get("/api/system/settings")
-async def get_system_settings():
+async def get_system_settings(api_key: str = Depends(get_api_key)):
     storage_dir = Path(os.getenv("NEURALVAULT_DATA_DIR", "./vault_data"))
     settings_file = storage_dir / "swarm_settings.json"
     if settings_file.exists():
@@ -296,7 +450,7 @@ async def get_system_settings():
     return {"theme": "dark", "wiki_model": "qwen2.5:7b"}
 
 @app.post("/api/system/priority")
-async def set_system_priority(request: Request):
+async def set_system_priority(request: Request, api_key: str = Depends(get_api_key)):
     """Sospende o riprende l'attività degli agenti per dare priorità all'utente."""
     try:
         data = await request.json()
@@ -307,6 +461,22 @@ async def set_system_priority(request: Request):
         return {"status": status, "paused": app.state.lab.pause_agents}
     except Exception as e:
         return {"error": str(e)}
+
+FLIGHT_MODE_ACTIVE = False
+
+@app.post("/api/flight-mode")
+async def set_flight_mode(request: Request, api_key: str = Depends(get_api_key)):
+    global FLIGHT_MODE_ACTIVE
+    data = await request.json()
+    FLIGHT_MODE_ACTIVE = data.get("active", False)
+    
+    # Throttle orchestrator to preserve GPU/CPU for Flight Simulator
+    if hasattr(app.state, 'lab'):
+        app.state.lab.pause_agents = FLIGHT_MODE_ACTIVE
+        
+    status = "FLIGHT_ACTIVE_THROTTLING_ON" if FLIGHT_MODE_ACTIVE else "FLIGHT_ENDED_RESUMING_SWARM"
+    print(f"\n🚀 [Flight Protocol] {status}")
+    return {"status": status, "flight_mode": FLIGHT_MODE_ACTIVE}
 
 # [v6.0.1] Recommendations consolidated at line 3379
 
@@ -366,7 +536,7 @@ async def update_system_settings(req: Dict[str, Any]):
 async def test_github_connection(req: Dict[str, Any]):
     """Verifica la validità del token e l'accesso al repository."""
     if req.get("api_key") != VAULT_KEY:
-         raise HTTPException(status_code=403, detail="Invalid Vault Key")
+        raise HTTPException(status_code=403, detail="Invalid Vault Key")
     
     token = req.get("token")
     repo = req.get("repo")
@@ -386,114 +556,24 @@ async def test_github_connection(req: Dict[str, Any]):
 
 # [v6.1] background loops moved to NeuralLabOrchestrator dedicated thread.
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    # Update last activity for all API calls (excluding health checks or static)
-    if request.url.path.startswith("/api/"):
-        app.state.last_activity = time.time()
-        if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'sleep_engine'):
-            app.state.lab.sleep_engine.touch()
-    
-    response = await call_next(request)
-    return response
+class ActivityTrackerMiddleware:
+    def __init__(self, app):
+        self.app = app
 
-def get_api_key(request: Request):
-    key = request.headers.get("X-API-KEY")
-    if not key and request.query_params.get("api_key"):
-        key = request.query_params.get("api_key")
-    if key == VAULT_KEY or key == "AURA-ADMIN-77":
-        return key
-    raise HTTPException(status_code=403, detail="Invalid Neural Vault Key")
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.startswith("/api/"):
+                if hasattr(app, "state"):
+                    app.state.last_activity = time.time()
+                    if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'sleep_engine'):
+                        try:
+                            app.state.lab.sleep_engine.touch()
+                        except: pass
+        
+        await self.app(scope, receive, send)
 
-def check_api_key(key: str):
-    if key == VAULT_KEY or key == "AURA-ADMIN-77":
-        return True
-    return False
-
-@app.on_event("startup")
-async def startup_event():
-    global engine
-    storage_dir = os.getenv("NEURALVAULT_DATA_DIR", "./vault_data")
-    engine = NeuralVaultEngine(data_dir=storage_dir)
-    
-    # 1. Load Swarm Settings first
-    from neural_lab import SwarmSettingsManager
-    settings_manager = SwarmSettingsManager(storage_dir)
-    engine.settings = settings_manager # Shared access
-    base_url = settings_manager.get("ollama_url")
-    
-    # 2. Initialize Multimodal Engine with dynamic URL & Routing Settings
-    app.state.mm_processor = MultimodalSynapseProcessor(ollama_url=base_url, settings=settings_manager)
-    engine.mm_processor = app.state.mm_processor # Attach for health
-    
-    # 🕵️ Ollama Uplink Health Check
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{base_url}/api/tags")
-            if resp.status_code == 200:
-                print(f"Ollama Uplink: {base_url} ... ✅ READY")
-            else:
-                print(f"Ollama Uplink: {base_url} ... ⚠️ UNRESPONSIVE")
-    except:
-        print(f"Ollama Uplink: {base_url} ... ❌ OFFLINE")
-    # 3. Initialize Forager & Neural Lab (Orchestrator)
-    engine.forager = SovereignWebForager(max_depth=1, max_pages=10)
-    app.state.lab = NeuralLabOrchestrator(engine)
-    engine.orchestrator = app.state.lab # Explicit link for RAG cognitive triggers
-    
-    # 🚀 [v6.0 Fix] Start the Swarm!
-    app.state.lab.start_orchestra()
-
-    # 4. Agent007 Schema Gardening
-    try:
-        engine.agent007.ensure_schema()
-    except: pass
-
-    # 5. [v4.1.5] Telegram Sovereign Link
-    from interface.telegram_bot import start_telegram_bridge
-    app.state.telegram_link = start_telegram_bridge(app.state.lab, settings_manager)
-
-    # 6. [v5.1] Sovereign Voice Interface
-    global voice_engine
-    try:
-        voice_engine = SovereignVoiceEngine(device="cpu")
-        app.state.voice = voice_engine
-    except Exception as e:
-        print(f"⚠️ [Voice] Init failed: {e}")
-
-    # 5. Mesh Discovery & Crypto Handshake (v4.0.0)
-    def on_peer_found(node_id, address, public_key):
-        if engine and engine.gossip:
-            engine.gossip.add_peer(node_id, address, public_key)
-
-    if engine and engine.crypto:
-        from network.discovery import SovereignDiscovery
-        pub_key = engine.crypto.get_public_key_base64()
-        # In un sistema reale, la porta dovrebbe essere rilevata dinamicamente
-        engine.discovery = SovereignDiscovery(
-            node_id=engine.node_id,
-            port=8001, 
-            public_key=pub_key,
-            on_peer_found_callback=on_peer_found
-        )
-        import threading
-        threading.Thread(target=engine.discovery.start, daemon=True).start()
-        print(f"📡 [Mesh] Discovery Online. PubKey: {pub_key[:10]}...")
-    try:
-        engine.agent007.execute("ALTER TABLE agent007_entities ADD COLUMN attributes JSON")
-        engine.agent007.execute("ALTER TABLE agent007_entities ADD COLUMN relevance FLOAT")
-    except: pass
-    
-    # 5. Pre-load UI settings
-    settings = await get_system_settings()
-    app.state.auto_evolve_active = settings.get("auto_evolve_active", False)
-    
-    # 6. [v7.0] Neural Sleep Engine (Integrated from Lab)
-    engine.sleep = app.state.lab.sleep_engine
-    # Maintenance loop is already started in Lab's dedicated thread
-
-    # Start background loops
-    asyncio.create_task(shard_maintenance_loop())
+app.add_middleware(ActivityTrackerMiddleware)
 
 async def shard_maintenance_loop():
     """v3.0: Automated Shard Maintenance (Cloning & Backup). Runs every 30 minutes."""
@@ -532,21 +612,27 @@ async def shard_maintenance_loop():
         await asyncio.sleep(1800) # 30 minutes
 
 
-# Static Files (Dashboard)
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse, Response
 
 # Static Files (Dashboard)
 # --- 🖥️ DASHBOARD ENDPOINTS ---
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=FileResponse)
 async def get_dashboard():
     """Carica la UI principale del Cycloscope."""
-    with open("dashboard/index.html", "r") as f:
-        return f.read()
+    return FileResponse("dashboard/index.html")
 
-@app.get("/wiki", response_class=HTMLResponse)
+@app.get("/wiki", response_class=FileResponse)
 async def get_wiki_standalone():
     """🏛️ [v8.0] Sovereign Wiki Standalone Entry."""
-    with open("dashboard/index.html", "r") as f:
-        return f.read()
+    return FileResponse("dashboard/index.html")
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+async def apple_touch_icon():
+    return Response(status_code=204)
 
 app.mount("/static", StaticFiles(directory="dashboard/static"), name="static")
 
@@ -585,7 +671,7 @@ def find_node_robust(node_id: str) -> Optional[Any]:
     return None
 
 @app.get("/api/debug/stats")
-async def debug_stats():
+async def get_debug_stats(api_key: str = Depends(get_api_key)):
     """[DEBUG v14] Chiamata diretta a engine.stats() per diagnosticare la telemetria 3D."""
     print("🔬 [DEBUG] Chiamata a /api/debug/stats ...")
     try:
@@ -604,7 +690,7 @@ async def debug_stats():
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 @app.get("/api/node/{node_id}")
-async def get_node_details(node_id: str):
+async def get_node_data(node_id: str, api_key: str = Depends(get_api_key)):
     """Recupera il contenuto completo e le connessioni locali di un nodo."""
     # 🔮 [v4.3.1] Record interaction for pre-fetching
     if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'prefetcher'):
@@ -615,70 +701,91 @@ async def get_node_details(node_id: str):
         cached = app.state.lab.prefetcher.get_cached_node(node_id)
         if cached:
             print(f"🔮 [Prefetch-Hit] Serving node {node_id[:8]} from L1 Hot RAM.")
-            return cached.to_dict()
+            if hasattr(cached, 'to_dict'):
+                return cached.to_dict()
+            return cached
 
-    async with engine_lock:
+    try:
+        # [v9.2.1] Performance Optimization: Removed global engine_lock for read-only access.
         node = find_node_robust(node_id)
-                    
-    if node:
-        # Estrazione Campi Reali
-        n_text = getattr(node, 'text', node.get('text', '') if isinstance(node, dict) else "")
-        n_meta = getattr(node, 'metadata', node.get('metadata', {}) if isinstance(node, dict) else {})
-        n_type = n_meta.get("type", "text")
-        
-        # Gestione Anteprima Multimediale (Fase 40)
-        media_preview = None
-        if n_type == "image":
-            media_preview = n_meta.get("source") or n_meta.get("url")
-        elif n_type == "video":
-            media_preview = n_meta.get("thumbnail") or n_meta.get("source")
-
-        # 🧠 [Ebbinghaus Reinforcement] v4.8
-        # Reset della curva dell'oblio ad ogni consultazione profonda
-        try:
-            n_meta["last_access"] = time.time()
-            n_meta["access_count"] = n_meta.get("access_count", 1) + 1
-            # Se il nodo è un oggetto VaultNode reale, salviamo la modifica
-            if hasattr(node, 'metadata'):
-                # Innesca il salvataggio asincrono nel tier persistente se necessario
-                pass 
-        except: pass
-
-        # Recupera connessioni reali
-        connessioni = []
-        try:
-            # Relazioni dirette nel nodo (GNN Sync)
-            edges = getattr(node, 'edges', [])
-            for e in edges:
-                connessioni.append({
-                    "node": str(e.target_id), 
-                    "relation": str(e.relation), 
-                    "reason": getattr(e, 'reason', None)
-                })
-
-            # Fallback: usiamo le relazioni Agent007 se presenti
-            res = engine.agent007.execute("""
-                SELECT target_id, type FROM agent007_relations WHERE source_node_id = ?
-            """, (node_id,)).fetchall()
-
-            for r in res:
-                connessioni.append({"node": r[0], "relation": r[1]})
-        except: pass
-
-        return {
-            "id": node_id,
-            "text": n_text,
-            "type": n_type,
-            "preview": media_preview,
-            "metadata": n_meta,
-            "created_at": float(getattr(node, 'created_at', time.time())),
-            "connections": connessioni
-        }
+                        
+        if node:
+            # Estrazione Campi Reali (Supporta sia VaultNode che dict)
+            n_text = getattr(node, 'text', "")
+            if not n_text and isinstance(node, dict):
+                n_text = node.get('text', "")
+                
+            n_meta = getattr(node, 'metadata', {})
+            if not n_meta and isinstance(node, dict):
+                n_meta = node.get('metadata', {})
+                
+            n_type = n_meta.get("type", "text") if isinstance(n_meta, dict) else "text"
             
-    return JSONResponse(status_code=404, content={"error": f"Node {node_id} not found in engine ({len(engine._nodes)} fragments active)"})
+            # Gestione Anteprima Multimediale
+            media_preview = None
+            if isinstance(n_meta, dict):
+                if n_type == "image":
+                    media_preview = n_meta.get("source") or n_meta.get("url")
+                elif n_type == "video":
+                    media_preview = n_meta.get("thumbnail") or n_meta.get("source")
+
+            # [Ebbinghaus Reinforcement]
+            try:
+                if isinstance(n_meta, dict):
+                    n_meta["last_access"] = time.time()
+                    n_meta["access_count"] = n_meta.get("access_count", 1) + 1
+            except: pass
+
+            # Recupera connessioni reali
+            connessioni = []
+            try:
+                # Relazioni dirette (GNN Sync)
+                edges = getattr(node, 'edges', [])
+                for e in edges:
+                    connessioni.append({
+                        "node": str(e.target_id), 
+                        "relation": str(e.relation), 
+                        "reason": getattr(e, 'reason', None)
+                    })
+
+                # Fallback: agent007
+                if engine and hasattr(engine, 'agent007') and engine.agent007:
+                    res = engine.agent007.execute("""
+                        SELECT target_id, type FROM agent007_relations WHERE source_node_id = ?
+                    """, (node_id,)).fetchall()
+
+                    for r in res:
+                        connessioni.append({"node": r[0], "relation": r[1]})
+            except Exception as ce:
+                print(f"⚠️ [api/node] Error fetching connections for {node_id}: {ce}")
+
+            # Calcolo created_at robusto
+            try:
+                c_at = getattr(node, 'created_at', time.time())
+                if isinstance(node, dict):
+                    c_at = node.get('created_at', c_at)
+                c_at = float(c_at)
+            except:
+                c_at = time.time()
+
+            return {
+                "id": node_id,
+                "text": n_text,
+                "type": n_type,
+                "preview": media_preview,
+                "metadata": n_meta,
+                "created_at": c_at,
+                "connections": connessioni
+            }
+                
+        return JSONResponse(status_code=404, content={"error": f"Node {node_id} not found"})
+    except Exception as e:
+        import traceback
+        print(f"❌ [api/node] Global Error: {e}\n{traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"error": f"Internal server error: {str(e)}"})
 
 @app.get("/api/node/verify/{node_id}")
-async def verify_node_coherence(node_id: str):
+async def verify_node_coherence(node_id: str, api_key: str = Depends(get_api_key)):
     """Verifica la coerenza logica di un nodo rispetto alla Nebula (Neural Audit)."""
     # 🔮 [v4.3.1] Record interaction for pre-fetching
     if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'prefetcher'):
@@ -724,7 +831,7 @@ Rispondi in modo tecnico e conciso (max 3 frasi). Inizia con [COERENTE] o [INCOE
         return {"audit": f"Errore durante l'audit: {str(e)}"}
 
 @app.post("/api/purge")
-async def nuclear_purge():
+async def nuclear_purge(api_key: str = Depends(get_api_key)):
     """Protocollo 'VETRO' (v1.0): Reset totale immediato."""
     print("☢️ PROTOCOLLO VETRO (VETRO-NUCLEAR) ATTIVATO.")
     
@@ -747,7 +854,7 @@ async def nuclear_purge():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/documents")
-async def get_documents(api_key: str = Depends(get_api_key)):
+async def list_documents(api_key: str = Depends(get_api_key)):
     """Recupera l'inventario cronologico della conoscenza acquisita."""
     if engine is None: return {"documents": []}
     try:
@@ -830,7 +937,7 @@ async def delete_custom_agent(name: str, api_key: str = Depends(get_api_key)):
     return {"error": "Agent not found"}
 
 @app.post("/api/log")
-async def client_log(request: Request):
+async def client_log(request: Request, api_key: str = Depends(get_api_key)):
     """Ponte di Telemetria Inversa: Visualizza le azioni del browser nel terminale."""
     try:
         data = await request.json()
@@ -843,10 +950,9 @@ async def client_log(request: Request):
 # --- MULTIMODAL BRIDGE ENDPOINTS (v4.0) ---
 
 @app.post("/api/multimodal/upload")
-async def upload_multimodal(file: UploadFile = File(...), api_key: str = Header(None)):
+async def upload_multimodal(file: UploadFile = File(...), api_key: str = Depends(get_api_key)):
     """Ingestione Drag-and-Drop: Caricamento e processamento di Immagini/Audio/Video."""
-    if api_key != VAULT_KEY:
-        raise HTTPException(status_code=403, detail="Invalid Vault Key")
+    # api_key is validated by get_api_key dependency
     
     if engine is None:
         raise HTTPException(status_code=503, detail="Neural Engine Offline")
@@ -902,10 +1008,6 @@ async def manual_shard_backup(api_key: str = Depends(get_api_key)):
         return {"status": "success", "message": "Backup fisico completato."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        level = data.get("level", "INFO")
-        print(f"🖥️ [Interactive HUD] {msg}")
-    except: pass
-    return {"status": "ok"}
 
 @app.post("/api/files/upload")
 @app.post("/api/upload")
@@ -1187,13 +1289,29 @@ MODEL_CATALOG = {
         "ram": "1GB RAM", "cpu": "1 Core",
         "capabilities": ["Micro-Classification", "Language ID", "Basic Logic", "Text Cleaning"]
     },
-    "ministral:latest": {
-        "name": "Ministral 3B", "size": "2.1GB", "category": "TINY_KINETIC", 
-        "pros": "Stato dell'arte per modelli sotto i 5B", "cons": "Finestra di contesto 128k richiede molta RAM", 
-        "caveau": "Il piccolo Titano di Mistral.", "forza": "Densità di intelligenza estrema e logica impeccabile.",
+    "mistral:latest": {
+        "name": "Mistral (7B v0.3)", "size": "4.1GB", "category": "SOVEREIGN_MID_CORE", 
+        "pros": "Affidabile e performante, ottima comprensione del contesto", "cons": "Meno specializzato nel codice rispetto a Qwen Coder", 
+        "caveau": "Il classico di riferimento.", "forza": "Versatilità generale e ottime doti di sintesi narrativa.",
         "synergy": ["mistral:latest"], "task": "Edge Intelligence",
         "ram": "4GB RAM", "vram": "2GB",
         "capabilities": ["High-Density Logic", "Complex Reasoning", "Large Context (128k)", "Italian Mastery"]
+    },
+    "ministral-3:latest": {
+        "name": "Ministral 8B", "size": "6.0GB", "category": "SOVEREIGN_MID_CORE", 
+        "pros": "Stato dell'arte per modelli edge, finestra 256k", "cons": "Richiede 8GB di memoria unificata", 
+        "caveau": "L'Ammiraglia compatta.", "forza": "Densità di intelligenza estrema e logica impeccabile.",
+        "synergy": ["mistral:latest"], "task": "Edge Intelligence",
+        "ram": "8GB RAM", "vram": "4GB",
+        "capabilities": ["High-Density Logic", "Complex Reasoning", "Large Context (256k)", "Agentic Ready"]
+    },
+    "ministral-3:3b": {
+        "name": "Ministral 3B (Sovereign)", "size": "3.0GB", "category": "TINY_KINETIC", 
+        "pros": "Modello ultra-compatto della famiglia Mistral, eccelsa logica", "cons": "Conoscenza enciclopedica ridotta rispetto all'8B", 
+        "caveau": "Il piccolo Titano di Mistral.", "forza": "Ottimo per dispositivi edge e inference locale rapida.",
+        "synergy": ["llama3.2:3b"], "task": "Pocket Reasoning",
+        "ram": "4GB RAM", "vram": "2GB",
+        "capabilities": ["Fast Extraction", "Edge Computing", "Large Context (128k)", "Agentic Logic"]
     },
     "deepseek-r1:1.5b": {
         "name": "DeepSeek R1 (1.5B Distill)", "size": "1.1GB", "category": "TINY_KINETIC", 
@@ -1247,9 +1365,33 @@ MODEL_CATALOG = {
         "name": "Gemma 2 (2B)", "size": "1.8GB", "category": "TINY_KINETIC", 
         "pros": "Architettura Google v2, ultra-compressa", "cons": "Tende alla brevità", 
         "caveau": "Il Nucleo di Cristallo.", "forza": "Spiegazioni concise e logica matematica solida in formato pocket.",
-        "synergy": ["qwen2.5:1.5b"], "task": "Pocket Reasoning",
+        "synergy": ["qwen2.5:3b"], "task": "Pocket Reasoning",
         "ram": "4GB RAM", "vram": "2GB",
         "capabilities": ["Math Solving", "Concise Summaries", "Code Snippets", "Logical Filters"]
+    },
+    "granite3-dense:2b": {
+        "name": "IBM Granite 3.0 (2B)", "size": "1.4GB", "category": "TINY_KINETIC", 
+        "pros": "Addestrato specificamente per RAG e tool calling", "cons": "Meno creativo in prosa", 
+        "caveau": "La Scacchiera d'Acciaio.", "forza": "Affidabilità estrema nei compiti di recupero dati senza allucinazioni.",
+        "synergy": ["llama3.2:3b"], "task": "RAG Verification",
+        "ram": "3GB RAM", "vram": "1GB",
+        "capabilities": ["Zero Hallucination RAG", "Tool Calling", "Data Extraction", "Logic Filtering"]
+    },
+    "qwen2.5:3b": {
+        "name": "Qwen 2.5 (3B)", "size": "1.9GB", "category": "TINY_KINETIC", 
+        "pros": "Eccezionale per hardware limitato, veloce e brillante", "cons": "Conoscenza enciclopedica ridotta rispetto a 7B", 
+        "caveau": "Il compromesso perfetto.", "forza": "Rapporto velocità/intelligenza inarrivabile per la sua taglia.",
+        "synergy": ["llama3.2:3b"], "task": "Fast Extraction",
+        "ram": "4GB RAM", "vram": "2GB",
+        "capabilities": ["Rapid Extraction", "JSON Formatting", "Basic Chat", "Agile Reasoning"]
+    },
+    "qwen2.5-coder:3b": {
+        "name": "Qwen 2.5 Coder (3B)", "size": "1.9GB", "category": "TINY_KINETIC", 
+        "pros": "Coding super-veloce, eccellente per autocomplete e script", "cons": "Non adatto ad architetture software complesse", 
+        "caveau": "Il programmatore tascabile.", "forza": "Scrittura e correzione rapida di frammenti di codice.",
+        "synergy": ["qwen2.5-coder:7b"], "task": "Agile Coding",
+        "ram": "4GB RAM", "vram": "2GB",
+        "capabilities": ["Fast Coding", "Script Generation", "Syntax Correction", "JSON Parsing"]
     },
     "qwen2.5-coder:7b": {
         "name": "Qwen 2.5 Coder (7B)", "size": "4.7GB", "category": "SOVEREIGN_MID_CORE", 
@@ -1335,14 +1477,6 @@ MODEL_CATALOG = {
     },
 
     # ── CATEGORIA: [SOVEREIGN_MID_CORE] - Prestazioni PC Fascia Media (4-12GB) ─────────
-    "mistral:latest": {
-        "name": "Mistral 7B v0.3", "size": "4.1GB", "category": "SOVEREIGN_MID_CORE", 
-        "pros": "Affidabilità granitica, finestra 32k", "cons": "No native CoT", 
-        "caveau": "Il Motore primario del Vault.", "forza": "Sintesi di documenti e stabilità logica.",
-        "synergy": ["deepseek-r1:7b"], "task": "General Knowledge",
-        "ram": "8GB RAM", "vram": "6GB",
-        "capabilities": ["Document Synthesis", "Code Writing", "Email Drafting", "Knowledge Retrieval"]
-    },
     "llama3.1:8b": {
         "name": "Llama 3.1 (8B)", "size": "4.7GB", "category": "SOVEREIGN_MID_CORE", 
         "pros": "Ecosistema vastissimo, ottimo italiano", "cons": "Censura occasionale", 
@@ -1480,6 +1614,14 @@ MODEL_CATALOG = {
         "synergy": ["llama3.1:70b"], "task": "Enterprise Intelligence",
         "ram": "64GB RAM", "vram": "40GB",
         "capabilities": ["Human-like Interaction", "Strategic Consulting", "Market Simulation", "Extreme Context Synthesis"]
+    },
+    "nutboy02/Qwen3.6-35B-A3B-Claude-4.7-Opus-abliterated-uncenfull": {
+        "name": "Qwen 3.6 Opus Uncensored (35B)", "size": "22GB", "category": "ELITE_HEAVY_WEIGHT", 
+        "pros": "Ibrido della community, abliterated, nessuna censura", "cons": "Richiede almeno 32GB di RAM unificata", 
+        "caveau": "Il Titano Ribelle.", "forza": "Ragionamento ibrido estremo e sintesi senza barriere etiche.",
+        "synergy": ["deepseek-r1:32b"], "task": "Unrestricted Synthesis",
+        "ram": "32GB RAM", "vram": "20GB",
+        "capabilities": ["Uncensored Logic", "Hybrid Architecture", "Deep Narrative", "Zero Constraints"]
     },
     "qwen2.5:32b": {
         "name": "Qwen 2.5 (32B)", "size": "18GB", "category": "ELITE_HEAVY_WEIGHT", 
@@ -1696,7 +1838,15 @@ async def ingest_text(request: Request, background_tasks: BackgroundTasks, api_k
     namespace = data.get("namespace", "default")
     
     node_id = str(uuid.uuid4())
-    engine.add_node(node_id, text, metadata={"source": filename, "namespace": namespace})
+    await engine.add_node(node_id, text, metadata={"source": filename, "namespace": namespace})
+    
+    # [v9.0] Shadow Logging for CQRS Migration
+    aegis_bus.emit("NODE_CREATED", {
+        "id": node_id,
+        "text_preview": text[:100],
+        "source": filename,
+        "namespace": namespace
+    })
     
     # [v7.0] Innesco automatico estrazione causale in background
     background_tasks.add_task(auto_extract_causal, node_id)
@@ -1706,8 +1856,8 @@ async def ingest_text(request: Request, background_tasks: BackgroundTasks, api_k
 async def auto_extract_causal(node_id: str):
     """Worker interno per l'estrazione causale automatica."""
     try:
-        async with engine_lock:
-            node = find_node_robust(node_id)
+        # [v9.2.1] Performance Optimization: Concurrent Reads
+        node = find_node_robust(node_id)
         if node:
             from retrieval.causal_extractor import CausalExtractor
             extractor = CausalExtractor(engine)
@@ -1728,10 +1878,11 @@ async def extract_causal_node(request: Request, api_key: str = Depends(get_api_k
     
     if engine is None: raise HTTPException(status_code=500, detail="Engine not ready")
     
-    async with engine_lock:
-        node = find_node_robust(node_id)
-        
-    if not node: raise HTTPException(status_code=404, detail="Node not found")
+    # [v9.2.1] Performance Optimization: Concurrent Reads
+    node = find_node_robust(node_id)
+    
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
     
     from retrieval.causal_extractor import CausalExtractor
     extractor = CausalExtractor(engine)
@@ -1758,10 +1909,11 @@ async def analyze_node(request: Request, api_key: str = Depends(get_api_key)):
     
     if engine is None: raise HTTPException(status_code=500, detail="Engine not ready")
     
-    async with engine_lock:
-        node = find_node_robust(node_id)
-        
-    if not node: raise HTTPException(status_code=404, detail="Node not found")
+    # [v9.2.1] Performance Optimization: Concurrent Reads
+    node = find_node_robust(node_id)
+    
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
     
     # Esegue la sessione avversariale (Digital Courtroom)
     verdict = await app.state.lab.run_adversarial_session(node_id, node.text)
@@ -1841,6 +1993,8 @@ async def receive_gossip_signal(signal: SyncSignal):
             
             node = VaultNode(
                 id=node_id,
+                # [v16.0] Refined Galaxy Clustering: use specific cluster_id or topic to avoid merging distinct galaxies
+                cluster_key = data.get("metadata", {}).get("cluster_id") or data.get("metadata", {}).get("topic") or data.get("metadata", {}).get("source", data.get("collection") or "default"),
                 collection=data.get("collection", "default"),
                 text=data.get("text", ""),
                 vector=np.array(data["vector"]) if "vector" in data else None,
@@ -2220,7 +2374,7 @@ async def agent_task(agent_id: str, request: Request, api_key: str = Depends(get
     
     # Esecuzione task (simuliamo un'interazione diretta via Ollama)
     prompt = f"TASK DIRETTO DALL'UTENTE: {task_text}\nRispondi secondo il tuo mandato: {agent.identity['prompt']}"
-    response = app.state.lab._call_ollama_for_agent(agent.identity["name"], prompt)
+    response = await app.state.lab._call_ollama_for_agent(agent.identity["name"], prompt)
     
     # Log sulla blackboard
     sig = SynapticSignal(agent.identity["name"], agent.identity["role"], f"🎯 TASK COMPLETATO: {task_text[:30]}...", SignalType.SYSTEM_NOTIFICATION)
@@ -2394,13 +2548,26 @@ async def get_inventory(api_key: str = Depends(get_api_key)):
     """Infrastruttura di analisi sorgenti: Ritorna lo stack cronologico della conoscenza (v2.9.0)."""
     try:
         sources = engine._prefilter.get_knowledge_sources()
-        # Arricchiamo con le sinapsi (stima basata sui nodi della sorgente)
+        
+        # [v4.3.5] Efficient & Thread-Safe Aggregation
+        # Evitiamo scansioni multiple e RuntimeError per dizionario modificato
+        with engine._lock:
+            all_nodes = list(engine._nodes.values())
+        
+        # Pre-calcoliamo i conteggi in un unico passaggio O(N)
+        edge_counts = {}
+        for n in all_nodes:
+            if not n or not hasattr(n, 'metadata') or n.metadata is None: continue
+            src = n.metadata.get("source", "Unknown Source")
+            edge_counts[src] = edge_counts.get(src, 0) + len(getattr(n, 'edges', []))
+            
         for s in sources:
-            # Calcoliamo quanti archi partono dai nodi di questa sorgente
-            # Nota: in una versione Rust sarebbe O(1) con aggregazione live
-            s["edges"] = sum(len(n.edges) for n in engine._nodes.values() if n.metadata.get("source") == s["source"])
+            s["edges"] = edge_counts.get(s["source"], 0)
+            
         return sources
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/namespaces")
@@ -2408,7 +2575,8 @@ async def get_namespaces(api_key: str = Depends(get_api_key)):
     """[v3.6.0] Esploratore di Compartimenti: Restituisce l'elenco dei namespace attivi."""
     try:
         # 1. Query dai metadati testuali
-        res = engine._prefilter.execute("SELECT DISTINCT namespace FROM vault_metadata").fetchall()
+        # [v4.3.1] Thread-Safe Fetch
+        res = engine._prefilter.fetchall("SELECT DISTINCT namespace FROM vault_metadata")
         text_ns = [r[0] for r in res if r[0]]
         
         # 2. Query dai metadati multimodali
@@ -2428,9 +2596,8 @@ async def get_namespaces(api_key: str = Depends(get_api_key)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/translate")
-async def translate_text(request: Request, x_api_key: str = Header(None)):
+async def translate_text(request: Request, api_key: str = Depends(get_api_key)):
     """Traduttore Neurale v1.2: Supporto Ollama IT/EN."""
-    check_api_key(x_api_key)
     data = await request.json()
     text = data.get("text")
     target_lang = data.get("lang", "IT")
@@ -2456,9 +2623,8 @@ async def translate_text(request: Request, x_api_key: str = Header(None)):
         return {"translated": text, "error": str(e)}
 
 @app.post("/api/chat")
-async def neural_chat(request: QueryRequest, x_api_key: str = Header(None)):
+async def neural_chat(request: QueryRequest, api_key: str = Depends(get_api_key)):
     """Oracolo Neurale: RAG Multimodale v7.5."""
-    check_api_key(x_api_key)
     
     timings = {}
     total_start = time.time()
@@ -2673,6 +2839,18 @@ async def generate_wiki_page(req: dict, api_key: str = Depends(get_api_key)):
         print(error_msg)
         traceback.print_exc()
         raise HTTPException(500, error_msg)
+        
+@app.get("/api/wiki/generate/stream")
+async def stream_wiki_page(topic: str, mode: str = "TECHNICAL", api_key: str = Depends(get_api_key)):
+    """[v8.4] Endpoint streaming per la generazione Wiki progressiva."""
+    from fastapi.responses import StreamingResponse
+    
+    async def event_generator():
+        async for chunk in engine.wiki.generate_page_stream(topic, mode=mode):
+            yield f"data: {chunk}\n\n"
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 @app.get("/api/wiki/status/{topic}")
 async def get_wiki_status(topic: str, api_key: str = Depends(get_api_key)):
@@ -2727,20 +2905,270 @@ async def get_taxonomy(api_key: str = Depends(get_api_key)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
-@app.get("/api/wiki/simulate")
-async def simulate_wiki_impact(topic: str, node_id: Optional[str] = None):
-    """🧪 [v8.0] Phase 7: What-If Simulation Engine."""
+@app.get("/api/wiki/list")
+async def list_wiki_pages(api_key: str = Depends(get_api_key)):
+    print("📡 [API] Wiki List Request Received")
+    """Ritorna la lista di tutte le pagine Wiki canoniche organizzate per Namespace."""
     try:
-        if not node_id:
-            # Trova il nodo più rappresentativo per il topic
-            results = await engine.query(topic, k=1)
-            if results: node_id = results[0].node.id
+        wiki_dir = engine.wiki.wiki_dir
+        # [v9.1] Ricerca ricorsiva per supportare i Namespace
+        files = list(wiki_dir.rglob("*.md"))
+        pages = []
+        for f in files:
+            stat = f.stat()
+            relative_path = str(f.relative_to(wiki_dir))
+            namespace = f.parent.name if f.parent != wiki_dir else "General"
+            pages.append({
+                "title": f.stem.replace("_", " "),
+                "file_name": relative_path,
+                "namespace": namespace,
+                "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "size": stat.st_size
+            })
+        return {"status": "success", "pages": sorted(pages, key=lambda x: x['last_modified'], reverse=True)}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/wiki/llms.txt")
+async def get_llms_txt(api_key: str = Depends(get_api_key)):
+    """Genera un file llms.txt aggregato per il consumo da parte di modelli AI."""
+    try:
+        wiki_dir = engine.wiki.wiki_dir
+        # [v9.1] Supporto ricorsivo per llms.txt
+        files = list(wiki_dir.rglob("*.md"))
+        content = "# 🏺 NEURALVAULT SOVEREIGN WIKI (llms.txt)\n\n"
+        content += f"Generato il: {datetime.now().isoformat()}\n"
+        content += f"Totale pagine: {len(files)}\n\n"
+        content += "## 📚 INDICE CONOSCENZA\n\n"
         
-        if not node_id:
-            return JSONResponse({"error": "No starting node found for topic"}, status_code=404)
+        for f in files:
+            relative_path = str(f.relative_to(wiki_dir))
+            content += f"- {f.stem.replace('_', ' ')}: /api/wiki/read?file={relative_path}\n"
             
-        simulation = await engine.wiki.simulator.simulate_intervention(node_id)
-        return JSONResponse(simulation)
+        content += "\n---\n\n"
+        
+        for f in files:
+            with open(f, "r") as md:
+                content += f"### DOCUMENT: {f.stem.replace('_', ' ')}\n\n"
+                content += md.read() + "\n\n---\n\n"
+                
+        return StreamingResponse(iter([content]), media_type="text/plain")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/wiki/read")
+async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
+    """Legge il contenuto di una pagina Wiki specifica (supporta path relativi)."""
+    try:
+        wiki_dir = engine.wiki.wiki_dir
+        # [v9.1] Prevenzione directory traversal
+        file_path = (wiki_dir / file).resolve()
+        if not str(file_path).startswith(str(wiki_dir.resolve())):
+            raise HTTPException(403, "Access denied")
+            
+        if not file_path.exists(): raise HTTPException(404, "Page not found")
+        with open(file_path, "r") as f:
+            return {"status": "success", "markdown": f.read()}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/api/sync/agents")
+async def sync_agents(req: dict, api_key: str = Depends(get_api_key)):
+    """Innesca la sincronizzazione delle sessioni agentiche (Cursor/Claude)."""
+    provider = req.get("provider", "auto")
+    try:
+        count = await engine.sync_agent_sessions(provider=provider)
+        return {"status": "success", "synced": count}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/api/wiki/simulate")
+async def simulate_impact(request: Request):
+    """[v8.3] Sovereign Oracle: Supporta modalità avanzate (Antifragilità, Conflitto, ecc)."""
+    if not check_api_key(request.headers.get("x-api-key", "")): return JSONResponse({"status": "error", "message": "Invalid API Key"}, status_code=403)
+    
+    data = await request.json()
+    node_id = data.get("node_id")
+    intensity = float(data.get("intensity", 1.0)) / 100.0
+    lens_ids = data.get("lens_ids", ["standard"])
+    mode = data.get("mode", "standard")
+    adversary_id = data.get("adversary_node_id")
+    
+    if not node_id: return {"status": "error", "message": "node_id is required"}
+    
+    from retrieval.causal_simulator import SimulationMode
+    try:
+        sim_mode = SimulationMode(mode)
+    except ValueError:
+        sim_mode = SimulationMode.STANDARD
+        
+    results = await engine.wiki.simulator.simulate_intervention(
+        node_id, 
+        intensity, 
+        iterations=1000, 
+        lens_ids=lens_ids,
+        mode=sim_mode,
+        adversary_node_id=adversary_id
+    )
+    return JSONResponse(results)
+
+@app.get("/api/wiki/simulate/timeline")
+async def simulate_wiki_timeline(topic: str, val: float = 1.0):
+    """🧪 [v8.1] Predictive Timeline Simulation."""
+    try:
+        # Trova il nodo radice per il topic
+        results = await engine.query(topic, k=1)
+        if not results: return JSONResponse({"error": "Node not found"}, status_code=404)
+        
+        results_timeline = await engine.wiki.simulator.simulate_across_time(results[0].node.id, val)
+        return JSONResponse(results_timeline)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+@app.post("/api/wiki/simulate/interview")
+async def interview_simulation_node(data: Dict[str, Any]):
+    """🧪 [v8.1] Sovereign Interview: Parla con un nodo durante la simulazione."""
+    try:
+        node_id = data.get("node_id")
+        simulation_context = data.get("context")
+        if not node_id or not simulation_context:
+            return JSONResponse({"error": "node_id and context required"}, status_code=400)
+            
+        result = await engine.wiki.simulator.interview_node(node_id, simulation_context)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/wiki/simulate/report")
+async def generate_simulation_report(data: Dict[str, Any]):
+    """🏺 [v8.1] Strategic Report: Genera un report narrativo dei risultati."""
+    try:
+        simulation_results = data.get("results")
+        if not simulation_results:
+            return JSONResponse({"error": "simulation results required"}, status_code=400)
+            
+        report = await engine.wiki.simulator.generate_strategic_report(simulation_results)
+        return JSONResponse({"report": report})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/wiki/simulate/scenario")
+async def generate_causal_scenario_api(request: Request):
+    """🚀 [v8.2] Causal Scenario: Genera uno scenario avanzato con lenti cognitive e Chaining."""
+    if not check_api_key(request.headers.get("x-api-key", "")): return JSONResponse({"status": "error", "message": "Invalid API Key"}, status_code=403)
+    
+    data = await request.json()
+    results = data.get("results")
+    lens_ids = data.get("lens_ids", ["standard"])
+    horizon = data.get("horizon", "immediate")
+    parent_id = data.get("parent_scenario_id")
+    
+    if not results:
+        return JSONResponse({"error": "simulation results required"}, status_code=400)
+        
+    scenario = await engine.wiki.simulator.generate_causal_scenario(
+        results, 
+        lens_id=lens_ids[0] if lens_ids else "standard",
+        horizon=horizon,
+        parent_scenario_id=parent_id
+    )
+    return JSONResponse(scenario)
+
+@app.post("/api/wiki/simulate/nl")
+async def simulate_nl_api(data: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    """🚀 [v8.4] NL What-If: Simulazione via linguaggio naturale."""
+    try:
+        query = data.get("query")
+        lenses = data.get("lenses", ["standard"])
+        mode = data.get("mode", "FAST")
+        horizon = data.get("horizon", "immediate") # [v8.4] Temporal Horizon
+        if not query:
+            return JSONResponse({"error": "query required"}, status_code=400)
+            
+        result = await engine.wiki.nl_whatif.run_nl_simulation(query, lenses, mode=mode, horizon=horizon)
+
+
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/journal/history")
+async def get_journal_history():
+    """⚖️ [v8.4] Recupera lo storico delle decisioni."""
+    try:
+        history = await engine.wiki.journal.get_history()
+        return JSONResponse({"history": history})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/wiki/journal/update")
+async def update_journal_outcome(data: Dict[str, Any]):
+    """⚖️ [v8.4] Registra l'esito reale di una decisione passata."""
+    try:
+        record_id = data.get("record_id")
+        outcome = data.get("outcome")
+        accuracy = data.get("accuracy") # 0.0 - 1.0
+        
+        if not record_id or outcome is None or accuracy is None:
+            return JSONResponse({"error": "record_id, outcome and accuracy required"}, status_code=400)
+            
+        await engine.wiki.journal.update_outcome(record_id, outcome, accuracy)
+        return JSONResponse({"status": "updated"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/journal/grade")
+async def get_oracle_grade():
+    """⚖️ [v8.4] Calcola il voto di accuratezza dell'Oracolo."""
+    try:
+        grade = await engine.wiki.journal.compute_oracle_grade()
+        return JSONResponse(grade)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/twin/create")
+async def create_vault_twin():
+    """🌓 [v8.4] Crea una sandbox temporanea (Digital Twin) del vault."""
+    try:
+        twin_id = await engine.twin.create_twin()
+        return JSONResponse({"twin_id": twin_id})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/twin/simulate")
+async def simulate_twin_ingestion(data: Dict[str, Any]):
+    """🌓 [v8.4] Simula l'ingestion di conoscenza nel Digital Twin."""
+    try:
+        twin_id = data.get("twin_id")
+        text = data.get("text")
+        source = data.get("source", "Twin_Simulation")
+        
+        if not twin_id or not text:
+            return JSONResponse({"error": "twin_id and text required"}, status_code=400)
+            
+        result = await engine.twin.simulate_ingestion(twin_id, text, source)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/twin/commit")
+async def commit_vault_twin(data: Dict[str, Any]):
+    """🌓 [v8.4] Applica le modifiche del Twin al Vault reale."""
+    try:
+        twin_id = data.get("twin_id")
+        if not twin_id:
+            return JSONResponse({"error": "twin_id required"}, status_code=400)
+            
+        success = await engine.twin.commit_twin(twin_id)
+        return JSONResponse({"status": "committed" if success else "failed"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/learning-path")
+async def get_learning_path(topic: str):
+    """🗺️ [v8.4] Genera un percorso di apprendimento per un topic."""
+    try:
+        path = await engine.wiki.learning_path.generate_path(topic)
+        return JSONResponse(path)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -2808,11 +3236,11 @@ async def trigger_reclustering(api_key: str = Depends(get_api_key)):
 async def list_communities(api_key: str = Depends(get_api_key)):
     """[v6.0] Elenca le Galassie Concettuali identificate."""
     try:
-        res = engine._prefilter.execute("""
+        res = engine._prefilter.fetchall("""
             SELECT id, title, summary, node_count, level 
             FROM neural_communities 
             ORDER BY node_count DESC
-        """).fetchall()
+        """)
         
         communities = []
         for r in res:
@@ -3015,7 +3443,7 @@ async def get_voice_status(api_key: str = Depends(get_api_key)):
     }
 
 @app.get("/events")
-async def sse_stream(request: Request):
+async def sse_stream(request: Request, api_key: str = Depends(get_api_key)):
     """Il battito cardiaco della Dashboard: Telemetria Real-time."""
     # Helper per calcolare il peso del cervello digitale
     _cached_size = {"val": 0, "time": 0}
@@ -3044,20 +3472,34 @@ async def sse_stream(request: Request):
     async def event_generator():
         last_size = 0
         try:
-            # 1. KEEPALIVE / INITIAL SYNC
+            # 1. IMMEDIATE INITIAL SYNC (Fast counts)
+            fast_data = {
+                "nodes_count": len(engine._nodes) if engine else 0,
+                "edges_count": 0, # Will be updated by full stats
+                "storage": {"total": "SYNCING", "pulse": "..."},
+                "lab": request.app.state.lab.get_status() if hasattr(request.app.state, 'lab') else {},
+                "status": "INIT_FAST_SYNC"
+            }
+            yield f"data: {json.dumps(fast_data, default=json_serializer)}\n\n"
+
+            # 2. FULL ENGINE STATS (Fast Boot v8.4: Limited to 5000 points for instant rendering)
             loop = asyncio.get_event_loop()
-            stats = await loop.run_in_executor(None, engine.stats, 30000)
-            initial_data = {
+            try:
+                # Iniziamo con 5000 punti per un'apparizione istantanea, poi caricheremo il resto
+                stats = await loop.run_in_executor(None, engine.stats, 5000)
+            except: stats = {}
+
+            full_initial_data = {
                 "points": stats.get("point_cloud", []),
                 "links": stats.get("edge_sample", []),
-                "nodes_count": len(engine._nodes),
+                "nodes_count": len(engine._nodes) if engine else 0,
                 "edges_count": stats.get("edges_count", 0),
-                "storage": {"total": "INIT", "pulse": "SYNCING"},
-                "lab": app.state.lab.get_status() if hasattr(app.state, 'lab') else {}, 
+                "storage": {"total": "INIT", "pulse": "READY"},
+                "lab": request.app.state.lab.get_status() if hasattr(request.app.state, 'lab') else {},
                 "system": {}, 
                 "agent007": {"entities_count": 0, "relations_count": 0}
             }
-            yield f"data: {json.dumps(initial_data, default=json_serializer)}\n\n"
+            yield f"data: {json.dumps(full_initial_data, default=json_serializer)}\n\n"
             while not _is_shutting_down:
                 if await request.is_disconnected():
                     break
@@ -3075,114 +3517,117 @@ async def sse_stream(request: Request):
                         "pulse": f"+{round(growth/1024, 1)} KB" if growth > 0 else "STABLE"
                     }
 
-                    # 3. 3D Engine Stats (Offloaded)
-                    try:
-                        stats = await loop.run_in_executor(None, engine.stats)
-                    except: stats = {}
+                    # 3. 3D Engine Stats (Offloaded & Throttled)
+                    # [v17.7] Only refresh full stats every 3 iterations to save CPU
+                    if not hasattr(event_generator, '_tick'): event_generator._tick = 0
+                    event_generator._tick += 1
                     
-                    # 4. Neural Lab & System Status
-                    async with engine_lock:
-                        lab_status = app.state.lab.get_status() if hasattr(app.state, 'lab') else {}
-                        
-                        # [v4.1.9] Hardware Tuner is now persistent to avoid console spam
-                        if not hasattr(app.state, 'tuner'):
-                            from utils.hardware import HardwareTuner
-                            app.state.tuner = HardwareTuner(data_dir=engine.data_dir if hasattr(engine, 'data_dir') else "./vault_data")
-                        
-                        hw_stats = app.state.tuner.get_telemetry()
-
-                        # 🕵️ Agent007 Hardbank (Thread-Safe v4.1.9)
-                        a007_data = {"entities_count": 0, "relations_count": 0}
+                    if event_generator._tick % 3 == 0 or not stats:
                         try:
-                            if hasattr(engine, 'agent007') and engine.agent007:
-                                a007_data = engine.agent007.get_stats()
-                        except Exception as e:
-                            print(f"🕵️ [Agent007/Stats] {e}")
-
-                        # 🧬 Global Cluster Detection (Vault Total)
+                            stats = await loop.run_in_executor(None, engine.stats)
+                        except: stats = {}
+                    
+                    # 4. Neural Lab & System Status (Offloaded)
+                    def _get_lab_status():
                         try:
-                            # 1. Check historical unique collections from persistent store
-                            res = engine._prefilter.execute("SELECT COUNT(DISTINCT collection) FROM vault_metadata WHERE collection != 'default' AND collection IS NOT NULL").fetchone()
-                            db_clusters = res[0] if res else 0
-                            
-                            # 2. Fetch current session activity from Quantum Agent
-                            session_fused = 0
-                            if 'QA-101' in lab_status.get('agents', {}):
-                                session_fused = lab_status['agents']['QA-101'].get('fused_clusters', 0)
-                            
-                            # 3. Calculate Global Cumulative Total
-                            # We use source as a fallback for collection to handle existing nodes (v17.6 Fix)
-                            mem_clusters = len(set(
-                                n.collection if n.collection != 'default' else n.metadata.get('source', 'default') 
-                                for n in engine._nodes.values() 
-                                if (n.collection != 'default' or n.metadata.get('source', 'default') != 'default')
-                            ))
-                            clusters_count = max(db_clusters, session_fused, mem_clusters)
-                        except Exception as e:
-                            # Fallback if DB query fails
-                            clusters_count = len(set(
-                                n.collection if n.collection != 'default' else n.metadata.get('source', 'default') 
-                                for n in engine._nodes.values() 
-                                if (n.collection != 'default' or n.metadata.get('source', 'default') != 'default')
-                            ))
-
-                        # 📏 Semantic Distance Calculation (Cohesion Metric)
-                        try:
-                            # We use the standard deviation of projections as a proxy for 'distance'
-                            # Higher SD = nodes are more spread out (Semantic Diversity)
-                            # Lower SD = nodes are clustered (Semantic Focus)
-                            if points_array := [[p.get("x", 0), p.get("y", 0), p.get("z", 0)] for p in stats.get("point_cloud", [])]:
-                                p_arr = np.array(points_array)
-                                dist_val = float(np.std(p_arr)) / 500000.0 # Normalized for UI
-                            else: dist_val = 0.84 # Baseline
-                        except: dist_val = 0.84
-
-                        # 🧬 [v4.8] Cognitive Health Metrics
-                        try:
-                            sample_nodes = list(engine._nodes.values())[:100]
-                            if sample_nodes:
-                                avg_ret = sum(engine.cognitive.calculate_strength(
-                                    n.metadata.get("last_access", n.created_at),
-                                    n.metadata.get("importance", 0.5),
-                                    n.metadata.get("access_count", 1)
-                                ) for n in sample_nodes) / len(sample_nodes)
-                                
-                                # Stability is derived from average access count and importance
-                                avg_stab = sum(min(1.0, (n.metadata.get("access_count", 1) * 0.2) + n.metadata.get("importance", 0.5)) for n in sample_nodes) / len(sample_nodes)
+                            # Use global app explicitly to avoid request detachment issues in background executor
+                            if hasattr(app.state, 'lab'):
+                                return app.state.lab.get_status()
                             else:
-                                avg_ret, avg_stab = 1.0, 1.0
-                        except: avg_ret, avg_stab = 0.98, 0.99
+                                print("⚠️ [SSE] app.state has no 'lab' attribute!")
+                                return {}
+                        except Exception as e:
+                            print(f"⚠️ [SSE] Error in get_status: {e}")
+                            return {}
+                            
+                    lab_status = await loop.run_in_executor(None, _get_lab_status)
+                    
+                    if not hasattr(app.state, 'tuner'):
+                        from utils.hardware import HardwareTuner
+                        app.state.tuner = HardwareTuner(data_dir=engine.data_dir if hasattr(engine, 'data_dir') else "./vault_data")
+                    
+                    hw_stats = await loop.run_in_executor(None, app.state.tuner.get_telemetry)
 
-                        data = {
-                            "points": stats.get("point_cloud", []),
-                            "links": stats.get("edge_sample", []),
-                            "nodes_count": len(engine._nodes),
-                            "edges_count": stats.get("edges_count", 0),
-                            "clusters_count": int(clusters_count),
-                            "semantic_distance": round(dist_val, 2),
-                            "cognitive": {
-                                "retention": round(avg_ret, 4),
-                                "stability": round(avg_stab, 4)
-                            },
-                            "storage": storage_hud,
-                            "lab": lab_status,
-                            "hardware": hw_stats, # [v4.0] Sovereign Telemetry
-                            "weather": app.state.lab.blackboard.get_weather() if hasattr(app.state, 'lab') else {},
-                            "agent007": a007_data,
-                            "sleep": {
-                                "active": getattr(engine.sleep, "is_sleeping", False),
-                                "dreaming": getattr(engine.sleep, "is_dreaming", False),
-                                "topic": getattr(engine.sleep, "current_dream", "")
-                            }
+                    # 🕵️ Agent007 Hardbank
+                    a007_data = {"entities_count": 0, "relations_count": 0}
+                    if hasattr(engine, 'agent007') and engine.agent007:
+                        try: a007_data = engine.agent007.get_stats()
+                        except: pass
+
+                    # 🧬 Cluster Detection (Optimized & Offloaded)
+                    if not hasattr(event_generator, '_cached_clusters') or event_generator._tick % 5 == 0:
+                        try:
+                            def get_clusters():
+                                res = engine._prefilter.fetchone("SELECT COUNT(DISTINCT collection) FROM vault_metadata WHERE collection != 'default'")
+                                db_clusters = res[0] if res else 0
+                                all_nodes = list(engine._nodes.values())
+                                if len(all_nodes) > 5000:
+                                    sample = random.sample(all_nodes, 1000)
+                                    sample_clusters = len(set(n.collection for n in sample if n.collection != 'default'))
+                                    return max(db_clusters, int(sample_clusters * (len(all_nodes)/1000)))
+                                else:
+                                    return max(db_clusters, len(set(n.collection for n in all_nodes if n.collection != 'default')))
+                            
+                            clusters_count = await loop.run_in_executor(None, get_clusters)
+                            event_generator._cached_clusters = clusters_count
+                        except: 
+                            clusters_count = getattr(event_generator, '_cached_clusters', 0)
+                    else:
+                        clusters_count = event_generator._cached_clusters
+
+                    # 📏 Semantic Distance
+                    dist_val = 0.84
+                    try:
+                        if points_array := [[p.get("x", 0), p.get("y", 0), p.get("z", 0)] for p in stats.get("point_cloud", [])]:
+                            p_arr = np.array(points_array)
+                            dist_val = float(np.std(p_arr)) / 500000.0
+                    except: pass
+
+                    # 🧬 Cognitive Health (Sampled & Offloaded)
+                    avg_ret, avg_stab = 0.98, 0.99
+                    try:
+                        def get_cognitive():
+                            nodes_list = list(engine._nodes.values())
+                            sample_nodes = random.sample(nodes_list, min(50, len(nodes_list)))
+                            if not sample_nodes: return 0.98, 0.99
+                            
+                            ret = sum(engine.cognitive.calculate_strength(
+                                n.metadata.get("last_access", n.created_at),
+                                n.metadata.get("importance", 0.5),
+                                n.metadata.get("access_count", 1)
+                            ) for n in sample_nodes) / len(sample_nodes)
+                            stab = sum(min(1.0, (n.metadata.get("access_count", 1) * 0.2) + n.metadata.get("importance", 0.5)) for n in sample_nodes) / len(sample_nodes)
+                            return ret, stab
+                        
+                        avg_ret, avg_stab = await loop.run_in_executor(None, get_cognitive)
+                    except: pass
+
+                    data = {
+                        "points": stats.get("point_cloud", []) if event_generator._tick % 2 == 0 else None, # Skip points updates half the time
+                        "links": stats.get("edge_sample", []) if event_generator._tick % 2 == 0 else None,
+                        "nodes_count": len(engine._nodes),
+                        "edges_count": stats.get("edges_count", 0),
+                        "clusters_count": int(clusters_count),
+                        "semantic_distance": round(dist_val, 2),
+                        "cognitive": {"retention": round(avg_ret, 4), "stability": round(avg_stab, 4)},
+                        "storage": storage_hud,
+                        "lab": lab_status,
+                        "hardware": hw_stats,
+                        "agent007": a007_data,
+                        "sleep": {
+                            "active": getattr(engine.sleep, "is_sleeping", False),
+                            "dreaming": getattr(engine.sleep, "is_dreaming", False),
+                            "topic": getattr(engine.sleep, "current_dream", "")
                         }
-                        yield f"data: {json.dumps(data, default=json_serializer)}\n\n"
+                    }
+                    yield f"data: {json.dumps(data, default=json_serializer)}\n\n"
 
                 except Exception as e:
                     print(f"⚠️ [SSE/Loop] {e}")
                     yield f"data: {json.dumps({'status': 'RECOVERING'})}\n\n"
                     await asyncio.sleep(2)
                 
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(1.2) # Relaxed interval
         finally:
             print("🔌 [SSE] Stream telemetria terminato pulitamente.")
 
@@ -3556,27 +4001,64 @@ async def apply_sync_delta(payload: Dict):
         await engine.crdt.apply_remote_op(op)
     return {"status": "success", "applied_ops": len(delta)}
 
+@app.get("/api/system/compression/stats")
+async def get_compression_stats():
+    """📊 [v8.0] Recupera le statistiche di efficienza del Neural Implicit Compression."""
+    storage_dir = Path(os.getenv("NEURALVAULT_DATA_DIR", "./vault_data"))
+    codebook_path = storage_dir / "nic_codebook.npy"
+    
+    # Calcolo approssimativo: 768 float32 (3072 bytes) vs 1 uint16 (2 bytes)
+    all_ids = engine._prefilter.filter("1=1")
+    count = len(all_ids)
+    raw_size_mb = (count * 768 * 4) / (1024 * 1024)
+    
+    # Se NIC è attivo, calcoliamo il risparmio reale
+    is_active = hasattr(engine, 'nic') and engine.nic.is_trained
+    opt_size_mb = (count * 2) / (1024 * 1024) if is_active else raw_size_mb
+    
+    if codebook_path.exists():
+        cb_size = os.path.getsize(codebook_path) / (1024 * 1024)
+        opt_size_mb += cb_size 
+        
+    efficiency = 0
+    if raw_size_mb > 0:
+        efficiency = (1 - (opt_size_mb / raw_size_mb)) * 100
+
+    return {
+        "is_active": is_active,
+        "raw_storage_mb": round(raw_size_mb, 2),
+        "opt_storage_mb": round(opt_size_mb, 2),
+        "efficiency": round(efficiency, 1),
+        "node_count": count
+    }
+
 @app.post("/api/system/compress")
 async def trigger_neural_compression(background_tasks: BackgroundTasks):
     """🧠 [v8.0] Trigger Neural Implicit Compression (NIC)."""
     async def _run_nic():
-        nic = NeuralImplicitCompressor()
-        # Recupera tutti gli embedding per il training
+        print("🧠 [NIC] Avvio addestramento Codebook Neurale...")
+        if not hasattr(engine, 'nic'): return
+        
         all_ids = engine._prefilter.filter("1=1")
         vectors = []
         for nid in all_ids:
             n = engine.get_node(nid)
-            if n and n.vector is not None: vectors.append(n.vector)
+            if n and n.vector is not None: 
+                vectors.append(n.vector)
+            if len(vectors) >= 5000: break 
         
-        if len(vectors) > 500:
-            nic.train_on_vault(np.array(vectors))
-            nic.save(str(Path(engine.data_dir) / "nic_codebook.npy"))
-            # In v8.1+ i nodi useranno nic.compress() per lo storage
+        if len(vectors) > 100: 
+            engine.nic.train_on_vault(np.array(vectors))
+            storage_dir = Path(os.getenv("NEURALVAULT_DATA_DIR", "./vault_data"))
+            engine.nic.save(str(storage_dir / "nic_codebook.npy"))
+            print("✅ [NIC] Codebook salvato con successo.")
+        else:
+            print("❌ [NIC] Troppi pochi vettori per addestramento.")
     
     background_tasks.add_task(_run_nic)
-    return {"status": "Compression training started in background"}
+    return {"status": "Compression training started in background", "message": "Il sistema sta ottimizzando i pesi neurali..."}
 
 if __name__ == "__main__":
-    print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v6.0.1 Sovereign Maturity...")
+    print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")
     # Torniamo alla versione semplice di run, i segnali li gestiamo nello startup_event
     uvicorn.run(app, host="127.0.0.1", port=8001, log_level="info")

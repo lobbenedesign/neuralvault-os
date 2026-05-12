@@ -38,12 +38,12 @@ class SemanticDiffEngine:
     async def analyze(self, new_text: str, new_vector: np.ndarray) -> SemanticDiffResult:
         """Compara il nuovo contenuto con i nodi più simili esistenti."""
         # Trova il nodo più simile nel vault
-        results = await self.engine.query_vector(new_vector, k=1)
+        results = await self.engine.query("", query_vector=new_vector, k=1)
         if not results:
             return SemanticDiffResult(action="CREATE", similarity=0.0)
         
         best_match = results[0]
-        similarity = best_match.score # Supponendo che score sia cosine similarity
+        similarity = best_match.final_score # QueryResult usa final_score
         
         if similarity > self.update_threshold:
             return SemanticDiffResult(action="UPDATE_METADATA", similarity=similarity, existing_node_id=best_match.node.id)
@@ -85,6 +85,6 @@ class SemanticDiffEngine:
 
         elif result.action == "SUPERSEDED":
             # Crea un nuovo nodo e collegalo al precedente con un arco "SUPERSEDES"
-            new_node = await self.engine.ingest_text(new_text, metadata=new_metadata)
-            self.engine.add_edge(new_node.id, result.existing_node_id, edge_type="SUPERSEDES")
+            new_node = await self.engine.upsert_text(new_text, metadata=new_metadata)
+            self.engine.add_relation(new_node.id, result.existing_node_id, "SUPERSEDES")
             print(f"🔗 [Semantic-Diff] New node {new_node.id} SUPERSEDES {result.existing_node_id}")

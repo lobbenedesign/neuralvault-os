@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 mod distance;
 mod hnsw_core;
 pub mod turboquant;
+pub mod causal_engine;
 
 #[pyclass]
 pub struct PyHNSW {
@@ -125,5 +126,6 @@ impl RustTurboQuant {
 fn neuralvault_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHNSW>()?;
     m.add_class::<RustTurboQuant>()?;
+    m.add_function(wrap_pyfunction!(causal_engine::run_stochastic_simulation_rs, m)?)?;
     Ok(())
 }

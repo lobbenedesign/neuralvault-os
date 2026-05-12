@@ -53,8 +53,17 @@ class SwarmSettingsManager:
         return self.settings.get(key, default)
 
     def get_model(self, task: str) -> str:
-        """Ritorna il modello configurato per un determinato compito."""
-        return self.settings.get("routing", {}).get(task, "llama3.2")
+        """Ritorna il modello configurato per un determinato compito (v8.4: Fallback Cross-Level)."""
+        # 1. Check in routing (Standard)
+        m = self.settings.get("routing", {}).get(task)
+        if m: return m
+        # 2. Check at top level (Legacy/Frontend mismatch)
+        m = self.settings.get(f"{task}_model")
+        if m: return m
+        m = self.settings.get(task)
+        if m: return m
+        # 3. Default
+        return "llama3.2"
 
     def resolve_model(self, task: str, installed_models: list) -> str:
         """
@@ -83,6 +92,19 @@ class SwarmSettingsManager:
         if "routing" not in self.settings:
             self.settings["routing"] = {}
         self.settings["routing"].update(new_routing)
+        self._save(self.settings)
+
+    def update(self, new_settings: Dict):
+        """Aggiornamento granulare e persistente (v8.4)"""
+        for k, v in new_settings.items():
+            if k == "routing" and isinstance(v, dict):
+                if "routing" not in self.settings: self.settings["routing"] = {}
+                self.settings["routing"].update(v)
+            elif k == "agents" and isinstance(v, dict):
+                if "agents" not in self.settings: self.settings["agents"] = {}
+                self.settings["agents"].update(v)
+            else:
+                self.settings[k] = v
         self._save(self.settings)
 
     def get_all(self):

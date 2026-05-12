@@ -7,7 +7,7 @@ fondamentale per la Fase 3: Cognitive Overdrive.
 """
 
 import time
-from typing import Any, Dict, Generic, TypeVar, Set
+from typing import Any, Dict, Generic, TypeVar, Set, Optional
 
 T = TypeVar("T")
 

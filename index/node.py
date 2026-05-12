@@ -9,7 +9,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, Dict, List
 import numpy as np
 
 
@@ -60,7 +60,17 @@ class RelationType(str, Enum):
     PREVENTS     = "prevents"    # [v7.0] Causal Logic
     REQUIRES     = "requires"    # [v7.0] Causal Logic
     ENABLES      = "enables"     # [v7.0] Causal Logic
+    ENHANCES     = "enhances"    # [v7.0] Causal Logic
     SUPERSEDES   = "supersedes"  # [v7.0] Causal Logic
+    REFLECTION_ANCHOR = "reflection_anchor" # [v12.0] Yoda Reflection
+    GALAXY_ANCHOR     = "galaxy_anchor"     # [v12.0] Galaxy connection to Nebula
+    SKYWALKER_ANCHOR  = "skywalker_anchor"  # [v13.0] Red Anchor
+    YODA_ANCHOR       = "yoda_anchor"       # [v13.0] Green Anchor
+    GALAXY_INTERNAL   = "galaxy_internal"   # [v12.0] Links within a Galaxy
+    SUPER_GALAXY      = "super_galaxy"      # [v13.6] Mandalorian unified formations
+    HERD_CONNECTION   = "herd_connection"   # [v13.6] Mandalorian herding links
+    GALAXY_TETHER     = "galaxy_tether"     # [v13.6] Mandalorian galaxy tether
+
 
 
 @dataclass
@@ -109,6 +119,11 @@ class VaultNode:
     created_at:            float      = field(default_factory=time.time)
     agent_relevance_score: float      = 0.0
     ingestion_status:      str        = "STABLE" # Default per i nodi esistenti
+
+    @property
+    def title(self) -> str:
+        """[v8.2] Estrae un titolo rappresentativo dal contenuto o metadati."""
+        return self.metadata.get("title") or self.text.split("\n")[0][:50] or self.id
 
     def __post_init__(self):
         if self.vector is not None and not isinstance(self.vector, np.ndarray):

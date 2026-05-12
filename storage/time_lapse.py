@@ -35,9 +35,9 @@ class TimeLapseManager:
             GROUP BY hour
             ORDER BY hour ASC
         """
-        res = self.engine._prefilter.con.execute(query).fetchall()
+        res = self.engine._prefilter.fetchall(query)
         return [
-            {"time": r[0].timestamp(), "count": r[1]}
+            {"time": r[0].timestamp() if hasattr(r[0], 'timestamp') else time.mktime(r[0].timetuple()), "count": r[1]}
             for r in res
         ]
 

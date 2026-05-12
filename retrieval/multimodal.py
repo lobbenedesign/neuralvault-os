@@ -24,12 +24,27 @@ import httpx
 import base64
 from pydub import AudioSegment
 
-# Motori Reali
-from scenedetect import ContentDetector, SceneManager, open_video
-from faster_whisper import WhisperModel
-from imagebind import data as ib_data
-from imagebind.models import imagebind_model
-from imagebind.models.imagebind_model import ModalityType
+# Motori Reali (v7.1.5 Resilience Patch)
+try:
+    from scenedetect import ContentDetector, SceneManager, open_video
+    SCENEDETECT_AVAILABLE = True
+except ImportError:
+    SCENEDETECT_AVAILABLE = False
+
+try:
+    from faster_whisper import WhisperModel
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
+try:
+    from imagebind import data as ib_data
+    from imagebind.models import imagebind_model
+    from imagebind.models.imagebind_model import ModalityType
+    IMAGEBIND_AVAILABLE = True
+except ImportError:
+    IMAGEBIND_AVAILABLE = False
+
 from utils.backpressure import backpressure
 
 # 🎤 [Phase 4] SpeechBrain Forensics Integration
@@ -137,6 +152,10 @@ class MultimodalSynapseProcessor:
             logger.error(f"❌ [Forensics] Profile Save Fail: {e}")
 
     def _get_ib_model(self):
+        if not IMAGEBIND_AVAILABLE:
+            logger.error("❌ [Multimodal] ImageBind not installed. Skipping HuGE 1024D embedding.")
+            return None
+            
         if self._ib_model is None:
             import gc
             gc.collect() # Libera RAM prima di caricare il gigante
@@ -144,10 +163,14 @@ class MultimodalSynapseProcessor:
                 torch.mps.empty_cache()
                 
             logger.info("📡 [ImageBind] ALERT: Loading HuGE 1024D model to Unified Memory (Demand-Driven)...")
-            from imagebind.models import imagebind_model
-            self._ib_model = imagebind_model.imagebind_huge(pretrained=True)
-            self._ib_model.eval()
-            self._ib_model.to(self.device)
+            try:
+                from imagebind.models import imagebind_model
+                self._ib_model = imagebind_model.imagebind_huge(pretrained=True)
+                self._ib_model.eval()
+                self._ib_model.to(self.device)
+            except Exception as e:
+                logger.error(f"❌ [ImageBind] Model load failed: {e}")
+                return None
         return self._ib_model
 
     def _cleanup_memory(self):
@@ -205,6 +228,9 @@ class MultimodalSynapseProcessor:
     def _identify_via_latent(self, text: str) -> str:
         """Fallback Identity: Usa lo spazio latente di ImageBind per raggruppare i timbri (Heuristic)."""
         ib_model = self._get_ib_model()
+        if not ib_model or not IMAGEBIND_AVAILABLE:
+            return "UNKNOWN_SUBJECT"
+
         inputs = {ModalityType.TEXT: ib_data.load_and_transform_text([text], device=self.device)}
         with torch.no_grad():
             embeddings = ib_model(inputs)
@@ -226,9 +252,17 @@ class MultimodalSynapseProcessor:
 
     def _get_whisper_model(self):
         """Lazy loader per Whisper Model."""
+        if not WHISPER_AVAILABLE:
+            logger.error("❌ [Multimodal] Faster-Whisper not installed. Skipping transcription.")
+            return None
+            
         if self._whisper_model is None:
             logger.info("🎙️ [Whisper] Initializing Faster-Whisper (On Demand)...")
-            self._whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            try:
+                self._whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            except Exception as e:
+                logger.error(f"❌ [Whisper] Load failed: {e}")
+                return None
         return self._whisper_model
 
     def _compute_hash(self, file_path: Path) -> str:
@@ -267,48 +301,52 @@ class MultimodalSynapseProcessor:
         else:
             logger.warning(f"❌ [Multimodal] MIME non supportato: {mime}")
             return []
-    def _diarize_and_identify(self, audio_data: np.ndarray, text: str, sample_rate: int = 16000) -> str:
-        """[Phase 4] Diarizzazione Chirurgica & Identificazione Biometrica."""
-        # 1. Fallback su ImageBind per il clustering vettoriale HuGE 1024D
+    def _diarize_and_identify_latent(self, audio_data: np.ndarray, text: str, sample_rate: int = 16000) -> str:
+        """[Phase 4] Identificazione Biometrica via ImageBind (Fallback)."""
         ib_model = self._get_ib_model()
-        
-        # Simuliamo l'estrazione di un 'fingerprint' acustico dal segmento
-        # In un sistema con SpeechBrain, qui chiameremmo l'encoder X-Vector
-        inputs = {
-            ModalityType.TEXT: ib_data.load_and_transform_text([text], device=self.device)
-        }
-        with torch.no_grad():
-            embeddings = ib_model(inputs)
-            vector = embeddings[ModalityType.TEXT].cpu().numpy()[0]
-        
-        # 2. Heuristic Speaker Identity (v12.0)
-        found_id = None
-        for s_id, center_vec in self._speaker_clusters.items():
-            sim = np.dot(vector, center_vec) / (np.linalg.norm(vector) * np.linalg.norm(center_vec))
-            if sim > 0.85: # Soglia Biometrica
-                found_id = s_id
-                # Stabilità dell'identità: aggiornamento centroidi via media mobile (exponential decay)
-                self._speaker_clusters[s_id] = 0.9 * center_vec + 0.1 * vector
-                break
-        
-        if found_id: return found_id
-        
-        # 3. Nuova identità rilevata
-        new_id = f"SUBJECT_{chr(65 + len(self._speaker_clusters))}"
-        self._speaker_clusters[new_id] = vector
-        self._save_profiles()
-        return new_id
+        if not ib_model or not IMAGEBIND_AVAILABLE:
+            return "UNKNOWN_SUBJECT"
+            
+        try:
+            inputs = {ModalityType.TEXT: ib_data.load_and_transform_text([text], device=self.device)}
+            with torch.no_grad():
+                embeddings = ib_model(inputs)
+                vector = embeddings[ModalityType.TEXT].cpu().numpy()[0]
+            
+            found_id = None
+            for s_id, center_vec in self._speaker_clusters.items():
+                sim = np.dot(vector, center_vec) / (np.linalg.norm(vector) * np.linalg.norm(center_vec))
+                if sim > 0.85:
+                    found_id = s_id
+                    self._speaker_clusters[s_id] = 0.9 * center_vec + 0.1 * vector
+                    break
+            
+            if found_id: return found_id
+            new_id = f"SUBJECT_{chr(65 + len(self._speaker_clusters))}"
+            self._speaker_clusters[new_id] = vector
+            self._save_profiles()
+            return new_id
+        except Exception as e:
+            logger.warning(f"⚠️ [Diarization] Latent identification failed: {e}")
+            return "UNKNOWN_SUBJECT"
 
     def _process_video(self, path: Path, uri: str, h: str, namespace: str = "default") -> List[str]:
         """Pipeline Video Reale: Saliency-Based Event Detection + Speaker Diarization."""
+        if not SCENEDETECT_AVAILABLE:
+            logger.warning("⚠️ [Video] SceneDetect not available. Processing as single block.")
+            return self._process_video_simple(path, uri, h, namespace)
+
         logger.info(f"🎞️ [Video] High-Fidelity Forensics: {path.name}")
         
-        # 1. SCENE DETECTION
-        video = open_video(str(path))
-        scene_manager = SceneManager()
-        scene_manager.add_detector(ContentDetector(threshold=27.0))
-        scene_manager.detect_scenes(video)
-        scenes = scene_manager.get_scene_list()
+        try:
+            video = open_video(str(path))
+            scene_manager = SceneManager()
+            scene_manager.add_detector(ContentDetector(threshold=27.0))
+            scene_manager.detect_scenes(video)
+            scenes = scene_manager.get_scene_list()
+        except Exception as e:
+            logger.error(f"❌ [Video] Scene Detection failed: {e}")
+            return self._process_video_simple(path, uri, h, namespace)
         
         scene_vault = []
         cap = cv2.VideoCapture(str(path))
@@ -372,9 +410,42 @@ class MultimodalSynapseProcessor:
 
     def _get_ib_embedding(self, text: str) -> np.ndarray:
         ib_model = self._get_ib_model()
-        inputs = {ModalityType.TEXT: ib_data.load_and_transform_text([text], device=self.device)}
-        with torch.no_grad():
-            return ib_model(inputs)[ModalityType.TEXT].cpu().numpy()[0]
+        if not ib_model or not IMAGEBIND_AVAILABLE:
+            return np.zeros(1024)
+        try:
+            inputs = {ModalityType.TEXT: ib_data.load_and_transform_text([text], device=self.device)}
+            with torch.no_grad():
+                return ib_model(inputs)[ModalityType.TEXT].cpu().numpy()[0]
+        except:
+            return np.zeros(1024)
+
+    def _process_video_simple(self, path: Path, uri: str, h: str, namespace: str = "default") -> List[str]:
+        """Versione semplificata per video senza SceneDetect o Whisper."""
+        logger.info(f"🎞️ [Video] Simple Processing for {path.name}")
+        whisper = self._get_whisper_model()
+        
+        if whisper:
+            segments, _ = whisper.transcribe(str(path))
+            transcript = " ".join([s.text for s in segments])
+        else:
+            transcript = f"Video processed without transcription: {path.name}"
+            
+        node_id = f"vid_{h[:8]}_simple"
+        synapse = {
+            "id": node_id,
+            "media_type": "video",
+            "namespace": namespace,
+            "source_uri": uri,
+            "content_hash": h,
+            "t_start_ms": 0.0,
+            "t_end_ms": 0.0,
+            "transcript": transcript,
+            "speaker": "UNKNOWN",
+            "vector": self._get_ib_embedding(transcript).tolist(),
+            "metadata": json.dumps({"engine": "Simple-Video-Fallback"})
+        }
+        self._store_synapse(synapse)
+        return [node_id]
 
     def _call_vision_llm(self, image_path: Path, task: str = "vision_description") -> str:
         """Interroga Ollama per descrivere l'immagine utilizzando il routing granulare dello swarm."""
@@ -415,17 +486,28 @@ class MultimodalSynapseProcessor:
         
         # 1. Trascrizione Reale
         whisper = self._get_whisper_model()
-        segments, info = whisper.transcribe(str(path))
-        transcript = " ".join([s.text for s in segments])
+        if whisper:
+            segments, info = whisper.transcribe(str(path))
+            transcript = " ".join([s.text for s in segments])
+            duration = info.duration
+        else:
+            transcript = "Transcription unavailable (Whisper missing)."
+            duration = 0.0
         
         # 2. Embedding Acustico (Timbro, Ambiente)
         ib_model = self._get_ib_model()
-        inputs = {
-            ModalityType.AUDIO: ib_data.load_and_transform_audio_data([str(path)], device=self.device)
-        }
-        with torch.no_grad():
-            embeddings = ib_model(inputs)
-            vector = embeddings[ModalityType.AUDIO].cpu().numpy()[0]
+        if ib_model and IMAGEBIND_AVAILABLE:
+            try:
+                inputs = {
+                    ModalityType.AUDIO: ib_data.load_and_transform_audio_data([str(path)], device=self.device)
+                }
+                with torch.no_grad():
+                    embeddings = ib_model(inputs)
+                    vector = embeddings[ModalityType.AUDIO].cpu().numpy()[0]
+            except:
+                vector = np.zeros(1024)
+        else:
+            vector = np.zeros(1024)
         
         node_id = f"aud_{h[:8]}"
         synapse = {

@@ -1,13 +1,13 @@
-# 🏛️ NeuralVault-OS v8.0.1: The Predictive Cognitive Engine
+# 🏛️ NeuralVault-OS v8.4.0: The Decision Intelligence Engine
 **The Autonomous Modular Agentic RAG with Hierarchical GraphRAG, Causal Simulation, and Neural Implicit Compression.**
 
 ---
 
 ## 📜 Vision: The Active Wisdom Core [ITA/EN]
 
-**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Con la **Release v8.0**, NeuralVault compie il salto da archivio passivo a simulatore predittivo: non si limita a ricordare il passato, ma simula scenari "What-If" per prevedere l'impatto di nuove informazioni sulla tua base di conoscenza.
+**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Con la **Release v8.4.0**, NeuralVault compie il salto da archivio passivo a simulatore predittivo: non si limita a ricordare il passato, ma simula scenari "What-If" per prevedere l'impatto di nuove informazioni sulla tua base di conoscenza.
 
-**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v8.0**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
+**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v8.4.0**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
 
 ---
 
@@ -47,7 +47,7 @@ python3 api.py
 ## 📊 Analytical Comparison (Market Matrix)
 *Un'analisi onesta e approfondita delle capacità di NeuralVault rispetto ai leader di mercato.*
 
-| Feature | **NeuralVault v8.0** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Quivr / Verba |
+| Feature | **NeuralVault v8.4** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Quivr / Verba |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Sovereignty** | **✅ 100% Local-Locked** | ❌ Cloud-Based | ✅ Local | ❌ SaaS Cloud | ⚠️ Hybrid | ✅ Local |
 | **Causal Simulation** | **✅ What-If Engine** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
