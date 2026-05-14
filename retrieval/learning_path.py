@@ -44,16 +44,25 @@ class LearningPathGenerator:
                 })
                 
         # 4. Calcolo Coverage (Quanto ne sappiamo già?)
-        # Simulato: se il nodo ha molta 'wisdom' (riassunto), lo consideriamo noto.
         steps = []
         for i, pre in enumerate(prerequisites):
             node = self.engine.get_node(pre["id"])
-            coverage = 0.8 if node and len(node.text) > 500 else 0.3
+            
+            # [v8.4] Recupero statistiche reali dal Prefilter
+            access_count = 0
+            if self.engine._prefilter:
+                meta = self.engine._prefilter.get_cognitive_metadata(pre["id"])
+                if meta:
+                    access_count = meta[1] # index 1 is access_count
+            
+            # Logica: più accessi = più padronanza
+            coverage = min(1.0, (access_count / 5.0) * 0.5 + (0.5 if node and len(node.text) > 500 else 0.2))
+            
             steps.append({
                 "order": i + 1,
                 "topic": pre["title"],
-                "coverage": coverage,
-                "status": "COMPLETED" if coverage > 0.7 else "GAP"
+                "coverage": round(coverage, 2),
+                "status": "COMPLETED" if coverage > 0.6 else "GAP"
             })
             
         return {

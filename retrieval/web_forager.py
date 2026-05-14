@@ -474,8 +474,8 @@ class SovereignWebForager:
                 ])
                 headers = {"User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
                 
-                # Timeout esteso a 180s per ricerche profonde e resilienti
-                async with httpx.AsyncClient(headers=headers, timeout=180.0, follow_redirects=True) as client:
+                # Timeout ridotto a 45s per prevenire deadlock sistemici
+                async with httpx.AsyncClient(headers=headers, timeout=45.0, follow_redirects=True) as client:
                     resp = await client.get(engine_url)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")

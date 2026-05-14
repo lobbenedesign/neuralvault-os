@@ -31,6 +31,12 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
+# [v25.1] Hardened Logging Silence for Terminal Clarity
+uvicorn_access = logging.getLogger("uvicorn.access")
+uvicorn_access.disabled = True
+uvicorn_error = logging.getLogger("uvicorn.error")
+uvicorn_error.setLevel(logging.CRITICAL)
+
 import traceback
 import json
 import uuid
@@ -51,6 +57,13 @@ from contextlib import asynccontextmanager
 from typing import List, Dict, Optional, Any
 
 from retrieval.aegis_bus import aegis_bus
+from retrieval.formal_logic import FormalLogicEngine
+from retrieval.kuzu_projection import KuzuProjection
+from retrieval.epistemic_engine import EpistemicCalculator
+from retrieval.playbook_generator import PlaybookGenerator
+from retrieval.shadow_twin import ShadowModeTwin
+from retrieval.simplifier import SimplificationDaemon
+from retrieval.compounding_wiki import CompoundingWikiManager, SovereignWikiLinter
 
 import uvicorn
 os.environ["PYSPARK_PYTHON"] = sys.executable # Just in case
@@ -108,7 +121,13 @@ from __init__ import NeuralVaultEngine
 from network.gossip import SyncSignal
 from retrieval.web_forager import SovereignWebForager
 from retrieval.multimodal import MultimodalSynapseProcessor
-from interface.voice import SovereignVoiceEngine
+# --- 🎙️ [v8.4] Optional Voice Integration ---
+try:
+    from interface.voice import SovereignVoiceEngine
+    voice_engine = SovereignVoiceEngine()
+except (ImportError, Exception) as e:
+    print(f"⚠️ [Voice] Interface unavailable (pyttsx3/dependencies missing): {e}")
+    voice_engine = None
 from utils.neural_compression import NeuralImplicitCompressor
 # 🛡️ Agent Smith Security Engine State (v6.0.1)
 RETALIATION_LOCKS = {} # {ip: timestamp_expiry}
@@ -238,6 +257,25 @@ async def startup_event():
     # 🚀 Start Swarm
     app.state.lab.start_orchestra()
 
+    # 🦆 [v9.0] Formal Logic & Graph Projections
+    global logic_engine, kuzu_projection, epistemic_engine, playbook_gen, shadow_twin, simplifier
+    logic_engine = FormalLogicEngine()
+    kuzu_projection = KuzuProjection(os.path.join(storage_dir, "kuzudb"))
+    epistemic_engine = EpistemicCalculator()
+    playbook_gen = PlaybookGenerator()
+    shadow_twin = ShadowModeTwin()
+    simplifier = SimplificationDaemon(app.state.lab)
+    
+    global compounding_wiki_mgr, wiki_linter
+    compounding_wiki_mgr = CompoundingWikiManager(engine)
+    wiki_linter = SovereignWikiLinter(compounding_wiki_mgr)
+    await compounding_wiki_mgr.sync_llms_txt()
+    
+    # Register Kuzu & Shadow Mode with Aegis Bus for real-time CQRS updates
+    aegis_bus.register_listener(kuzu_projection.handle_event)
+    aegis_bus.register_listener(shadow_twin.handle_event)
+    print("🏺 [v9.0] Operational Strategy Engines (Playbook, Shadow, Simplifier) ACTIVE.")
+
     # 8. Mesh Discovery & Crypto Handshake (v4.0.0)
     def on_peer_found(node_id, address, public_key):
         if engine and engine.gossip:
@@ -349,8 +387,9 @@ engine_lock = asyncio.Lock()
 VAULT_KEY = os.getenv("NEURAL_VAULT_KEY")
 
 if not VAULT_KEY:
-    VAULT_KEY = "vault_secret_aura_2026" # Legacy Fallback
-    print("⚠️  [SECURITY WARNING] No NEURAL_VAULT_KEY found in .env. Using legacy default.")
+    VAULT_KEY = "VAULT_SECURE_KEY_REQUIRED_IN_ENV" # Security Hardening
+    print("🚨 [SECURITY CRITICAL] No NEURAL_VAULT_KEY found in environment variables!")
+    print("🚨 [SECURITY CRITICAL] System is in RESTRICTED mode. Please set NEURAL_VAULT_KEY.")
 elif VAULT_KEY == "vault_secret_aura_2026":
     print("🛡️  [Security] Sovereign Key detected. (Default signature active)")
 else:
@@ -449,6 +488,14 @@ async def get_system_settings(api_key: str = Depends(get_api_key)):
         except: pass
     return {"theme": "dark", "wiki_model": "qwen2.5:7b"}
 
+@app.get("/api/system/weather")
+async def get_system_weather(api_key: str = Depends(get_api_key)):
+    """[v8.4] Restituisce lo stato meteorologico della conoscenza (Epistemic Weather)."""
+    if not hasattr(app.state, 'lab') or not app.state.lab.blackboard:
+        raise HTTPException(status_code=503, detail="Neural Lab Blackboard Offline")
+    
+    return app.state.lab.blackboard.get_weather()
+
 @app.post("/api/system/priority")
 async def set_system_priority(request: Request, api_key: str = Depends(get_api_key)):
     """Sospende o riprende l'attività degli agenti per dare priorità all'utente."""
@@ -531,6 +578,22 @@ async def update_system_settings(req: Dict[str, Any]):
         print(f"🧬 [Sovereign State] Live Sync Complete. Evolution Mode: {getattr(app.state.lab, 'evolution_active', False)}")
 
     return {"status": "success", "settings": current}
+
+# 🧠 [v9.0] COGNITIVE PRESETS API
+@app.get("/api/system/presets")
+async def get_cognitive_presets(api_key: str = Depends(get_api_key)):
+    if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'preset_mgr'):
+        return app.state.lab.preset_mgr.config
+    return {"error": "Preset Manager Offline"}
+
+@app.post("/api/system/presets")
+async def update_cognitive_preset(req: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'preset_mgr'):
+        name = req.get("active_preset")
+        if app.state.lab.preset_mgr.set_preset(name):
+            return {"status": "success", "active_preset": name}
+        return {"status": "error", "message": "Preset not found"}
+    return {"error": "Preset Manager Offline"}
 
 @app.post("/api/github/test")
 async def test_github_connection(req: Dict[str, Any]):
@@ -901,27 +964,60 @@ async def get_intelligence_status(api_key: str = Depends(get_api_key)):
         return {"status": "offline"}
     return app.state.lab.get_orchestra_report()
 
+@app.get("/api/intelligence/agents/custom/list")
+async def list_custom_agents(api_key: str = Depends(get_api_key)):
+    """Restituisce la lista di tutti gli agenti custom salvati."""
+    if not app.state.lab: return {"agents": []}
+    return {"agents": app.state.lab.custom_agents_config}
+
+@app.post("/api/intelligence/agents/custom/favorite")
+async def toggle_favorite_agent(req: Dict, api_key: str = Depends(get_api_key)):
+    """Imposta o rimuove un agente dalla lista dei preferiti (auto-spawn)."""
+    if not app.state.lab: return {"error": "Neural Lab Offline"}
+    name = req.get("name")
+    is_fav = req.get("is_favorite", False)
+    if not name: return {"error": "Name required"}
+    
+    success = app.state.lab.toggle_favorite_agent(name, is_fav)
+    return {"status": "success" if success else "error", "name": name, "is_favorite": is_fav}
+
 @app.post("/api/intelligence/agents/custom")
 async def create_custom_agent(config: Dict, api_key: str = Depends(get_api_key)):
-    """Crea un nuovo agente custom (Custom Agent Factory)."""
+    """Crea un nuovo agente custom. Se 'save' è True, l'agente viene persistito su disco."""
     if not app.state.lab: return {"error": "Neural Lab Offline"}
     
     name = config.get("name")
+    role = config.get("role", "analyst")
+    prompt = config.get("prompt", "")
+    model = config.get("model", "llama3.2")
+    save_to_disk = config.get("save", False)
+    is_favorite = config.get("is_favorite", False)
+
     if not name: return {"error": "Name required"}
     
-    # Registrazione e persistenza
-    app.state.lab.custom_agents_config[name] = {
-        "model": config.get("model", "llama3"),
-        "role": config.get("role", "Generalist"),
-        "prompt": config.get("prompt", ""),
-        "color": config.get("color", "#00ffcc"),
-        "created_at": time.time()
-    }
+    # 1. Spawn Immediato nello Swarm attivo
+    agent_id = app.state.lab.spawn_custom_agent(name, role, prompt, model)
     
-    with open(app.state.lab.custom_agents_path, "w") as f:
-        json.dump(app.state.lab.custom_agents_config, f)
+    # 2. Persistenza su disco (opzionale)
+    if save_to_disk:
+        app.state.lab.custom_agents_config[name] = {
+            "model": model,
+            "role": role,
+            "prompt": prompt,
+            "color": config.get("color", "#00ffcc"),
+            "is_favorite": is_favorite,
+            "created_at": time.time()
+        }
+        with open(app.state.lab.custom_agents_path, "w") as f:
+            json.dump(app.state.lab.custom_agents_config, f)
         
-    return {"status": "Agent Created", "name": name}
+    return {
+        "status": "Agent Spawned", 
+        "agent_id": agent_id, 
+        "name": name, 
+        "persistent": save_to_disk,
+        "is_favorite": is_favorite
+    }
 
 @app.delete("/api/intelligence/agents/custom/{name}")
 async def delete_custom_agent(name: str, api_key: str = Depends(get_api_key)):
@@ -1850,6 +1946,9 @@ async def ingest_text(request: Request, background_tasks: BackgroundTasks, api_k
     
     # [v7.0] Innesco automatico estrazione causale in background
     background_tasks.add_task(auto_extract_causal, node_id)
+    
+    # [v9.5] Innesco Compounding Wiki Update
+    background_tasks.add_task(compounding_wiki_mgr.update_compounding_wiki, node_id)
     
     return {"status": "synapsed", "id": node_id}
 
@@ -2823,6 +2922,9 @@ async def generate_wiki_page(req: dict, api_key: str = Depends(get_api_key)):
                     "is_contradictory": c.is_contradictory,
                     "conflict_node_id": c.conflict_node_id
                 })
+                # [v9.5] Record in Cross-Reference Index
+                file_name = f"concepts/{topic.lower().replace(' ', '_')}.md"
+                await compounding_wiki_mgr.register_citation(file_name, c.node_id)
         
         return {
             "status": "success",
@@ -2929,32 +3031,14 @@ async def list_wiki_pages(api_key: str = Depends(get_api_key)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.get("/llms.txt")
 @app.get("/api/wiki/llms.txt")
-async def get_llms_txt(api_key: str = Depends(get_api_key)):
-    """Genera un file llms.txt aggregato per il consumo da parte di modelli AI."""
-    try:
-        wiki_dir = engine.wiki.wiki_dir
-        # [v9.1] Supporto ricorsivo per llms.txt
-        files = list(wiki_dir.rglob("*.md"))
-        content = "# 🏺 NEURALVAULT SOVEREIGN WIKI (llms.txt)\n\n"
-        content += f"Generato il: {datetime.now().isoformat()}\n"
-        content += f"Totale pagine: {len(files)}\n\n"
-        content += "## 📚 INDICE CONOSCENZA\n\n"
-        
-        for f in files:
-            relative_path = str(f.relative_to(wiki_dir))
-            content += f"- {f.stem.replace('_', ' ')}: /api/wiki/read?file={relative_path}\n"
-            
-        content += "\n---\n\n"
-        
-        for f in files:
-            with open(f, "r") as md:
-                content += f"### DOCUMENT: {f.stem.replace('_', ' ')}\n\n"
-                content += md.read() + "\n\n---\n\n"
-                
-        return StreamingResponse(iter([content]), media_type="text/plain")
-    except Exception as e:
-        raise HTTPException(500, str(e))
+async def get_llms_txt_standard():
+    """🏛️ [v9.5] Sovereign standard for AI Agent navigation (llms.txt)."""
+    if 'compounding_wiki_mgr' not in globals():
+        return Response(content="# NeuralVault Wiki\nInitialization in progress...", media_type="text/plain")
+    content = await compounding_wiki_mgr.generate_llms_txt()
+    return Response(content=content, media_type="text/plain")
 
 @app.get("/api/wiki/read")
 async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
@@ -2968,7 +3052,39 @@ async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
             
         if not file_path.exists(): raise HTTPException(404, "Page not found")
         with open(file_path, "r") as f:
-            return {"status": "success", "markdown": f.read()}
+            content = f.read()
+            
+        # [v9.5] Recupero citazioni associate dal Cross-Reference Index
+        citations = []
+        try:
+            # Cerchiamo referenze nel DB per questo file
+            res = engine._prefilter.con.execute("""
+                SELECT node_id FROM wiki_xref WHERE source_page = ?
+            """, [file]).fetchall()
+            
+            node_ids = list(set([r[0] for r in res])) # Unico per node_id
+            
+            for nid in node_ids:
+                node = engine.get_node(nid)
+                if node:
+                    citations.append({
+                        "node_id": nid,
+                        "source_title": node.metadata.get("title", "Frammento Atomico"),
+                        "source_url": node.metadata.get("source", "Internal Vault"),
+                        "source_date": node.metadata.get("timestamp", "v9.0"),
+                        "confidence": node.metadata.get("confidence", 0.92),
+                        "excerpt": node.text[:250],
+                        "is_contradictory": False, # TODO: implement dynamic conflict check
+                        "conflict_node_id": None
+                    })
+        except Exception as e:
+            print(f"⚠️ [Wiki XRef] Error fetching citations: {e}")
+            
+        return {
+            "status": "success", 
+            "markdown": content,
+            "citations": citations
+        }
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -3081,13 +3197,65 @@ async def simulate_nl_api(data: Dict[str, Any], api_key: str = Depends(get_api_k
         lenses = data.get("lenses", ["standard"])
         mode = data.get("mode", "FAST")
         horizon = data.get("horizon", "immediate") # [v8.4] Temporal Horizon
+        twin_id = data.get("twin_id")
+        
         if not query:
             return JSONResponse({"error": "query required"}, status_code=400)
             
-        result = await engine.wiki.nl_whatif.run_nl_simulation(query, lenses, mode=mode, horizon=horizon)
-
-
+        # [v9.0] Digital Twin Integration
+        twin = None
+        if twin_id and hasattr(app.state, 'twins') and twin_id in app.state.twins:
+            twin = app.state.twins[twin_id]
+            
+        result = await engine.wiki.nl_whatif.run_nl_simulation(query, lenses, mode=mode, horizon=horizon, twin=twin)
         return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/vault/twin/create")
+async def create_vault_twin(request: Request):
+    """🚀 [v9.0] Crea un Digital Twin differenziale (CoW)."""
+    if not check_api_key(request.headers.get("x-api-key", "")): return JSONResponse({"status": "error", "message": "Invalid API Key"}, status_code=403)
+    
+    twin = engine.create_twin()
+    # Salviamo il twin nello stato dell'app (temporaneo)
+    if not hasattr(app.state, 'twins'): app.state.twins = {}
+    twin_id = str(uuid.uuid4())
+    app.state.twins[twin_id] = twin
+    
+    return JSONResponse({
+        "twin_id": twin_id,
+        "status": "Differential Twin Created (CoW)",
+        "parent_nodes": len(engine._nodes),
+        "delta_nodes": 0
+    })
+
+@app.post("/api/vault/twin/query")
+async def query_vault_twin(request: Request):
+    """🚀 [v9.0] Query su un Digital Twin (Simulazione sandbox)."""
+    if not check_api_key(request.headers.get("x-api-key", "")): return JSONResponse({"status": "error", "message": "Invalid API Key"}, status_code=403)
+    try:
+        data = await request.json()
+        twin_id = data.get("twin_id")
+        query = data.get("query")
+        
+        if not twin_id or twin_id not in getattr(app.state, 'twins', {}):
+            return JSONResponse({"error": "Twin ID non valido o scaduto"}, status_code=404)
+            
+        twin = app.state.twins[twin_id]
+        results = await twin.query(query, k=data.get("k", 10))
+        
+        # Serializzazione dei risultati del twin
+        serializable = []
+        for r in results:
+            serializable.append({
+                "id": r.node.id,
+                "text": r.node.text,
+                "score": r.final_score,
+                "metadata": r.node.metadata
+            })
+            
+        return JSONResponse({"results": serializable})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -3122,6 +3290,25 @@ async def get_oracle_grade():
     try:
         grade = await engine.wiki.journal.compute_oracle_grade()
         return JSONResponse(grade)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/swarm/capabilities")
+async def get_swarm_capabilities():
+    """🛡️ [v9.1] PBC: Recupera il catalogo delle capacità componibili dello sciame (JSON-LD)."""
+    try:
+        capabilities = []
+        # Agenti standard nell'orchestrator
+        for agent_id, agent in engine.orchestrator.agents.items():
+            if hasattr(agent, "get_capability_ld"):
+                capabilities.append(agent.get_capability_ld())
+        
+        # Agenti Smith
+        for smith_id, smith in engine.orchestrator.smiths.items():
+            if hasattr(smith, "get_capability_ld"):
+                capabilities.append(smith.get_capability_ld())
+                
+        return JSONResponse({"@context": "https://neuralvault.io/context/swarm", "agents": capabilities})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -3163,6 +3350,14 @@ async def commit_vault_twin(data: Dict[str, Any]):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+@app.get("/api/wiki/audit")
+async def run_wiki_audit():
+    """🔍 [v9.5] Runs a full Sovereign Wiki audit (Linter)."""
+    if 'wiki_linter' not in globals():
+        return {"status": "error", "message": "Linter not initialized"}
+    report = await wiki_linter.run_full_audit()
+    return report
+
 @app.get("/api/wiki/learning-path")
 async def get_learning_path(topic: str):
     """🗺️ [v8.4] Genera un percorso di apprendimento per un topic."""
@@ -3173,24 +3368,39 @@ async def get_learning_path(topic: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/wiki/history")
-async def get_wiki_history(topic: str):
-    """🏺 [v8.0] Knowledge Versioning: Recupera lo storico della conoscenza."""
+async def get_wiki_history(topic: str, version: Optional[int] = None):
+    """🏺 [v9.5] Sovereign Time Travel: Recupera lo storico o una versione specifica."""
     try:
         history_dir = Path(engine.data_dir) / "wiki_history"
         safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
+        
+        if version:
+            target_file = history_dir / f"{safe_topic}_{version}.md"
+            if target_file.exists():
+                return JSONResponse({
+                    "topic": topic,
+                    "version": version,
+                    "content": target_file.read_text(encoding='utf-8')
+                })
+            return JSONResponse({"error": "Versione non trovata"}, status_code=404)
+
+        import glob
         files = glob.glob(str(history_dir / f"{safe_topic}_*.md"))
         
         history = []
         for f in sorted(files, reverse=True):
-            with open(f, "r") as fh:
-                content = fh.read()
+            try:
                 # Estraiamo timestamp dal nome file
-                ts = f.split("_")[-1].replace(".md", "")
-                history.append({
-                    "timestamp": int(ts),
-                    "date": datetime.fromtimestamp(int(ts)).strftime('%Y-%m-%d %H:%M'),
-                    "preview": content[:200] + "..."
-                })
+                ts_str = f.split("_")[-1].replace(".md", "")
+                ts = int(ts_str)
+                with open(f, "r", encoding='utf-8') as fh:
+                    content = fh.read()
+                    history.append({
+                        "timestamp": ts,
+                        "date": datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M'),
+                        "preview": content[:200] + "..."
+                    })
+            except: continue
         return JSONResponse({"topic": topic, "versions": history})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -4057,6 +4267,105 @@ async def trigger_neural_compression(background_tasks: BackgroundTasks):
     
     background_tasks.add_task(_run_nic)
     return {"status": "Compression training started in background", "message": "Il sistema sta ottimizzando i pesi neurali..."}
+
+# --- 🏺 [v9.0] FORMAL LOGIC & GRAPH AUDIT ENDPOINTS ---
+@app.post("/api/formal-logic/audit")
+async def audit_logic(nodes: List[Dict], edges: List[Dict]):
+    """Audit a subgraph for mathematical contradictions using Z3."""
+    if 'logic_engine' not in globals():
+        return {"status": "ERROR", "message": "Logic Engine not initialized."}
+    result = logic_engine.audit_graph(nodes, edges)
+    return result
+
+@app.post("/api/formal-logic/check")
+async def check_logic_assumptions(request: Request):
+    """
+    Check if specific assumptions create a contradiction.
+    Payload: { 'assumptions': [node_id, ...], 'edges': [...] }
+    """
+    data = await request.json()
+    assumptions = data.get('assumptions', [])
+    edges = data.get('edges', [])
+    
+    temp_engine = FormalLogicEngine()
+    for edge in edges:
+        temp_engine.add_causal_relation(edge['source'], edge['target'], edge['type'])
+    
+    result = temp_engine.check_contradiction(assumptions)
+    return result
+
+@app.get("/api/formal-logic/check")
+async def check_formal_logic(topic: str):
+    """🏛️ [v9.0] Check if a topic has logical contradictions."""
+    if 'logic_engine' not in globals():
+        return {"consistent": True, "message": "Logic engine not initialized."}
+    
+    # We use the existing engine to check the topic in the vault
+    # For now, we simulate a check or use a pre-calculated status
+    # In a real scenario, this would solve constraints related to the topic
+    consistent = logic_engine.is_consistent(topic)
+    return {"consistent": consistent, "topic": topic}
+
+@app.get("/api/kuzu/path")
+async def get_kuzu_path(start: str, end: str):
+    """Query the Kùzu Graph Projection for causal paths."""
+    if 'kuzu_projection' not in globals():
+        return {"status": "ERROR", "message": "Kùzu Projection not initialized."}
+    paths = kuzu_projection.query_causal_path(start, end)
+    return {"paths": str(paths)} # Kùzu results need serialization
+
+@app.post("/api/epistemic/audit")
+async def audit_epistemic(nodes: List[Dict]):
+    """Calculate multi-dimensional epistemic integrity for nodes."""
+    if 'epistemic_engine' not in globals():
+        return {"status": "ERROR", "message": "Epistemic Engine not initialized."}
+    
+    # Enrich nodes with verification status from logic engine if available
+    for n in nodes:
+        if 'logic_engine' in globals():
+            # Quick check if node exists in logic constraints
+            n['is_verified'] = n['id'] in logic_engine.node_vars
+            
+    results = epistemic_engine.batch_audit(nodes)
+    return results
+
+@app.get("/api/swarm/merit")
+async def get_swarm_merit():
+    """Get the merit-based ranking of swarm agents."""
+    if 'app' in globals() and hasattr(app.state, 'lab'):
+        return app.state.lab.trust_network.reward_manager.get_priority_ranking()
+    return []
+
+@app.post("/api/strategy/playbook")
+async def generate_action_playbook(req: Dict):
+    """Generate a 5-step action plan from a topic or path."""
+    if 'playbook_gen' not in globals():
+        return {"status": "ERROR", "message": "Playbook Generator not initialized."}
+    
+    target = req.get("topic") or req.get("target")
+    path = req.get("path") or []
+    
+    # If no path provided, try to find one via Kuzu if start is known
+    if not path and 'kuzu_projection' in globals() and target:
+        # Placeholder: in a real case we'd find the shortest path to an 'outcome' node
+        path = [{"node": target, "action": "INITIAL_AUDIT"}]
+        
+    playbook = playbook_gen.generate_playbook(target, path)
+    return {"playbook": playbook}
+
+@app.get("/api/system/cleanup")
+async def get_system_cleanup():
+    """Audit system complexity and suggest cleanup actions."""
+    if 'simplifier' not in globals():
+        return {"status": "ERROR", "message": "Simplifier not initialized."}
+    return simplifier.get_cleanup_plan()
+
+@app.get("/api/shadow/stats")
+async def get_shadow_stats():
+    """Get calibration statistics from the Shadow Mode Twin."""
+    if 'shadow_twin' not in globals():
+        return {"status": "ERROR", "message": "Shadow Twin not initialized."}
+    return shadow_twin.get_calibration_report()
 
 if __name__ == "__main__":
     print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")

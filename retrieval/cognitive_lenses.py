@@ -48,6 +48,26 @@ class CognitiveLens:
             "prompt": "Sei il custode della reputazione e dell'etica. Valuta l'impatto a lungo termine sull'immagine e sulla morale. Evita azioni che corrodono la fiducia.",
             "weights": {"disruption": 0.5, "stability": 1.5, "opportunity": 0.8, "risk": 1.2}
         },
+        "compliance": {
+            "name": "Compliance / Regulatory",
+            "prompt": "Valuta lo scenario attraverso le normative vigenti (GDPR, ISO, sicurezza). Identifica illeciti normativi prima di quelli finanziari.",
+            "weights": {"disruption": 0.1, "stability": 2.8, "risk": 2.5}
+        },
+        "bottleneck": {
+            "name": "Bottleneck / Resource (PM)",
+            "prompt": "Focus sull'attrito interno e burnout. Analizza se il piano B sovraccarica il team oltre i limiti storici registrati.",
+            "weights": {"disruption": 0.8, "stability": 1.2, "opportunity": 0.7, "risk": 1.5}
+        },
+        "competitive_dominance": {
+            "name": "Competitive Dominance",
+            "prompt": "Simula come un concorrente spietato userebbe questa info o questo ritardo a suo vantaggio per distruggere la nostra posizione.",
+            "weights": {"disruption": 1.9, "stability": 0.5, "opportunity": 1.8, "risk": 1.3}
+        },
+        "cascading_failure": {
+            "name": "Cascading Failure (Domino)",
+            "prompt": "Analisi sistemica di 2° e 3° grado. Ignora gli impatti immediati e focus solo su blocchi futuri a catena (effetto domino).",
+            "weights": {"disruption": 2.2, "stability": 0.3, "risk": 2.8}
+        },
         "standard": {
             "name": "Objective Analyst",
             "prompt": "Analisi bilanciata, obiettiva e basata puramente sui fatti. Nessun bias archetipale.",

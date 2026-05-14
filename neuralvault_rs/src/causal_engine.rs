@@ -1,19 +1,65 @@
 use pyo3::prelude::*;
-use rand::prelude::*;
-use rand_distr::{Normal, Distribution};
 use rayon::prelude::*;
 use std::collections::HashMap;
+
+/// [v9.0] Sobol Sequence Generator for Quasi-Monte Carlo simulations.
+/// Provides better coverage of the probability space than standard RNG.
+pub struct SobolGenerator {
+    index: u32,
+    direction_numbers: Vec<u32>,
+}
+
+impl SobolGenerator {
+    pub fn new(dim_capacity: usize) -> Self {
+        // Simplified Sobol direction numbers for the first dimension
+        // In a full implementation, we would have unique numbers per dimension
+        let mut v = vec![0u32; 32];
+        for i in 0..32 {
+            v[i] = 1 << (31 - i);
+        }
+        Self { index: 0, direction_numbers: v }
+    }
+
+    pub fn next_f32(&mut self) -> f32 {
+        self.index += 1;
+        let mut result = 0u32;
+        let mut i = self.index;
+        let mut j = 0;
+        
+        // Gray code based Sobol generation
+        while i > 0 {
+            if i & 1 == 1 {
+                result ^= self.direction_numbers[j];
+            }
+            i >>= 1;
+            j += 1;
+        }
+        
+        result as f32 / (u32::MAX as f32)
+    }
+}
+
+/// Simple inverse normal CDF approximation (Beasley-Springer-Moro)
+fn inverse_normal_cdf(p: f32) -> f32 {
+    let p = p.clamp(0.0001, 0.9999);
+    let x = p - 0.5;
+    if x.abs() < 0.42 {
+        let r = x * x;
+        x * (((2.50662823884 * r - 30.8559893949) * r + 102.837390235) * r - 116.701525273) /
+            ((((r - 16.5479756484) * r + 71.5091298651) * r - 107.131514778) * r + 20.2737538191)
+    } else {
+        let r = if x > 0.0 { 1.0 - p } else { p };
+        let s = (-r.ln()).sqrt();
+        let t = (((0.010328 * s + 0.802853) * s + 2.515517) /
+                 (((0.001308 * s + 0.189269) * s + 1.432788) * s + 1.0)) - s;
+        if x > 0.0 { -t } else { t }
+    }
+}
 
 #[derive(Clone)]
 pub struct RustCausalEdge {
     pub target_id: String,
     pub weight: f32,
-}
-
-#[derive(Clone)]
-pub struct RustCausalNode {
-    pub id: String,
-    pub edges: Vec<RustCausalEdge>,
 }
 
 #[pyfunction]
@@ -39,12 +85,20 @@ pub fn run_stochastic_simulation_rs(
         })
         .collect();
 
-    // 2. Esecuzione Parallela Monte Carlo (Rayon)
+    // 2. Esecuzione Parallela Quasi-Monte Carlo (Rayon + Sobol)
     let results: Vec<HashMap<String, f32>> = (0..iterations)
         .into_par_iter()
-        .map(|_| {
-            let mut rng = thread_rng();
-            let normal = Normal::new(0.0, noise_level).unwrap();
+        .map(|i| {
+            // Each thread uses a Sobol generator initialized with an offset for 'Owen-like' scrambling
+            let mut sobol = SobolGenerator { 
+                index: i as u32 * 1000, // Jump ahead for each iteration to avoid correlation
+                direction_numbers: vec![0u32; 32] 
+            };
+            // Initialize direction numbers (simple XOR-shift scrambling)
+            for j in 0..32 {
+                sobol.direction_numbers[j] = (1 << (31 - j)) ^ (i as u32).wrapping_mul(0x9E3779B9);
+            }
+
             let mut current_impacts = HashMap::new();
             current_impacts.insert(start_node_id.clone(), initial_impact);
 
@@ -55,7 +109,10 @@ pub fn run_stochastic_simulation_rs(
                 for (nid, impact) in active_nodes {
                     if let Some(edges) = graph.get(&nid) {
                         for edge in edges {
-                            let noise = normal.sample(&mut rng);
+                            // Using Sobol sequence for noise generation
+                            let p = sobol.next_f32();
+                            let noise = inverse_normal_cdf(p) * noise_level;
+                            
                             let weight_with_noise = (edge.weight + noise).clamp(-2.0, 2.0);
                             let transmission = impact * weight_with_noise;
                             

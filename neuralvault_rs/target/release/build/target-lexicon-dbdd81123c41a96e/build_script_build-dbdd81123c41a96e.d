@@ -1,0 +1,8 @@
+/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/rust_src/target/release/build/target-lexicon-dbdd81123c41a96e/build_script_build-dbdd81123c41a96e.d: /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/build.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/data_model.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/triple.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/targets.rs
+
+/Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/rust_src/target/release/build/target-lexicon-dbdd81123c41a96e/build_script_build-dbdd81123c41a96e: /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/build.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/data_model.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/triple.rs /Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/targets.rs
+
+/Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/build.rs:
+/Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/data_model.rs:
+/Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/triple.rs:
+/Users/giuseppelobbene/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.12.16/src/targets.rs:

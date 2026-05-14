@@ -70,6 +70,8 @@ class RelationType(str, Enum):
     SUPER_GALAXY      = "super_galaxy"      # [v13.6] Mandalorian unified formations
     HERD_CONNECTION   = "herd_connection"   # [v13.6] Mandalorian herding links
     GALAXY_TETHER     = "galaxy_tether"     # [v13.6] Mandalorian galaxy tether
+    HYPER_CONVERGENCE = "hyper_convergence" # [v9.0] Bayesian Hyper-Graph
+    HYPER_DIVERGENCE  = "hyper_divergence"  # [v9.0] Bayesian Hyper-Graph
 
 
 
@@ -85,6 +87,21 @@ class SemanticEdge:
     source:           str   = "manual"
     reason:           Optional[str] = None # [Phase 3]: Perché questi nodi sono collegati?
     metadata:         Dict[str, Any] = field(default_factory=dict) # [v8.0] Per attributi extra dell'arco
+
+@dataclass
+class HyperEdge:
+    """
+    🕸️ [v9.0] Bayesian Hyper-Edge.
+    Connects a set of source nodes to a set of target nodes.
+    Used for multi-causal reasoning ({A, B} -> C).
+    """
+    source_ids:      List[str]
+    target_ids:      List[str]
+    relation:        RelationType
+    weight:          float = 1.0
+    logic_weight:    float = 1.0
+    created_at:      float = field(default_factory=time.time)
+    metadata:        Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not 0.0 <= self.weight <= 1.0:
@@ -111,6 +128,7 @@ class VaultNode:
 
     # ── Context graph ────────────────────────────────────────
     edges:          list[SemanticEdge] = field(default_factory=list)
+    hyper_edges:    list[HyperEdge]    = field(default_factory=list) # [v9.0]
 
     # ── Memory management ────────────────────────────────────
     tier:                  MemoryTier = MemoryTier.SEMANTIC

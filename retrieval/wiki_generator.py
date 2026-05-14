@@ -70,11 +70,10 @@ class SovereignWikiGenerator:
         self.wiki_dir.mkdir(exist_ok=True)
 
     def save_canonical_page(self, topic: str, markdown: str, namespace: str = "General"):
-        """Salva o aggiorna la versione canonica (Source of Truth) di un argomento con redazione automatica."""
-        # [v9.1] Redazione dati sensibili
+        """Salva o aggiorna la versione canonica (Source of Truth) e mantiene la cronologia Aegis."""
+        from retrieval.aegis_bus import aegis_bus
         sanitized_md = redactor.redact(markdown)
         
-        # [v9.1] Supporto Namespace (Cartelle)
         safe_ns = "".join([c if c.isalnum() else "_" for c in namespace])
         ns_dir = self.wiki_dir / safe_ns
         ns_dir.mkdir(exist_ok=True)
@@ -82,9 +81,34 @@ class SovereignWikiGenerator:
         safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
         canonical_file = ns_dir / f"{safe_topic}.md"
         
+        # [v9.5] History Tracking
+        timestamp = int(time.time())
+        history_file = self.history_dir / f"{safe_topic}_{timestamp}.md"
+        
+        # Salva file fisico
         with open(canonical_file, "w") as f:
             f.write(sanitized_md)
-        print(f"💾 [Wiki v9.1] Pagina [{namespace}] salvata: {canonical_file.name} (Redacted)")
+        with open(history_file, "w") as f:
+            f.write(sanitized_md)
+            
+        # [v9.5] Aegis Log for Time Travel
+        aegis_bus.emit("WIKI_UPDATE", {
+            "topic": topic,
+            "namespace": namespace,
+            "version": timestamp,
+            "file_path": str(canonical_file.relative_to(self.engine.data_dir)),
+            "content_preview": sanitized_md[:500]
+        })
+        
+        # [v9.5] Pubblica evento su Bus Neurale per Orchestrator (Sovereign Adversary)
+        self.engine.events.emit_sync(NeuralEventType.WIKI_GENERATED, {
+            "page_name": topic,
+            "namespace": namespace,
+            "content": sanitized_md,
+            "timestamp": timestamp
+        })
+
+        print(f"💾 [Wiki v9.5] Pagina [{namespace}] salvata e versionata: {canonical_file.name}")
 
     async def generate_page(self, topic: str, mode: str = "TECHNICAL") -> WikiPage:
         print(f"📖 [Wiki v8.1] Generazione pagina {mode} per: {topic}")
@@ -388,9 +412,17 @@ class SovereignWikiGenerator:
         md = f"# 📖 Wiki: {page.title.upper()}\n\n"
         md += f"> {page.summary}\n\n"
         
-        # 🏺 [v8.0] Epistemic Weather HUD
+        # 🏺 [v8.4] Epistemic Weather HUD
         sections_meta = [{"confidence": s.confidence} for s in page.sections]
-        md += self.visualizer.generate_confidence_dashboard(sections_meta)
+        
+        # Fetch real-time system mood for the HUD
+        global_mood = {}
+        try:
+            if hasattr(self.engine, 'orchestrator') and hasattr(self.engine.orchestrator, 'blackboard'):
+                global_mood = self.engine.orchestrator.blackboard.get_weather()
+        except: pass
+        
+        md += self.visualizer.generate_confidence_dashboard(sections_meta, global_mood=global_mood)
         
         md += f"---\n"
         

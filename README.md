@@ -1,31 +1,40 @@
-# 🏛️ NeuralVault-OS v8.4.0: The Decision Intelligence Engine
+# 🏛️ NeuralVault-OS v9.0.0: The Decision Intelligence Engine
 **The Autonomous Modular Agentic RAG with Hierarchical GraphRAG, Causal Simulation, and Neural Implicit Compression.**
 
 ---
 
 ## 📜 Vision: The Active Wisdom Core [ITA/EN]
 
-**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Con la **Release v8.4.0**, NeuralVault compie il salto da archivio passivo a simulatore predittivo: non si limita a ricordare il passato, ma simula scenari "What-If" per prevedere l'impatto di nuove informazioni sulla tua base di conoscenza.
+**ITA**: NeuralVault-OS non è un semplice database vettoriale. È un **Sovereign Cognitive Engine** progettato per l'evoluzione autonoma della conoscenza. Con la **Release v9.0.0**, NeuralVault compie il salto da archivio passivo a simulatore predittivo: non si limita a ricordare il passato, ma simula scenari "What-If" per prevedere l'impatto di nuove informazioni sulla tua base di conoscenza.
 
-**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v8.4.0**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
+**EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v9.0.0**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
+
+![Neural Nebula v9.0.0 Hero](assets/Screenshot%202026-05-13%20alle%2008.38.55.png)
 
 ---
 
 ## 🌌 Why NeuralVault?
 
-- **🧪 What-If Engine (v8.0)**: Simula l'impatto causale di un cambiamento prima di implementarlo. / Simulate the causal impact of a change before implementing it.
+- **🧪 What-If Engine (v9.0.0)**: Simula l'impatto causale di un cambiamento prima di implementarlo. / Simulate the causal impact of a change before implementing it.
 - **🦾 Neural Implicit Compression (NIC)**: Riduzione dello storage degli embedding fino al 90% (VQ-VAE). / Embedding storage reduction up to 90% via neural quantization.
-- **🏛️ Sovereign Wiki 3.0**: Portale enciclopedico generativo con diagrammi Mermaid e Epistemic Weather HUD. / Generative encyclopedic portal with Mermaid diagrams and Epistemic Weather HUD.
+- **🏛️ Sovereign Wiki 4.0**: Portale enciclopedico generativo con diagrammi Mermaid e Epistemic Weather HUD. / Generative encyclopedic portal with Mermaid diagrams and Epistemic Weather HUD.
 - **🌌 H-RAG (Hierarchical GraphRAG)**: Mappatura automatica in Galassie Concettuali. / Automatic mapping into Conceptual Galaxies.
 - **🛡️ Verification Era**: Red Teaming autonomo e Consenso Pesato tra Vault. / Autonomous Red Teaming and Weighted Consensus.
 
-![Nexus Vault](assets/Screenshot%202026-05-05%20alle%2012.16.13.png)
+### 🌌 The Sovereign Interface
+![Nexus Vault Full Dashboard](assets/Screenshot%202026-05-10%20alle%2016.42.08.png)
+*L'interfaccia 3D integrata con monitoraggio telemetrico, tracciamento motore e gestione dell'ingestione.*
 
 ---
 
 ## 📖 Documentazione Completa & Quick Start / Documentation & Quick Start
 
 👉 [**🏛️ LEGGI IL MANIFESTO TECNICO (ARCHITETTURA.md)**](ARCHITETTURA.md)
+
+### 📚 Technical Specifications (v9.0.0)
+- [📘 **Sovereign Wiki Schema**](DOCUMENTAZIONE/SOVEREIGN_WIKI_SCHEMA.md): Standard canonico per la conoscenza autorigenerante.
+- [🔬 **Epistemic Engine Specs**](DOCUMENTAZIONE/EPISTEMIC_SPECIFICATIONS.md): Dettagli su Epistemic Fingerprinting e Causal Gradient Descent.
+- [🗺️ **Sovereign Roadmap**](DOCUMENTAZIONE/ROADMAP_V9.0_SOVEREIGN_HEGEMONY.md): Visione strategica e piano di evoluzione.
 
 ---
 
@@ -47,13 +56,14 @@ python3 api.py
 ## 📊 Analytical Comparison (Market Matrix)
 *Un'analisi onesta e approfondita delle capacità di NeuralVault rispetto ai leader di mercato.*
 
-| Feature | **NeuralVault v8.4** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Quivr / Verba |
+| Feature | **NeuralVault v9.0.0** | MS GraphRAG | AnythingLLM | Pinecone / Zilliz | Mem0 | Quivr / Verba |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Sovereignty** | **✅ 100% Local-Locked** | ❌ Cloud-Based | ✅ Local | ❌ SaaS Cloud | ⚠️ Hybrid | ✅ Local |
-| **Causal Simulation** | **✅ What-If Engine** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Formal Logic (Z3)** | **✅ YES (Proved)** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Causal Simulation** | **✅ Sobol-Owen QMC** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Compounding Wiki** | **✅ YES (Adaptive)** | ❌ No | ❌ Chat Only | ❌ No | ❌ No | ❌ No |
 | **Neural Compression** | **✅ NIC (VQ-VAE)** | ❌ No | ❌ No | ⚠️ Scalar Quant. | ❌ No | ❌ No |
-| **Agentic Swarm** | **✅ 9 Autonomous Agents** | ❌ No | ❌ No | ❌ No | ⚠️ Basic | ❌ No |
-| **Knowledge Wiki** | **✅ Generative Portal** | ❌ No | ❌ Chat Only | ❌ No | ❌ No | ❌ No |
+| **Agentic Swarm** | **✅ 14 Auton. Agents** | ❌ No | ❌ No | ❌ No | ⚠️ Basic | ❌ No |
 | **Verification** | **✅ Red-Team/Consensus** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 | **3D Visualization** | **✅ Native Nebula** | ❌ No | ❌ 2D Simple | ❌ No | ❌ No | ❌ No |
 | **P2P Mesh Network** | **✅ ZeroConf Mesh** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
@@ -74,4 +84,5 @@ python3 api.py
 ---
 
 👤 **Author**: Giuseppe Lobbene
+![Swarm Intelligence Hub](assets/Screenshot%202026-05-05%20alle%2012.23.15.png)
 🏺 **NeuralVault-OS: Turning Information into Active Wisdom.**

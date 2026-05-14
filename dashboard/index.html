@@ -50,6 +50,64 @@
             50% { transform: scale(1.02); opacity: 0.8; }
             100% { transform: scale(1); opacity: 1; }
         }
+        /* [v9.0] Sovereign Hegemony Styles */
+        .v9-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.6rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 10px;
+        }
+        .badge-z3 {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+        .badge-epistemic {
+            background: rgba(251, 191, 36, 0.1);
+            color: #fbbf24;
+            border: 1px solid #fbbf24;
+        }
+        .merit-hud {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            width: 220px;
+            background: rgba(2, 6, 23, 0.7);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 1rem;
+            z-index: 500;
+            display: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .merit-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.65rem;
+        }
+        .merit-score {
+            font-weight: 800;
+            color: #3b82f6;
+        }
+        .playbook-modal {
+            max-width: 600px;
+            background: #020617;
+            border: 1px solid #3b82f6;
+            border-radius: 20px;
+            padding: 2rem;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.21.1/cytoscape.min.js"></script>
@@ -60,13 +118,25 @@
         /* ðŸŽ­ SYMMETRIC HUD ORCHESTRATION (v10.5) */
         #mc-wrapper, #nav-guide-tab {
             position: absolute !important;
-            bottom: 30px !important; /* Symmteric alignment with Cycloscope UI */
+            bottom: 30px !important; /* Base position for Window View */
             z-index: 100000;
             display: flex;
             flex-direction: row;
             align-items: flex-end; 
             transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
             pointer-events: none;
+        }
+
+        /* 📺 FULLSCREEN + COMBAT OFFSET: Move up by 200px ONLY in Fullscreen during Combat Mode */
+        html:fullscreen.combat-mode-active #mc-wrapper, 
+        html:fullscreen.combat-mode-active #nav-guide-tab {
+            bottom: 230px !important;
+        }
+        
+        /* For Webkit/Blink compatibility */
+        html:-webkit-full-screen.combat-mode-active #mc-wrapper, 
+        html:-webkit-full-screen.combat-mode-active #nav-guide-tab {
+            bottom: 230px !important;
         }
 
         #nav-guide-tab { left: 0px !important; transform: translateX(calc(-100% + 32px)); pointer-events: none !important; }
@@ -862,6 +932,18 @@
                 <div style="font-size: 0.75rem; color: #4ade80; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; margin-top: 5px;">
                     <span class="pulse-dot"></span> <span id="label-kernel-online" data-i18n="kernel_online">KERNEL ONLINE</span>
                 </div>
+
+                <!-- 🛡️ [v11.5] Moved Integrity Status -->
+                <div id="self-healing-hud" style="margin-top: 15px; display: flex; align-items: center; gap: 8px; cursor: help;" data-tooltip="Self-Healing Engine: Monitoraggio bit-rot e integrità Merkle.">
+                    <i class="fas fa-shield-alt" id="integrity-icon" style="color: #4ade80; font-size: 0.9rem;"></i>
+                    <span id="integrity-score" style="color: #4ade80; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.5px;">100% SECURE</span>
+                </div>
+
+                <!-- 🧬 [v11.5] Moved Cognitive DNA (Smaller) -->
+                <div id="cognitive-dna-hud" style="margin-top: 8px; display: flex; align-items: center; gap: 8px; opacity: 0.8; cursor: help;" data-tooltip="Query DNA Fingerprint: Analisi proattiva del profilo cognitivo.">
+                    <i class="fas fa-dna" style="color: #3b82f6; font-size: 0.7rem;"></i>
+                    <span id="cognitive-status" style="font-size: 0.55rem; color: #94a3b8; font-family: 'JetBrains Mono';">Analyzing DNA...</span>
+                </div>
             </div>
             <nav style="display: flex; flex-direction: column; gap: 0.25rem;">
                 <div class="nav-item active" onclick="showSection('overview')" id="nav-overview" data-i18n="nav_overview">PANORAMICA MEMORIA</div>
@@ -1075,8 +1157,15 @@
                                 <span style="font-size: 0.6rem; color: #0ea5e9; font-weight: 800;">PILOT MODE</span>
                                 <label class="ios-switch" for="flight-toggle"><input type="checkbox" id="flight-toggle" onchange="window.playerController && window.playerController.setPilotMode(this.checked)"><span class="ios-slider"></span></label>
                             </div>
+                            <div style="margin-top: 5px; margin-bottom: 10px; padding-top: 5px; display: flex; align-items: center; justify-content: space-between;">
+                                <span style="font-size: 0.6rem; color: #ef4444; font-weight: 800;"><i class="fas fa-crosshairs"></i> COMBAT MODE</span>
+                                <label class="ios-switch" for="combat-toggle"><input type="checkbox" id="combat-toggle" onchange="window.toggleCombatMode && window.toggleCombatMode(this.checked)"><span class="ios-slider" style="background-color: #440000;"></span></label>
+                            </div>
                             <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>MANOVRE</span> <span style="color: #0ea5e9;">[W/A/S/D]</span></div>
                             <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>ESCI / DISATTIVA</span> <span style="color: #0ea5e9;">[ESC]</span></div>
+                            <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>SPARO LASER</span> <span style="color: #ef4444;">[E]</span></div>
+                            <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>SCUDO ENERGIA</span> <span style="color: #38bdf8;">[SPAZIO]</span></div>
+                            <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>HEAVY BLASTER</span> <span style="color: #f43f5e;">[O]</span></div>
                             <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>VISUALE 1ª/3ª</span> <span style="color: #0ea5e9;">[1] / [2]</span></div>
                             <div class="guide-item" style="font-size: 0.6rem; color: #fff; margin-bottom: 0.4rem; display: flex; justify-content: space-between;"><span>POSTBRUCIATORI</span> <span style="color: #0ea5e9;">[P] HOLD (10x)</span></div>
                             
@@ -1094,7 +1183,6 @@
                         </div>
                     </div>
 
-                    <!-- 🤖 AGENT BOX (Right Side Overlay) -->
                     <div id="mc-wrapper">
                         <div id="mission-control-toggle" onclick="toggleMissionControl()" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(168, 85, 247, 0.9); border-radius: 12px 0 0 12px; width: 32px; min-height: 120px; border: 1px solid rgba(255, 255, 255, 0.2); border-right: none; cursor: pointer;">
                             <i class="fas fa-chevron-left" id="mc-toggle-icon"></i>
@@ -1107,6 +1195,15 @@
                             </div>
                             
                             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                                <!-- NERD MODE Master Toggle (v12.0) -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 4px;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <span style="font-size: 0.6rem; color: #facc15; font-weight: 900; letter-spacing: 1px;">NERD MODE</span>
+                                        <span style="font-size: 0.45rem; color: #8b949e;">Show/Hide Agents & Flight HUD</span>
+                                    </div>
+                                    <label class="ios-switch" for="nerd-mode-toggle"><input type="checkbox" id="nerd-mode-toggle" checked onchange="window.toggleNerdMode(this.checked)"><span class="ios-slider"></span></label>
+                                </div>
+                                
                                 <!-- Auto-Evolve -->
                                 <div style="display: flex; align-items: center; justify-content: space-between;">
                                     <span style="font-size: 0.55rem; color: #10b981; font-weight: 900; letter-spacing: 1px;" data-i18n="label_auto_evolve_title">AUTO-EVOLVE</span>
@@ -1360,28 +1457,41 @@
                     </div>
 
                     <!-- 🌐 SOVEREIGN UNIFIED HUD (Persistent Immersion Deck) -->
-                    <div id="cycloscope-hud" style="position: absolute; bottom: 2rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: 90%; display: none; align-items: center; justify-content: center; gap: 1rem; z-index: 50000; pointer-events: none;">
+                    <div id="cycloscope-hud" style="position: absolute; bottom: 2rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: 90%; display: flex; align-items: center; justify-content: center; gap: 1rem; z-index: 50000; pointer-events: none;">
+                        <!-- 🌑 [v9.0] SHADOW STATS -->
+                        <div id="shadow-stats-hud" class="glass-card" style="padding: 0.5rem 1rem; border: 1px solid rgba(59, 130, 246, 0.4); display: flex; align-items: center; gap: 10px; pointer-events: all; cursor: help;" title="Oracle Predictive Accuracy (Shadow Mode)">
+                            <div class="quantum-hud" style="width: 14px; height: 14px;"></div>
+                            <div style="font-size: 0.6rem; font-weight: 800; color: #3b82f6; letter-spacing: 1px;">
+                                ORACLE: <span id="val-shadow-acc">100%</span>
+                            </div>
+                        </div>
+
+                        <!-- 🌡️ [v9.0] HEALTH STATS -->
+                        <div id="health-stats-hud" class="glass-card" style="padding: 0.5rem 1rem; border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; gap: 10px; pointer-events: all; cursor: help;" title="Global Vault Knowledge Health (Ebbinghaus Decay)">
+                            <i class="fas fa-heartbeat" style="color: #10b981; font-size: 0.8rem;"></i>
+                            <div style="font-size: 0.6rem; font-weight: 800; color: #10b981; letter-spacing: 1px;">
+                                HEALTH: <span id="val-vault-health">100%</span>
+                            </div>
+                        </div>
             <!-- 🧬 [v4.3.1] REM Phase Indicator -->
             <div id="rem-phase-indicator" class="super-metrics-hud hidden" data-tooltip="Fase REM: Consolidamento neurale in corso. Il sistema sta ottimizzando il grafo e risolvendo contraddizioni.">
                 <div class="pulse-dot" style="background: #a855f7; box-shadow: 0 0 15px #a855f7;"></div>
                 <span style="color: #a855f7; font-weight: 800;">REM PHASE ACTIVE</span>
             </div>
 
-            <!-- 🧬 [v4.3.1] Cognitive Profile DNA -->
-            <div id="cognitive-dna-hud" class="super-metrics-hud" data-tooltip="Query DNA Fingerprint: Analisi proattiva del tuo profilo cognitivo e dei gap di conoscenza.">
-                <i class="fas fa-dna" style="color: #3b82f6;"></i>
-                <div id="dna-strand" style="display: flex; gap: 2px;">
-                    <!-- DNA dots dynamically populated -->
-                </div>
-                <span id="cognitive-status" style="font-size: 0.6rem; color: #94a3b8; margin-left: 5px;">Analyzing DNA...</span>
-            </div>
-
-            <!-- 🛡️ [v5.0] Self-Healing Integrity Status -->
-            <div id="self-healing-hud" class="super-metrics-hud" data-tooltip="Self-Healing Engine: Monitoraggio bit-rot e integrità Merkle dei Tier L1-L4.">
-                <i class="fas fa-shield-alt" id="integrity-icon" style="color: #4ade80;"></i>
-                <span id="integrity-score" style="color: #4ade80; font-weight: 800;">100% SECURE</span>
-            </div>
+            <!-- DNA & Integrity moved to Sidebar [v11.5] -->
                         <!-- 💎 [LEFT] QUALITY SELECTOR -->
+                        <!-- 🧭 [v9.0] COGNITIVE MINDSET SELECTOR -->
+                        <div id="mindset-selector-container" class="glass-card" style="padding: 0.3rem 0.6rem; border-radius: 50px; border: 1px solid rgba(168, 85, 247, 0.4); display: flex; align-items: center; gap: 8px; pointer-events: all; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                            <i class="fas fa-brain" style="color: #a855f7; font-size: 0.7rem;"></i>
+                            <select id="mindset-select" onchange="updateCognitiveMindset()" style="background: transparent; border: none; color: #e2e8f0; font-size: 0.6rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; cursor: pointer; outline: none; text-transform: uppercase; letter-spacing: 1px;">
+                                <option value="default" style="background: #020617;">DEFAULT</option>
+                                <option value="analista_minsky" style="background: #020617;">MINSKY (Logic)</option>
+                                <option value="creativo_de_bono" style="background: #020617;">DE BONO (Lateral)</option>
+                                <option value="custode_federale" style="background: #020617;">GUARDIAN (Safe)</option>
+                            </select>
+                        </div>
+
                         <div id="quality-selector-bar" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(35px); padding: 0.5rem; border-radius: 100px; border: 1px solid rgba(59, 130, 246, 0.4); display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 15px 50px rgba(0,0,0,0.9); pointer-events: all;">
                              <button id="q-btn-lq" onclick="setNebulaQuality('LQ')" style="background: rgba(245, 158, 11, 0.1); border: none; color: #f59e0b; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; transition: 0.3s;" data-i18n-title="label_low_quality" title="Bassa Qualità (Performance)">LQ</button>
                              <button id="q-btn-hd" onclick="setNebulaQuality('HD')" style="background: rgba(16, 185, 129, 0.3); border: 2px solid #10b981; color: #10b981; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; transition: 0.3s;" data-i18n-title="label_high_definition" title="Alta Definizione (Bilanciato)">HD</button>
@@ -1405,6 +1515,7 @@
                                     <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; margin-bottom: 0.5rem; letter-spacing: 1px;" data-i18n="label_layers_filter">LAYERS_FILTER</div>
                                     <label class="layer-item" for="layer-agents"><input type="checkbox" id="layer-agents" checked onchange="toggleLayer('agents')"> <span data-i18n="label_layer_agents">Sprite Agenti</span></label>
                                     <label class="layer-item" for="cluster-focus-toggle"><input type="checkbox" id="cluster-focus-toggle" checked onchange="toggleClusterFocus(this.checked)"> <span data-i18n="label_layer_clusters">Enfasi Cluster</span></label>
+                                    <label class="layer-item" for="metis-partition-toggle"><input type="checkbox" id="metis-partition-toggle" onchange="togglePartitions()"> <span>Metis Partition Map</span></label>
                                     <label class="layer-item" for="layer-orphans"><input type="checkbox" id="layer-orphans" checked onchange="toggleLayer('orphans')"> <span data-i18n="label_layer_orphans">Nodi Orfani</span></label>
                                     <label class="layer-item" for="layer-nodes"><input type="checkbox" id="layer-nodes" checked onchange="toggleLayer('nodes')"> <span data-i18n="label_layer_nodes">Nodi (Tutti)</span></label>
                                     <label class="layer-item" for="layer-linked"><input type="checkbox" id="layer-linked" checked onchange="toggleLayer('linked_nodes')"> <span data-i18n="label_layer_linked">Nodi con Archi</span></label>
@@ -1523,12 +1634,11 @@
 
                             <div id="lab-tab-content-forge" class="glass-card" style="flex: 1; display: none; flex-direction: column; padding: 1.5rem; background: rgba(15, 23, 42, 0.8); border-radius: 20px; border: 1px solid #a855f7; overflow-y: auto;">
                                 <div style="font-size: 0.8rem; color: #a855f7; font-weight: 800; margin-bottom: 1.5rem;"><i class="fas fa-hammer"></i> <span data-i18n="tab_agent_forge">AGENT FORGE</span></div>
-                                <div style="display: flex; flex-direction: column; gap: 1.2rem; margin-top: 0.5rem;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
                                     <div>
                                         <label for="lab-forge-name" style="display:block; margin-bottom: 0.5rem; color: #8b949e; font-size: 0.6rem; text-transform: uppercase;" data-i18n="label_name">Nome Identificativo</label>
                                         <input type="text" id="lab-forge-name" placeholder="es. SY-009 SYNTH" style="width: 100%; background: #000; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 0.8rem; border-radius: 8px; font-size: 0.75rem; outline: none;">
                                     </div>
-                                    
                                     <div>
                                         <label for="lab-forge-role" style="display:block; margin-bottom: 0.5rem; color: #8b949e; font-size: 0.6rem; text-transform: uppercase;" data-i18n="label_role">Ruolo Neurale</label>
                                         <select id="lab-forge-role" style="width: 100%; background: #000; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 0.8rem; border-radius: 8px; font-size: 0.75rem; outline: none;">
@@ -1538,10 +1648,16 @@
                                             <option value="distiller" data-i18n="role_distiller">Distillatore (Pruning)</option>
                                         </select>
                                     </div>
+                                </div>
 
+                                <div style="display: flex; flex-direction: column; gap: 1.2rem; margin-top: 1.2rem;">
                                     <div>
-                                        <label for="lab-forge-prompt" style="display:block; margin-bottom: 0.5rem; color: #8b949e; font-size: 0.6rem; text-transform: uppercase;" data-i18n="label_mission_directive">Mission Directive (Prompt)</label>
-                                        <textarea id="lab-forge-prompt" data-i18n-placeholder="placeholder_mission_directive" placeholder="Definisci la missione specifica..." style="width: 100%; height: 60px; background: #000; border: 1px solid rgba(168, 85, 247, 0.3); color: white; padding: 0.8rem; border-radius: 8px; font-size: 0.7rem; outline: none; resize: none;"></textarea>
+                                        <label for="lab-forge-prompt" style="display:block; margin-bottom: 0.5rem; color: #10b981; font-size: 0.6rem; text-transform: uppercase; font-weight: 900;">🧠 BACKEND MANDATE (Natural Language)</label>
+                                        <textarea id="lab-forge-prompt" data-i18n-placeholder="placeholder_mission_directive" placeholder="Cosa deve fare l'agente nel sistema? (Logica backend)" style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); border: 1px solid rgba(16, 185, 129, 0.3); color: white; padding: 0.8rem; border-radius: 8px; font-size: 0.7rem; outline: none; resize: none;"></textarea>
+                                    </div>
+                                    <div>
+                                        <label for="lab-forge-frontend" style="display:block; margin-bottom: 0.5rem; color: #a855f7; font-size: 0.6rem; text-transform: uppercase; font-weight: 900;">👁️ FRONTEND PERSONALITY (Appearance & UI)</label>
+                                        <textarea id="lab-forge-frontend" placeholder="Come deve apparire nel dashboard? (Ruolo visivo)" style="width: 100%; height: 60px; background: rgba(0,0,0,0.4); border: 1px solid rgba(168, 85, 247, 0.3); color: white; padding: 0.8rem; border-radius: 8px; font-size: 0.7rem; outline: none; resize: none;"></textarea>
                                     </div>
 
                                     <button onclick="forgeCustomAgent()" style="width: 100%; padding: 0.8rem; background: linear-gradient(135deg, #a855f7, #3b82f6); border: none; border-radius: 12px; color: #fff; font-weight: 800; cursor: pointer; font-size: 0.7rem; box-shadow: 0 10px 30px rgba(168, 85, 247, 0.1);" data-i18n="btn_forge_agent">FORGE AGENT</button>
@@ -2774,7 +2890,14 @@
                     </div>
                 </div>
                 
-                <div id="wiki-main-grid" style="display: grid; grid-template-columns: 250px 1fr 280px; gap: 1.5rem; min-height: 85vh; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);">
+                <div id="wiki-main-grid" style="display: grid; grid-template-columns: 250px 220px 1fr 300px; gap: 1.5rem; min-height: 85vh; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
+                    <!-- [v9.0] Agent Merit Leaderboard -->
+                    <div id="merit-leaderboard" class="merit-hud">
+                        <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; margin-bottom: 12px; text-transform: uppercase;">🏆 Agent Merit Ranking</div>
+                        <div id="merit-list-container">
+                            <div style="opacity: 0.5; font-size: 0.5rem;">Sincronizzazione meritocrazia...</div>
+                        </div>
+                    </div>
                     <!-- Sidebar: Galassie & Versioni -->
                     <div id="wiki-sidebar-container" style="position: relative; overflow: visible;">
                         <div id="wiki-sidebar" style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; max-height: 85vh; backdrop-filter: blur(10px); transition: all 0.4s ease; transform-origin: left;">
@@ -2791,12 +2914,14 @@
                                 Seleziona una pagina per lo storico.
                             </div>
 
-                            <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05);">
-                                <a href="/api/wiki/llms.txt" target="_blank" style="text-decoration: none;">
+                                <a href="/api/wiki/llms.txt" target="_blank" style="text-decoration: none; margin-bottom: 8px; display: block;">
                                     <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid #a855f7; color: #a855f7; padding: 8px; border-radius: 6px; font-size: 0.55rem; text-align: center; font-weight: 800;">
                                         <i class="fas fa-robot"></i> EXPORT LLMS.TXT
                                     </div>
                                 </a>
+                                <button onclick="window.runSovereignAudit()" style="width: 100%; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981; padding: 8px; border-radius: 6px; font-size: 0.55rem; text-align: center; font-weight: 800; cursor: pointer;">
+                                    <i class="fas fa-shield-check"></i> AUDIT KB (LINTER)
+                                </button>
                             </div>
                         </div>
                         <!-- Collapsed State Button (Hidden by default) -->
@@ -2833,6 +2958,9 @@
                                 <p>Inizializzazione NeuralWiki v9.0...</p>
                             </div>
                         </div>
+
+                        <!-- 🔍 [v8.1] Semantic Disclosure Panel -->
+                        <div id="wiki-disclosure-panel" style="display:none; position:absolute; background:rgba(15,23,42,0.95); border:1px solid rgba(59,130,246,0.4); border-radius:16px; box-shadow:0 15px 40px rgba(0,0,0,0.6); z-index:100; backdrop-filter:blur(15px); pointer-events:all;"></div>
                     </div>
 
                     <!-- Right Sidebar: Epistemic Insights (v9.0) -->
@@ -2844,6 +2972,13 @@
                                 <div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: #64748b;">
                                     GRAPH_READY_V9
                                 </div>
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.2rem; border: 1px solid rgba(168, 85, 247, 0.2); backdrop-filter: blur(10px);">
+                            <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">Cognitive Path</div>
+                            <div id="wiki-learning-path" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                                <div style="font-size: 0.55rem; color: #64748b;">Nessun percorso attivo.</div>
                             </div>
                         </div>
 
@@ -2918,11 +3053,15 @@
                                         <option value="bezos">📦 BEZOS strategy (Long-term / Flywheel)</option>
                                         <option value="trump">🦅 TRUMP disruption (Disruption / Winning)</option>
                                         <option value="standard">🔍 STANDARD analysis (Objective)</option>
+                                        <option value="compliance">📜 COMPLIANCE / REGULATORY (Legal/GDPR)</option>
+                                        <option value="bottleneck">🚧 BOTTLENECK / RESOURCE (PM Friction)</option>
+                                        <option value="competitive_dominance">💥 COMPETITIVE DOMINANCE (Adversarial)</option>
+                                        <option value="cascading_failure">⛓️ CASCADING FAILURE (Domino Effect)</option>
+                                        <option value="black_swan">🦢 BLACK SWAN (High Impact / Low Prob)</option>
                                         <option value="legal">⚖️ LEGAL EAGLE (Compliance/Risk)</option>
                                         <option value="auditor">🛡️ THE AUDITOR (Governance/Policy)</option>
                                         <option value="competitor">⚔️ THE COMPETITOR (Adversarial/Risk)</option>
                                         <option value="guardian">🌍 THE GUARDIAN (Ethics/Safeguard)</option>
-                                        <option value="black_swan">🦢 BLACK SWAN (High Impact / Low Prob)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -2931,6 +3070,17 @@
                                         <option value="FAST" selected>⚡ FAST (100 iterazioni - Istantaneo)</option>
                                         <option value="DEEP">🔮 DEEP (2000 iterazioni - Alta Precisione)</option>
                                     </select>
+                                </div>
+                                
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(59, 130, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <span style="font-size: 0.6rem; color: #3b82f6; font-weight: 900;">COW TWIN MODE (v9.0)</span>
+                                        <span style="font-size: 0.45rem; color: #94a3b8;">Simulazione differenziale a impatto zero.</span>
+                                    </div>
+                                    <label class="ios-switch">
+                                        <input type="checkbox" id="cow-twin-toggle" checked>
+                                        <span class="ios-slider"></span>
+                                    </label>
                                 </div>
 
                                 <div>
@@ -3389,6 +3539,7 @@
     <script src="/static/js/v51_features.js"></script>
     <script src="/static/js/v60_features.js"></script>
     <script src="/static/js/v80_features.js"></script>
+    <script src="/static/js/wasm_bridge.js"></script>
 
     <!-- 🌐 AURA PERSISTENT LAYER (Modals & Scripts isolated from Grid) -->
     <!-- 📊 AI BENCHMARK HUB -->
@@ -3478,6 +3629,62 @@
             <div style="padding: 1rem; background: rgba(0,0,0,0.2); text-align: right;">
                 <button onclick="document.getElementById('agent-help-modal').style.display='none'" style="background: #a855f7; border: none; color: white; padding: 0.5rem 2rem; border-radius: 10px; font-size: 0.7rem; font-weight: 800; cursor: pointer;" data-i18n="btn_understood">COMPRESO</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 🕹️ ARCADE COCKPIT OVERLAY (Restored v14.0) -->
+    <div id="arcade-cockpit-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9000; overflow: hidden; background: transparent;">
+        <!-- Main Cockpit Frame Image -->
+        <img src="/static/img/cockpit.png" style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 100%; object-fit: contain; pointer-events: none; opacity: 0.95;">
+        
+        <!-- Holographic Gauges (Left) -->
+        <div style="position: absolute; bottom: 15%; left: 15%; width: 300px; height: 150px; background: rgba(13, 148, 136, 0.05); backdrop-filter: blur(5px); border: 1px solid rgba(13, 148, 136, 0.4); border-radius: 15px; padding: 15px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 0 30px rgba(13, 148, 136, 0.2);">
+            <div style="font-size: 0.6rem; color: #5eead4; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;" data-i18n="label_engine_telemetry">Engine Core Telemetry</div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 0.55rem; color: #94a3b8;">RPM</span>
+                <div style="width: 150px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
+                    <div id="cockpit-rpm-bar" style="width: 70%; height: 100%; background: #0d9488; box-shadow: 0 0 10px #0d9488;"></div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 0.55rem; color: #94a3b8;">TEMP</span>
+                <div style="width: 150px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
+                    <div id="cockpit-temp-bar" style="width: 45%; height: 100%; background: #f59e0b; box-shadow: 0 0 10px #f59e0b;"></div>
+                </div>
+            </div>
+            <div id="cockpit-status-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 5px;">
+                 <div style="width: 10px; height: 10px; background: #4ade80; border-radius: 2px; box-shadow: 0 0 5px #4ade80;"></div>
+                 <div style="width: 10px; height: 10px; background: #4ade80; border-radius: 2px; box-shadow: 0 0 5px #4ade80;"></div>
+                 <div style="width: 10px; height: 10px; background: #4ade80; border-radius: 2px; box-shadow: 0 0 5px #4ade80;"></div>
+                 <div style="width: 10px; height: 10px; background: #3b82f6; border-radius: 2px; animation: pulse 1s infinite;"></div>
+            </div>
+        </div>
+
+        <!-- Target Acquisition (Center) -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; height: 400px; border: 2px solid rgba(16, 185, 129, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0.8;">
+            <div style="width: 50px; height: 50px; border: 1px solid #10b981; border-radius: 50%; position: relative;">
+                <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 2px; height: 10px; background: #10b981;"></div>
+                <div style="position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 2px; height: 10px; background: #10b981;"></div>
+                <div style="position: absolute; left: -10px; top: 50%; transform: translateY(-50%); width: 10px; height: 2px; background: #10b981;"></div>
+                <div style="position: absolute; right: -10px; top: 50%; transform: translateY(-50%); width: 10px; height: 2px; background: #10b981;"></div>
+            </div>
+            <div style="position: absolute; top: -20px; color: #10b981; font-family: 'JetBrains Mono'; font-size: 0.6rem; letter-spacing: 2px; font-weight: 900;" data-i18n="label_locking_on">LOCKING_ON</div>
+        </div>
+
+        <!-- Ship Systems (Right) -->
+        <div style="position: absolute; bottom: 15%; right: 15%; width: 300px; height: 150px; background: rgba(59, 130, 246, 0.05); backdrop-filter: blur(5px); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 15px; padding: 15px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);">
+            <div style="font-size: 0.6rem; color: #60a5fa; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;" data-i18n="label_nav_data">Ship Navigation Data</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="font-size: 0.45rem; color: #94a3b8;">ALTITUDE</div>
+                    <div id="cockpit-alt-val" style="font-size: 0.9rem; color: #fff; font-family: 'JetBrains Mono'; font-weight: 900;">1,000,000</div>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="font-size: 0.45rem; color: #94a3b8;">VELOCITY</div>
+                    <div id="cockpit-vel-val" style="font-size: 0.9rem; color: #fff; font-family: 'JetBrains Mono'; font-weight: 900;">0.00</div>
+                </div>
+            </div>
+            <div style="font-size: 0.5rem; color: #3b82f6; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">AURA_OS_KINETIC_LINK_ACTIVE</div>
         </div>
     </div>
     <style>

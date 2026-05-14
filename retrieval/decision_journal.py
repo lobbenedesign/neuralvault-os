@@ -27,6 +27,8 @@ class SovereignDecisionJournal:
         self.db = engine._prefilter
         self.logger = logging.getLogger("DecisionJournal")
         self._init_db()
+        from retrieval.shadow_twin import ShadowModeTwin
+        self.shadow_twin = ShadowModeTwin()
 
     def _init_db(self):
         """Crea la tabella per il journal se non esiste."""
@@ -58,6 +60,10 @@ class SovereignDecisionJournal:
             (id, query, target_node_id, predicted_impacts, predicted_confidence)
             VALUES (?, ?, ?, ?, ?)
         """, (record_id, query, node_id, json.dumps(impacts), json.dumps(confidences)))
+        
+        # 🌑 [v9.0] Record for Shadow Mode Calibration
+        shadow_preds = [{"node_id": nid, "expected_impact": imp} for nid, imp in impacts.items()]
+        self.shadow_twin.record_simulation(record_id, shadow_preds)
         
         self.logger.info(f"⚖️ Decision Recorded: {record_id} for query '{query}'")
         return record_id

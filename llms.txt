@@ -1,0 +1,21 @@
+# NeuralVault Sovereign Knowledge Base
+> Sovereign Intelligence Oracle - Local-First Agentic RAG
+
+## About
+NeuralVault is a sovereign knowledge management system with Z3 formal logic, 
+Kùzu causal graphs, and Sobol-Owen QMC simulations.
+
+- **Vault Health**: 98%
+- **Nodes**: 16675
+- **Wiki Pages**: 1
+- **Last Sync**: 2026-05-14T07:56:48.862060
+
+## Navigation for Agents
+- **Search**: Use `/api/search` for semantic retrieval.
+- **Wiki**: Access structured concepts at `/api/wiki/read?file=[name]`.
+- **Logic**: Verify consistency at `/api/formal-logic/check`.
+
+## Core Concepts
+
+## Knowledge Index
+- [Sovereign Wiki Schema](wiki/SOVEREIGN_WIKI_SCHEMA.md)

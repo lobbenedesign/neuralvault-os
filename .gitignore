@@ -1,4 +1,4 @@
-# [NEURAL VAULT - SOVEREIGN IGNORE]
+# [NEURAL VAULT - SOVEREIGN RELEASE IGNORE]
 
 # Python / Ambiente
 venv/
@@ -17,6 +17,9 @@ __pycache__/
 *.log
 history/
 backups/
+vault_data/
+vault_data_test/
+vault_metadata.db
 
 # Dashboard & Web
 node_modules/
@@ -27,16 +30,38 @@ node_modules/
 swarm_settings.json
 vault_key.bin
 
-# NeuralVault System Data
+# NeuralVault System Data (Snapshots & Backups)
 .snapshots/
 .checkpoints/
 .backup_hub/
 backup/
 Dashboard-BACKUP/
 scratch/
-vault_data/
-neuralvault_rs/target/
+legacy_scratch/
+oracle_performance.log
+aegis_event_log.jsonl
+
+# Cartelle Progetti Studio / Documentazione (Excluded for Push)
+DOCUMENTAZIONE/
+mirofish/
+StarWars/
+tests/
+test/
+benchmarks/
 bench_py/
 bench_rs/
-oracle_performance.log
+aura_extension/
+raycast-vault/
+progetti_studio/
+
+# File temporanei e bozze
 AA PROPOSTE PER VIDEO CON CLAUDE AI + TOOL NV.md
+all_files.txt
+extracted_paper.txt
+check_*.py
+test_*.py
+v0_*_validation.py
+fix_*.py
+heart_check.py
+get_ollama_version*.py
+stress_test_*.py

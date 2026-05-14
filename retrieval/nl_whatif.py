@@ -63,8 +63,10 @@ class NaturalLanguageWhatIf:
             self.logger.error(f"Errore nel parsing della query NL: {e} | Response: {response[:100] if 'response' in locals() else 'None'}...")
             return None
 
-    async def run_nl_simulation(self, query: str, lenses: List[str] = ["standard"], mode: str = "FAST", horizon: str = "immediate") -> Dict[str, Any]:
+    async def run_nl_simulation(self, query: str, lenses: List[str] = ["standard"], mode: str = "FAST", horizon: str = "immediate", twin=None) -> Dict[str, Any]:
         """Esegue l'intero pipeline dalla domanda al report narrativo, includendo le lenti archetipali."""
+        # Se viene passato un twin (CoW), usiamo quello per la ricerca dei nodi
+        source = twin if twin else self.engine
         # [v8.4 Fix] Mette in pausa il Vault (Priority Shift) per liberare la CPU/RAM per la simulazione
         if hasattr(self.engine.orchestrator, 'set_priority_shift'):
             self.engine.orchestrator.set_priority_shift(True)
@@ -85,8 +87,8 @@ class NaturalLanguageWhatIf:
             # Sovrascriviamo l'horizon del parser con quello dello slider se quest'ultimo è stato toccato
             if horizon: parsed.time_horizon = horizon
  
-            # 2. Ricerca del nodo target
-            search_res = await self.engine.query(parsed.target_concept, k=3)
+            # 2. Ricerca del nodo target (Usiamo source che può essere il twin CoW)
+            search_res = await source.query(parsed.target_concept, k=3)
             if not search_res:
                 return {"error": f"Non ho trovato informazioni su '{parsed.target_concept}' nel tuo vault."}
             
@@ -127,7 +129,7 @@ class NaturalLanguageWhatIf:
             # 🚀 LOG TELEMETRIA NEL TERMINALE
             print(f"\n🔮 [What-If] Risposta generata in {duration:.2f}s")
             print(f"🧠 Modello: {model_used}")
-            print(f"🏺 Conoscenza: {k_nodes} nodi analizzati nel Vault")
+            # print(f"🏺 Conoscenza: {len(source._nodes) if hasattr(source, '_nodes') else 'Unknown'} nodi analizzati")
             print(f"📊 Simulazione: 1000 iterazioni stocastiche completate.\n")
         
             return {

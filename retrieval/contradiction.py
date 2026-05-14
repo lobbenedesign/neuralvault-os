@@ -12,10 +12,11 @@ class ContradictionMapper:
     Identifica proattivamente le incongruenze logiche nel Vault.
     Crea archi di tipo CONTRADICTS tra nodi che si smentiscono a vicenda.
     """
-    def __init__(self, engine, orchestrator):
+    def __init__(self, engine, orchestrator, formal_logic=None):
         self.engine = engine
         self.orchestrator = orchestrator
         self.vault = engine
+        self.formal_logic = formal_logic
 
     async def scan_for_contradictions(self, limit: int = 50):
         """
@@ -87,15 +88,30 @@ class ContradictionMapper:
             if result.get("contradiction") and result.get("confidence", 0) > 0.7:
                 logger.warning(f"🚨 [Contradiction Found] {node_a.id[:8]} vs {node_b.id[:8]}: {result['reason']}")
                 
+                # --- [v9.0] Z3 Formal Logic Verification ---
+                is_mathematical = False
+                if self.formal_logic:
+                    # Tenta di dimostrare matematicamente il conflitto
+                    # Inseriamo i nodi come assunzioni nel solver
+                    proof = self.formal_logic.check_contradiction([node_a.id, node_b.id])
+                    if proof.get("is_contradiction"):
+                        is_mathematical = True
+                        logger.info(f"⚖️ [Z3 PROOF] Contradiction Mathematically Proven for {node_a.id[:8]} and {node_b.id[:8]}!")
+                
                 # Crea l'arco di contraddizione (Rosso nella Nebula)
-                self.vault.add_relation(node_a.id, node_b.id, RelationType.CONTRADICTS, weight=result['confidence'])
+                # Se dimostrato matematicamente, peso massimo 1.0
+                final_weight = 1.0 if is_mathematical else result.get("confidence", 0.7)
+                self.vault.add_relation(node_a.id, node_b.id, RelationType.CONTRADICTS, weight=final_weight)
                 
                 # Log nel Ledger per la Timeline
+                description = f"Contraddizione rilevata con {node_b.id[:8]}: {result['reason']}"
+                if is_mathematical: description = "[Z3 PROVED] " + description
+                
                 self.engine._prefilter.log_event(
                     event_type="CONTRADICTION_DETECTED",
                     topic_cluster="Logic Integrity",
                     node_id=node_a.id,
-                    description=f"Contraddizione rilevata con {node_b.id[:8]}: {result['reason']}"
+                    description=description
                 )
         except Exception as e:
             logger.error(f"❌ [Contradiction Audit Fail] {e}")

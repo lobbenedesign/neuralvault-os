@@ -74,8 +74,22 @@ class NeuralImplicitCompressor:
 
     def decompress(self, code_index: int) -> np.ndarray:
         """Ricostruisce il vettore approssimato partendo dall'indice del codebook."""
-        if not self.is_trained or code_index < 0: return None
+        if not self.is_trained or self.codebook is None or code_index < 0 or code_index >= len(self.codebook): 
+            return None
         return self.codebook[code_index]
+
+    def reconstruct(self, node_id: str, metadata: dict = None) -> Optional[np.ndarray]:
+        """
+        [v8.1] Reconstructs a vector from its compressed index stored in metadata.
+        Used by NeuralVaultEngine.get_node for transparent decompression.
+        """
+        if not self.is_trained or metadata is None:
+            return None
+            
+        code_index = metadata.get("nic_idx")
+        if code_index is not None:
+            return self.decompress(int(code_index))
+        return None
 
     def save(self, path: str):
         if self.is_trained:

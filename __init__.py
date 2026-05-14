@@ -68,6 +68,7 @@ from utils.event_bus import NeuralEventBus, NeuralEventType # [v6.0]
 from utils.neural_compression import NeuralImplicitCompressor # [v8.0]
 from retrieval.vault_twin import SovereignVaultTwin # [v8.4]
 from retrieval.aegis_bus import aegis_bus # [v9.0]
+from retrieval.graph_partitioner import SovereignGraphPartitioner # [v9.0]
 
 class QueryIntent:
     SEMANTIC = "semantic"
@@ -202,6 +203,7 @@ class NeuralVaultEngine:
         self.sandbox = SovereignShadowSandbox(self) # [v6.0]
         self.events = NeuralEventBus() # [v6.0]
         self.twin = SovereignVaultTwin(self) # [v8.4]
+        self.partitioner = SovereignGraphPartitioner(self) # [v9.0]
         self.last_routing = None
         
         print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")
@@ -490,7 +492,7 @@ class NeuralVaultEngine:
             if node_id in self.nic_lru_cache:
                 node.vector = self.nic_lru_cache[node_id]
             else:
-                node.vector = self.nic.reconstruct(node_id)
+                node.vector = self.nic.reconstruct(node_id, metadata=node.metadata)
                 # Update Cache
                 if len(self.nic_lru_cache) < self._nic_cache_limit:
                     self.nic_lru_cache[node_id] = node.vector
@@ -802,6 +804,11 @@ class NeuralVaultEngine:
                 asyncio.create_task(self.agent007_lab.propagate_tension(node_id, vector))
             except Exception:
                 pass
+        
+        # 📦 [v9.0] Automated Partitioning (Metis-like)
+        if len(self._nodes) > 0 and len(self._nodes) % 1000 == 0:
+             threading.Thread(target=self.partitioner.run_partitioning, kwargs={'k': max(10, len(self._nodes)//500)}, daemon=True).start()
+
         return node
 
     async def upsert_multimodal(self, file_path: str, source_uri: str = None):
@@ -907,24 +914,21 @@ class NeuralVaultEngine:
         prefilter_data = [(n.id, n.collection, n.metadata) for n in nodes]
         self._prefilter.add_nodes_batch(prefilter_data)
         
-        # v14.3: Async Agent007 (Non-blocking ingestion)
-        def run_agent007_tasks(node_list):
-            # [v4.1.9] Priority Shift: Wait if active
-            while self.priority_mode:
-                time.sleep(1.0)
-            
+        # v14.3: Async Agent007 (Non-blocking ingestion via Task)
+        async def run_agent007_tasks(node_list):
             for n in node_list:
                 try:
-                    # Riprova il check se il flag viene attivato durante il loop
-                    if self.priority_mode: break
+                    # [v4.1.9] Priority Shift: Pause if active
+                    while self.priority_mode:
+                        await asyncio.sleep(1.0)
                     
                     is_foraging = getattr(n, 'metadata', {}).get('forage_job') is not None
                     use_fast_mode = len(node_list) > 10 or is_foraging
-                    self.agent007.extract_entities(n.text, n.id, fast_mode=use_fast_mode)
+                    await self.agent007.extract_entities(n.text, n.id, fast_mode=use_fast_mode)
                 except Exception: pass
 
         if self.agent007:
-            threading.Thread(target=run_agent007_tasks, args=(nodes,), daemon=True).start()
+            asyncio.create_task(run_agent007_tasks(nodes))
 
         print(f"✅ [Kernel] Engine now contains {len(self._nodes)} active nodes.")
         
@@ -1199,6 +1203,10 @@ class NeuralVaultEngine:
             self.preloader.record_access(query_text, results[0].node.id)
             
         return sorted(results, key=lambda x: x.final_score, reverse=True)
+
+    def get_node_count(self) -> int:
+        """Restituisce il numero totale di nodi nella Neural Grid attiva."""
+        return len(self._nodes)
 
     def get_synapse_count(self) -> int:
         """Restituisce il numero totale di sinapsi (archi) nel sistema."""
@@ -1849,3 +1857,28 @@ class NeuralVaultEngine:
         except Exception as e:
             print(f"❌ [Deep-Sleep] Errore durante il consolidamento: {e}")
             return False
+
+    async def add_hyper_edge(self, source_ids: List[str], target_ids: List[str], relation: RelationType | str, weight: float = 1.0, metadata: Dict = None):
+        """🕸️ [v9.0] Crea un Iper-Arco (Bayesian Hyper-Graph)."""
+        from index.node import HyperEdge
+        if isinstance(relation, str):
+            relation = RelationType(relation)
+            
+        edge = HyperEdge(
+            source_ids=source_ids,
+            target_ids=target_ids,
+            relation=relation,
+            weight=weight,
+            metadata=metadata or {}
+        )
+        
+        # Registra l'iper-arco in tutti i nodi sorgente
+        for sid in source_ids:
+            node = self._nodes.get(sid)
+            if node:
+                if not hasattr(node, 'hyper_edges'): node.hyper_edges = []
+                node.hyper_edges.append(edge)
+                
+        # Registra l'evento
+        self._prefilter.log_event("HYPER_EDGE_CREATED", source_ids[0] if source_ids else "null", description=f"Hyper-link: {len(source_ids)} sources -> {len(target_ids)} targets")
+        return edge

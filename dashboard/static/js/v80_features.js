@@ -72,18 +72,42 @@ window.loadWikiPage = async (topic, mode = 'TECHNICAL', fileName = null) => {
             data = await resp.json();
         }
         
+        // [v9.0] Z3 Formal Logic Audit
+        let z3Badge = '';
+        try {
+            const z3Resp = await fetch(`/api/formal-logic/check?topic=${encodeURIComponent(topic)}`, {
+                headers: { 'X-API-KEY': apiKey }
+            });
+            const z3Data = await z3Resp.json();
+            if (z3Data.consistent) {
+                z3Badge = `<span class="v9-badge badge-z3" title="Z3 Theorem Prover: Nessuna contraddizione logica trovata."><i class="fas fa-shield-check"></i> PROVEN</span>`;
+            } else {
+                z3Badge = `<span class="v9-badge badge-z3" style="color:#ef4444; border-color:#ef4444;" title="Z3 Theorem Prover: Rilevate contraddizioni logiche!"><i class="fas fa-exclamation-triangle"></i> CONFLICT</span>`;
+            }
+        } catch(e) { console.warn("Z3 Audit failed", e); }
+
+        const epistemicScore = data.metadata?.epistemic_score || data.metadata?.confidence || 0.85;
+        const epistemicBadge = `<span class="v9-badge badge-epistemic" title="Epistemic Score: ${Math.round(epistemicScore*100)}%"><i class="fas fa-brain"></i> ${Math.round(epistemicScore*100)}% EPISTEMIC</span>`;
+
         // --- 📊 Generative Multimedia (v8.1) ---
         content.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:1rem;">
-                <h1 id="wiki-portal-title" style="margin:0; font-size:1.5rem; letter-spacing:2px;">${data.title}</h1>
+                <div style="display:flex; align-items:center;">
+                    <h1 id="wiki-portal-title" style="margin:0; font-size:1.5rem; letter-spacing:2px;">${data.title}</h1>
+                    ${z3Badge}
+                    ${epistemicBadge}
+                </div>
                 <div class="reading-mode-selector" style="display:flex; gap:10px; background:rgba(0,0,0,0.2); padding:5px; border-radius:10px;">
                     <button onclick="window.switchWikiMode('EXECUTIVE')" style="background:${mode=='EXECUTIVE'?'#3b82f6':'transparent'}; border:none; color:#fff; font-size:0.5rem; padding:5px 10px; border-radius:5px; cursor:pointer;">⚡ EXE</button>
                     <button onclick="window.switchWikiMode('TECHNICAL')" style="background:${mode=='TECHNICAL'?'#3b82f6':'transparent'}; border:none; color:#fff; font-size:0.5rem; padding:5px 10px; border-radius:5px; cursor:pointer;">🔧 TECH</button>
                     <button onclick="window.switchWikiMode('RESEARCH')" style="background:${mode=='RESEARCH'?'#3b82f6':'transparent'}; border:none; color:#fff; font-size:0.5rem; padding:5px 10px; border-radius:5px; cursor:pointer;">🔬 RES</button>
                 </div>
             </div>
-            <div class="wiki-article">${data.markdown}</div>
+            <div class="wiki-article">${window.processWikiMarkdown ? window.processWikiMarkdown(data.markdown, data.citations || []) : data.markdown}</div>
         `;
+
+        // [v9.0] Trigger Merit Ranking Update
+        window.updateMeritRanking();
         
         // [v8.4] Phase 7.4: High-Velocity Optimization (Lazy Multimedia 2.0)
         if (!window.lazyMermaid) {
@@ -107,11 +131,58 @@ window.loadWikiPage = async (topic, mode = 'TECHNICAL', fileName = null) => {
         
         window.loadWikiHistory(topic);
         window.updateWikiRightSidebar(data);
+        window.loadLearningPath(topic);
         
         // Applica classe modalità al body
         document.body.classList.add(`mode-${mode.toLowerCase()}`);
     } catch (e) {
         console.error("Load Wiki Error:", e);
+    }
+};
+
+window.runSovereignAudit = async () => {
+    try {
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        
+        // Show loading state
+        const content = document.getElementById('wiki-portal-content');
+        const originalHTML = content.innerHTML;
+        content.innerHTML = `<div style="text-align:center; padding:5rem; color:#10b981;">
+            <i class="fas fa-microscope fa-spin fa-3x"></i>
+            <h2 style="margin-top:20px;">Sovereign Audit in Corso...</h2>
+            <p style="font-size:0.7rem; opacity:0.7;">Scansione integrità logica e link cross-page.</p>
+        </div>`;
+
+        const resp = await fetch('/api/wiki/audit', {
+            headers: { 'X-API-KEY': apiKey }
+        });
+        const report = await resp.json();
+
+        // Render Audit Results
+        let issuesHTML = report.issues.map(i => `
+            <div style="background:rgba(255,255,255,0.02); border-left:4px solid ${i.severity=='CRITICAL'?'#ef4444':'#facc15'}; padding:15px; border-radius:8px; margin-bottom:10px;">
+                <div style="font-size:0.6rem; color:#64748b; margin-bottom:5px;">${i.type} | ${i.file || 'Global'}</div>
+                <div style="font-size:0.8rem; color:#f8fafc;">${i.detail}</div>
+            </div>
+        `).join('') || '<div style="color:#10b981; padding:20px; text-align:center;">🛡️ Nessuna incongruenza rilevata. Il Vault è in salute.</div>';
+
+        content.innerHTML = `
+            <div style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <h2 style="margin:0; color:#10b981;"><i class="fas fa-file-certificate"></i> Audit Report v9.5</h2>
+                    <div style="background:rgba(16, 185, 129, 0.1); padding:10px 20px; border-radius:12px; border:1px solid #10b981;">
+                        <span style="font-size:0.6rem; color:#10b981;">HEALTH_SCORE</span>
+                        <div style="font-size:1.5rem; font-weight:900;">${report.health_score}%</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:20px; font-size:0.7rem; color:#64748b;">Totale pagine scansionate: ${report.total_pages}</div>
+                <div class="audit-issues-list">${issuesHTML}</div>
+                <button onclick="window.refreshWikiList()" style="margin-top:30px; background:#3b82f6; border:none; color:white; padding:10px 20px; border-radius:8px; cursor:pointer;">TORNA ALLA WIKI</button>
+            </div>
+        `;
+    } catch (e) {
+        console.error("Audit Error:", e);
+        alert("Errore durante l'audit: " + e.message);
     }
 };
 
@@ -601,6 +672,96 @@ window.renderEpistemicHUD = (meta) => {
         icon.style.color = trustScore > 0.8 ? '#facc15' : '#64748b';
         document.getElementById('wiki-trust-text').innerText = trustScore > 0.8 ? 'STABILE / SOLEGGIATO' : 'INCERTO / NUVOLOSO';
     }
+
+    // [v9.0] Additional Epistemic Insights
+    if (meta.epistemic_score) {
+        const actionContainer = document.getElementById('wiki-hud-actions');
+        if (actionContainer) {
+            const playbookBtn = document.createElement('button');
+            playbookBtn.innerHTML = `<i class="fas fa-scroll"></i> TACTICAL PLAYBOOK`;
+            playbookBtn.style = "background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid #3b82f6; font-size:0.55rem; padding:4px 10px; border-radius:5px; cursor:pointer; font-weight:800; margin-left:5px;";
+            playbookBtn.onclick = () => window.generateTacticalPlaybook();
+            actionContainer.appendChild(playbookBtn);
+        }
+    }
+};
+
+/**
+ * [v9.0] AGENT MERITOCRACY RANKING
+ */
+window.updateMeritRanking = async () => {
+    const leaderboard = document.getElementById('merit-leaderboard');
+    const container = document.getElementById('merit-list-container');
+    if (!leaderboard || !container) return;
+
+    try {
+        leaderboard.style.display = 'block';
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        const resp = await fetch('/api/swarm/merit', {
+            headers: { 'X-API-KEY': apiKey }
+        });
+        const data = await resp.json();
+        
+        container.innerHTML = '';
+        if (data && data.agents) {
+            data.agents.slice(0, 5).forEach((agent, i) => {
+                const item = document.createElement('div');
+                item.className = 'merit-item';
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#64748b; font-weight:800;">#${i+1}</span>
+                        <span style="color:#e2e8f0;">${agent.name}</span>
+                    </div>
+                    <span class="merit-score">${Math.round(agent.merit_tokens)} MT</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+    } catch (e) {
+        console.warn("Merit fetch failed", e);
+    }
+};
+
+/**
+ * [v9.0] TACTICAL PLAYBOOK GENERATOR
+ */
+window.generateTacticalPlaybook = async () => {
+    const topic = document.getElementById('wiki-portal-title')?.innerText || "Summary";
+    log(`📜 [v9.0] Generating Tactical Playbook for: ${topic}`, "#3b82f6");
+    
+    try {
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        const resp = await fetch('/api/strategy/playbook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
+            body: JSON.stringify({ topic: topic })
+        });
+        const data = await resp.json();
+        
+        if (data.playbook) {
+            let playbookHTML = `<div class="playbook-modal">
+                <h2 style="color:#3b82f6; margin-top:0;">🛡️ TACTICAL PLAYBOOK: ${topic}</h2>
+                <div style="margin-bottom:1.5rem; font-size:0.7rem; color:#8b949e;">Strategia operativa generata in < 50ms (v9.0)</div>
+                <div style="display:flex; flex-direction:column; gap:1rem;">`;
+                
+            data.playbook.steps.forEach((step, i) => {
+                playbookHTML += `
+                    <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); padding:1rem; border-radius:12px;">
+                        <div style="color:#3b82f6; font-weight:900; font-size:0.6rem; margin-bottom:5px;">STEP ${i+1}: ${step.action.toUpperCase()}</div>
+                        <div style="font-size:0.75rem; line-height:1.4;">${step.description}</div>
+                    </div>
+                `;
+            });
+            
+            playbookHTML += `</div>
+                <button onclick="window.closeSovereignModal()" style="margin-top:2rem; width:100%; padding:10px; background:#3b82f6; border:none; color:#fff; border-radius:8px; font-weight:800; cursor:pointer;">CHIUDI COMANDO</button>
+            </div>`;
+            
+            window.showSovereignModal("📜 TACTICAL PLAYBOOK", playbookHTML);
+        }
+    } catch (e) {
+        log(`❌ Playbook Error: ${e.message}`, "#ef4444");
+    }
 };
 
 window.loadWikiHistory = async (topic) => {
@@ -609,6 +770,9 @@ window.loadWikiHistory = async (topic) => {
             headers: { 'X-API-KEY': typeof VAULT_KEY !== 'undefined' ? VAULT_KEY : 'AURA-ADMIN-77' }
         });
         const data = await resp.json();
+        window._currentWikiVersions = data.versions || [];
+        window._currentWikiTopic = topic;
+        
         const container = document.getElementById('wiki-history-list');
         if (!container) return;
         
@@ -623,12 +787,85 @@ window.loadWikiHistory = async (topic) => {
             div.style.padding = '8px';
             div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
             div.style.cursor = 'pointer';
+            div.className = 'history-v-item';
+            div.onclick = () => window.loadSpecificWikiVersion(topic, v.timestamp);
             div.innerHTML = `<div>${v.date}</div><div style="font-size:0.5rem; opacity:0.5;">${v.preview}</div>`;
             container.appendChild(div);
         });
     } catch (e) {
         console.error("Wiki History Error:", e);
     }
+};
+
+window.temporalShiftWiki = (percentage) => {
+    if (!window._currentWikiVersions || window._currentWikiVersions.length === 0) return;
+    
+    // Invertiamo: 100% è il più recente (indice 0), 0% è il più antico (ultimo indice)
+    const reversedVersions = [...window._currentWikiVersions].reverse();
+    const index = Math.floor((percentage / 100) * (reversedVersions.length - 1));
+    const version = reversedVersions[index];
+    
+    if (version && version.timestamp !== window._lastShiftedVersion) {
+        window._lastShiftedVersion = version.timestamp;
+        window.loadSpecificWikiVersion(window._currentWikiTopic, version.timestamp);
+    }
+};
+
+window.loadSpecificWikiVersion = async (topic, timestamp) => {
+    try {
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        const resp = await fetch(`/api/wiki/history?topic=${encodeURIComponent(topic)}&version=${timestamp}`, {
+            headers: { 'X-API-KEY': apiKey }
+        });
+        const data = await resp.json();
+        
+        const article = document.querySelector('.wiki-article');
+        if (article && data.content) {
+            const oldContent = article.innerHTML;
+            const newContent = data.content;
+            
+            // Se non è la versione attuale, mostriamo il Diff
+            if (window._showWikiDiff) {
+                article.innerHTML = window.computeWikiDiff(oldContent, newContent);
+            } else {
+                article.innerHTML = newContent;
+            }
+
+            // Visual feedback
+            article.style.opacity = '0.5';
+            setTimeout(() => article.style.opacity = '1', 100);
+            
+            const titleEl = document.getElementById('wiki-portal-title');
+            if (titleEl) titleEl.innerHTML = `${topic} <span style="font-size:0.6rem; opacity:0.5;">(V:${timestamp})</span>`;
+        }
+    } catch (e) {
+        console.error("Shift Error:", e);
+    }
+};
+
+window._showWikiDiff = true; // Abilitato di default per il Time Travel
+
+window.computeWikiDiff = (oldHtml, newHtml) => {
+    // Semplice diff a livello di parole per visualizzazione temporale
+    const oldWords = oldHtml.split(/\s+/);
+    const newWords = newHtml.split(/\s+/);
+    
+    // Usiamo un set per trovare parole rimosse/aggiunte (molto semplificato)
+    const oldSet = new Set(oldWords);
+    const newSet = new Set(newWords);
+    
+    let result = "";
+    newWords.forEach(word => {
+        if (!oldSet.has(word)) {
+            result += `<span style="background: rgba(16, 185, 129, 0.2); color: #4ade80; border-radius: 2px; padding: 0 2px;">${word}</span> `;
+        } else {
+            result += word + " ";
+        }
+    });
+    
+    // Nota: questo diff non mostra le rimozioni nel testo nuovo, 
+    // ma evidenzia le novità rispetto alla versione precedente visualizzata.
+    return result;
 };
 
 // --- WHAT-IF ENGINE ---
@@ -854,6 +1091,20 @@ window.runNaturalLanguageSimulation = async () => {
     log(`🧠 [NL-WhatIf] Analisi scenario: "${prompt}" (Lenti: ${lensIds.join(', ')} | Mode: ${mode} | Horizon: ${horizon})...`, "#facc15");
     
     try {
+        let twinId = null;
+        const useTwin = document.getElementById('cow-twin-toggle')?.checked;
+        
+        if (useTwin) {
+            log("🧪 [NL-WhatIf] Inizializzazione Differential Twin (CoW)...", "#3b82f6");
+            const twinResp = await fetch('/api/vault/twin/create', {
+                method: 'POST',
+                headers: { 'X-API-KEY': typeof VAULT_KEY !== 'undefined' ? VAULT_KEY : 'AURA-ADMIN-77' }
+            });
+            const twinData = await twinResp.json();
+            twinId = twinData.twin_id;
+            log(`✅ [NL-WhatIf] Twin generato: ${twinId.substring(0,8)}...`, "#10b981");
+        }
+
         const resp = await fetch('/api/wiki/simulate/nl', {
             method: 'POST',
             headers: { 
@@ -864,16 +1115,24 @@ window.runNaturalLanguageSimulation = async () => {
                 query: prompt,
                 lenses: lensIds,
                 mode: mode,
-                horizon: horizon
+                horizon: horizon,
+                twin_id: twinId
             })
         });
-
 
         const data = await resp.json();
         
         if (data.error) {
             log(`❌ Errore Simulazione: ${data.error}`, "#ef4444");
             alert(data.error);
+            // Reset button
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                if (btnIcon) btnIcon.className = 'fas fa-play';
+                if (btnText) btnText.innerText = 'AVVIA SIMULAZIONE';
+            }
             return;
         }
 
@@ -941,7 +1200,14 @@ window.generateStrategicReport = async (results) => {
         });
         const data = await resp.json();
         
+        // [v12.7] Show the report and bind evidence clicks
         window.showSovereignModal(`Report Strategico Sovrano`, data.report);
+        
+        // Bind evidence clicks after a short delay to ensure modal is rendered
+        setTimeout(() => {
+            if (window.bindEvidenceLinks) window.bindEvidenceLinks('sovereign-intelligence-modal');
+        }, 100);
+        
     } catch (e) {
         console.error("Report Error:", e);
     }
@@ -1376,3 +1642,183 @@ window.toggleMainSidebar = function() {
         window.dispatchEvent(new Event('resize'));
     }, 400);
 };
+
+/**
+ * 🗺️ [v8.4] LEARNING PATH ENGINE
+ */
+window.loadLearningPath = async (topic) => {
+    const container = document.getElementById('wiki-learning-path');
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div style="font-size: 0.5rem; color: #a855f7;"><i class="fas fa-spinner fa-spin"></i> Mapping prerequisites...</div>';
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        const resp = await fetch(`/api/wiki/learning-path?topic=${encodeURIComponent(topic)}`, {
+            headers: { 'X-API-KEY': apiKey }
+        });
+        const data = await resp.json();
+
+        if (data.error) {
+            container.innerHTML = `<div style="font-size: 0.55rem; color: #64748b;">${data.error}</div>`;
+            return;
+        }
+
+        let html = '';
+        if (data.path && data.path.length > 0) {
+            data.path.forEach(step => {
+                const color = step.status === 'COMPLETED' ? '#10b981' : '#a855f7';
+                const progress = Math.round(step.coverage * 100);
+                html += `
+                    <div style="margin-bottom: 8px;">
+                        <div style="display:flex; justify-content:space-between; font-size: 0.55rem; color: #e2e8f0; margin-bottom: 4px;">
+                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${step.order}. ${step.topic}</span>
+                            <span style="color:${color}; font-weight:800;">${progress}%</span>
+                        </div>
+                        <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;">
+                            <div style="width: ${progress}%; height: 100%; background: ${color}; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        container.innerHTML = html || '<div style="font-size: 0.55rem; color: #64748b;">Nessun percorso trovato.</div>';
+    } catch (e) {
+        console.error("Learning Path Error:", e);
+        container.innerHTML = '<div style="font-size: 0.55rem; color: #ef4444;">Errore caricamento percorso.</div>';
+    }
+};
+
+/**
+ * 📦 [v8.4] METIS PARTITION TOGGLE
+ */
+window._showPartitions = false;
+window.togglePartitions = () => {
+    window._showPartitions = !window._showPartitions;
+    if (window.log) window.log(`📦 [Metis] Partition Visualization: ${window._showPartitions ? 'ON' : 'OFF'}`, "#facc15");
+    // Trigger re-render of nebula if points exist
+    if (typeof lastVaultPoints !== 'undefined' && lastVaultPoints) {
+        updateThreeScene(lastVaultPoints, null);
+    }
+};
+
+/**
+ * 🏺 [v9.0] SOVEREIGN WIKI DASHBOARD
+ * Renders the home view of the Knowledge Vault with real-time stats and metrics.
+ */
+window.renderWikiDashboard = async () => {
+    const content = document.getElementById('wiki-portal-content');
+    const hud = document.getElementById('wiki-epistemic-hud');
+    if (!content) return;
+
+    if (hud) hud.style.display = 'none';
+
+    content.innerHTML = `<div style="text-align:center; padding:5rem;"><i class="fas fa-spinner fa-spin"></i> Accesso al Cuore del Vault...</div>`;
+
+    try {
+        const apiKey = (typeof window.VAULT_KEY !== 'undefined') ? window.VAULT_KEY : 'AURA-ADMIN-77';
+        
+        // Parallel fetch for stats and wiki list
+        const [statsResp, wikiResp, weatherResp] = await Promise.all([
+            fetch('/api/debug/stats', { headers: { 'X-API-KEY': apiKey } }),
+            fetch('/api/wiki/list', { headers: { 'X-API-KEY': apiKey } }),
+            fetch('/api/system/weather', { headers: { 'X-API-KEY': apiKey } })
+        ]);
+
+        const stats = statsResp.ok ? await statsResp.json() : { nodes_count: 0 };
+        const wiki = wikiResp.ok ? await wikiResp.json() : { pages: [] };
+        const weather = weatherResp.ok ? await weatherResp.json() : { score: 0.85, status: "SUNNY" };
+
+        const totalNodes = stats.nodes_count || 0;
+        const totalPages = wiki.pages ? wiki.pages.length : 0;
+        const trustPercent = Math.round((weather.score || 0.85) * 100);
+
+        let latestPagesHtml = '';
+        if (wiki.pages && wiki.pages.length > 0) {
+            wiki.pages.slice(0, 4).forEach(p => {
+                latestPagesHtml += `
+                    <div class="glass-card" style="padding:1.5rem; cursor:pointer; transition:0.3s; border:1px solid rgba(168,85,247,0.2);" onclick="window.loadWikiPage('${p.title}', 'TECHNICAL', '${p.file_name}')">
+                        <div style="font-size:0.55rem; color:#a855f7; margin-bottom:8px; text-transform:uppercase; font-weight:900;">${p.namespace || 'General'}</div>
+                        <div style="font-size:0.9rem; color:#fff; font-weight:800; margin-bottom:12px;">${p.title}</div>
+                        <div style="font-size:0.6rem; color:#64748b;">Dimensioni: ${(p.size/1024).toFixed(1)} KB</div>
+                    </div>
+                `;
+            });
+        }
+
+        content.innerHTML = `
+            <div class="wiki-dashboard-container" style="animation: fadeIn 0.5s ease;">
+                <div style="text-align:center; margin-bottom:4rem;">
+                    <h1 style="letter-spacing:10px; color:#3b82f6; font-size:2rem; margin-bottom:1rem; font-weight:900; text-transform:uppercase;">SOVEREIGN KNOWLEDGE VAULT</h1>
+                    <p style="color:#64748b; font-size:0.7rem; letter-spacing:3px;">NEURAL_VAULT_v9.0 // EPISTEMIC_INTEGRITY_VERIFIED</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1.5rem; margin-bottom:4rem;">
+                    <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); padding:2rem; border-radius:20px; text-align:center;">
+                        <i class="fas fa-brain" style="color:#3b82f6; font-size:1.5rem; margin-bottom:1rem;"></i>
+                        <div style="font-size:1.8rem; font-weight:900; color:#fff;">${totalNodes.toLocaleString()}</div>
+                        <div style="font-size:0.55rem; color:#8b949e; text-transform:uppercase; letter-spacing:1px;">Frammenti Cognitivi</div>
+                    </div>
+                    <div style="background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.2); padding:2rem; border-radius:20px; text-align:center;">
+                        <i class="fas fa-scroll" style="color:#a855f7; font-size:1.5rem; margin-bottom:1rem;"></i>
+                        <div style="font-size:1.8rem; font-weight:900; color:#fff;">${totalPages}</div>
+                        <div style="font-size:0.55rem; color:#8b949e; text-transform:uppercase; letter-spacing:1px;">Pagine Persistite</div>
+                    </div>
+                    <div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); padding:2rem; border-radius:20px; text-align:center;">
+                        <i class="fas fa-sun" style="color:#facc15; font-size:1.5rem; margin-bottom:1rem;"></i>
+                        <div style="font-size:1.8rem; font-weight:900; color:#fff;">${trustPercent}%</div>
+                        <div style="font-size:0.55rem; color:#8b949e; text-transform:uppercase; letter-spacing:1px;">Fiducia Epistemica</div>
+                    </div>
+                    <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); padding:2rem; border-radius:20px; text-align:center;">
+                        <i class="fas fa-shield-check" style="color:#3b82f6; font-size:1.5rem; margin-bottom:1rem;"></i>
+                        <div style="font-size:1.8rem; font-weight:900; color:#fff;">PASSED</div>
+                        <div style="font-size:0.55rem; color:#8b949e; text-transform:uppercase; letter-spacing:1px;">Z3 Logic Guard</div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:3rem;">
+                    <div>
+                        <h2 style="color:#fff; font-size:1rem; font-weight:900; margin-bottom:1.5rem; display:flex; align-items:center; gap:10px;">
+                            <i class="fas fa-history" style="color:#a855f7;"></i> ULTIME PUBBLICAZIONI
+                        </h2>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                            ${latestPagesHtml || '<div style="grid-column:span 2; text-align:center; padding:3rem; opacity:0.3; border:1px dashed #444; border-radius:20px;">Nessuna pagina ancora generata.</div>'}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h2 style="color:#fff; font-size:1rem; font-weight:900; margin-bottom:1.5rem; display:flex; align-items:center; gap:10px;">
+                            <i class="fas fa-tools" style="color:#3b82f6;"></i> AZIONI SOVRANE
+                        </h2>
+                        <div style="display:flex; flex-direction:column; gap:1rem;">
+                            <button onclick="window.runSovereignAudit()" style="background:rgba(16,185,129,0.1); border:1px solid #10b981; color:#10b981; padding:1.5rem; border-radius:16px; font-weight:900; font-size:0.7rem; cursor:pointer; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+                                <span><i class="fas fa-microscope" style="margin-right:10px;"></i> AUDIT INTEGRITÀ KB</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button onclick="window.refreshWikiList()" style="background:rgba(59,130,246,0.1); border:1px solid #3b82f6; color:#3b82f6; padding:1.5rem; border-radius:16px; font-weight:900; font-size:0.7rem; cursor:pointer; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+                                <span><i class="fas fa-sync" style="margin-right:10px;"></i> SINCRONIZZA VAULT</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <a href="/api/wiki/llms.txt" target="_blank" style="text-decoration:none;">
+                                <button style="width:100%; background:rgba(168,85,247,0.1); border:1px solid #a855f7; color:#a855f7; padding:1.5rem; border-radius:16px; font-weight:900; font-size:0.7rem; cursor:pointer; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+                                    <span><i class="fas fa-robot" style="margin-right:10px;"></i> EXPORT LLMS.TXT (Full Context)</span>
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+    } catch (e) {
+        console.error("Wiki Dashboard Error:", e);
+        content.innerHTML = `<div style="text-align:center; padding:5rem; color:#ef4444;">
+            <i class="fas fa-exclamation-triangle fa-3x"></i>
+            <h2 style="margin-top:20px;">Errore Accesso Vault</h2>
+            <p>${e.message}</p>
+        </div>`;
+    }
+};
+

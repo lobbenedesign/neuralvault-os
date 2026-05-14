@@ -494,6 +494,12 @@ function provisionAgents() {
     agentsContainer.add(bridgerGroup);
 }
 function updateAgentPhysics() {
+    // [v12.0] NERD MODE Check: Hide/Show all agents in Cycloscope
+    if (agentsContainer) {
+        agentsContainer.visible = (window.NERD_MODE_ACTIVE !== false);
+    }
+    if (window.NERD_MODE_ACTIVE === false) return;
+
     const now = Date.now();
     const time = now * 0.001;
     const exp = nebulaExpansionFactor || 1.0;

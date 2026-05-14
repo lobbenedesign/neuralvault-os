@@ -57,17 +57,40 @@ class WikiVisualizer:
             
         return "\n".join(lines)
 
-    def generate_confidence_dashboard(self, sections_metadata: List[Dict]) -> str:
+    def generate_confidence_dashboard(self, sections_metadata: List[Dict], global_mood: Dict = None) -> str:
         """Genera un HUD di riepilogo della fiducia (Epistemic Weather)."""
         avg_conf = sum(s.get('confidence', 0) for s in sections_metadata) / len(sections_metadata) if sections_metadata else 0
-        status = "EXCELLENT" if avg_conf > 0.85 else ("STABLE" if avg_conf > 0.65 else "UNSTABLE")
         
+        # [v8.4] Epistemic Weather Logic
+        if global_mood:
+            weather_icon = global_mood.get("mood", "☀️")
+            weather_status = global_mood.get("status", "CLEAR_SKY")
+            score = global_mood.get("score", avg_conf)
+        else:
+            # Fallback based on confidence
+            if avg_conf > 0.85: weather_icon, weather_status = "☀️", "CLEAR_SKY"
+            elif avg_conf > 0.65: weather_icon, weather_status = "🌤️", "PARTLY_CLOUDY"
+            elif avg_conf > 0.45: weather_icon, weather_status = "🌥️", "OVERCAST"
+            else: weather_icon, weather_status = "🌩️", "STORMY"
+            score = avg_conf
+
         return f"""
-<div class="confidence-dashboard">
-    <div class="status-badge {status.lower()}">{status}</div>
-    <div class="metrics">
-        <span>Avg Confidence: {round(avg_conf*100)}%</span>
-        <span>Verified Sources: {len([s for s in sections_metadata if s.get('mesh_verified')])}</span>
+<div class="epistemic-weather-hud" style="background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+    <div class="weather-icon" style="font-size: 3rem; filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.4));">{weather_icon}</div>
+    <div class="weather-info" style="flex: 1;">
+        <div style="font-size: 0.6rem; color: #3b82f6; font-weight: 900; letter-spacing: 2px;">EPISTEMIC_WEATHER</div>
+        <div style="font-size: 1.2rem; font-weight: 800; color: #fff;">{weather_status.replace('_', ' ')}</div>
+        <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 4px;">Knowledge Integrity Score: <span style="color: #4ade80; font-weight: 800;">{round(score*100)}%</span></div>
+    </div>
+    <div class="weather-stats" style="display: flex; gap: 1.5rem; border-left: 1px solid rgba(255,255,255,0.05); padding-left: 2rem;">
+        <div class="stat-item">
+            <div style="font-size: 0.5rem; color: #64748b; text-transform: uppercase;">Confidence</div>
+            <div style="font-size: 0.9rem; color: #fff; font-weight: 700;">{round(avg_conf*100)}%</div>
+        </div>
+        <div class="stat-item">
+            <div style="font-size: 0.5rem; color: #64748b; text-transform: uppercase;">Source Nodes</div>
+            <div style="font-size: 0.9rem; color: #fff; font-weight: 700;">{len(sections_metadata)}</div>
+        </div>
     </div>
 </div>
 """

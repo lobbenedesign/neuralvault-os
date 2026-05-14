@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 from index.node import RelationType
 import numpy as np
 from enum import Enum
+from utils.qmc_sampler import QuasiMonteCarloSampler
 
 class SimulationMode(str, Enum):
     STANDARD = "standard"
@@ -143,10 +144,17 @@ class CausalSimulator:
             return self._format_rust_results(start_id, stats, iterations, subgraph=subgraph)
             
         except ImportError:
-            self.logger.warning("⚠️ Rust extension not found. Falling back to Python (Slow Path).")
+            self.logger.warning("⚠️ Rust extension not found. Falling back to Python (Sobol Optimized).")
             all_outcomes = []
-            for _ in range(iterations):
-                outcome = self._run_single_stochastic_pass(start_id, val, subgraph, depth, lens_weights)
+            
+            # [v9.0] Phase D: Sobol-Owen Optimization
+            # Generate QMC noise for all iterations upfront to ensure low-discrepancy coverage
+            qmc_sampler = QuasiMonteCarloSampler(dimension=1)
+            sobol_noise = qmc_sampler.get_samples(iterations).flatten()
+            
+            for i in range(iterations):
+                # We pass the i-th Sobol sample to the pass
+                outcome = self._run_single_stochastic_pass(start_id, val, subgraph, depth, lens_weights, noise_seed=sobol_noise[i])
                 all_outcomes.append(outcome)
             return self._format_results(start_id, all_outcomes, iterations, subgraph=subgraph)
 
@@ -267,24 +275,38 @@ class CausalSimulator:
 
     async def interview_node(self, node_id: str, simulation_context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        🧪 [v8.1] Sovereign Interview: Permette di "intervistare" un nodo per capirne la reazione causale.
-        Supera la funzione di MiroFish portando l'agente direttamente dentro il grafo logico.
+        🧪 [v12.7] Sovereign Interview (PG-RAG): Intervista identitaria certificata.
+        Spostiamo il focus dalla narrativa alla causalità documentale.
         """
         node = self.engine.get_node(node_id)
         if not node: return {"error": "Nodo non trovato"}
         
+        # 🎭 [PG-RAG] Recupero evidenze comportamentali (Lexicon, Obligations, Precedents)
+        persona_data = {"OBLIGATIONS": [], "PRECEDENTS": [], "LEXICON": []}
+        if hasattr(self.engine, 'agent007'):
+            res = self.engine.agent007.execute("SELECT category, content FROM agent007_personas WHERE entity_id = ?", (node.title or node_id,)).fetchall()
+            for cat, content in res:
+                if cat in persona_data: persona_data[cat].append(content)
+
         impact_data = next((n for n in simulation_context.get("affected_nodes", []) if n["id"] == node_id), None)
         impact_val = impact_data["impact"] if impact_data else 0.0
         
         prompt = f"""
-        Sei l'anima cognitiva del nodo: "{node.title or node_id}".
-        Il tuo contenuto è: {node.text[:500]}...
+        ### IDENTITY PROTOCOL: PG-RAG
+        ### SUBJECT: "{node.title or node_id}"
+        ### BEHAVIORAL ANCHORS:
+        - OBLIGATIONS: {persona_data['OBLIGATIONS']}
+        - PRECEDENTS: {persona_data['PRECEDENTS']}
+        - LEXICON: {persona_data['LEXICON']}
         
-        Stiamo simulando un intervento su "{simulation_context.get('root_id')}".
-        Il tuo impatto calcolato è: {impact_val} (scala -1 a 1).
+        ### CONTEXT:
+        Contenuto: {node.text[:500]}
+        Impatto Simulato: {impact_val} (Target: {simulation_context.get('root_id')})
         
-        Spiega all'utente, con tono professionale e proattivo, come ti senti influenzato da questa modifica e quali rischi o opportunità intravedi dalla tua prospettiva atomica.
-        Sii sintetico ma estremamente acuto. Rispondi in prima persona.
+        ### TASK:
+        Reagisci all'impatto mantenendo la coerenza con i tuoi vincoli contrattuali e precedenti storici.
+        Usa lo STILE SITREP: Conciso, professionale, zero aggettivi emotivi, focus su impatto e probabilità.
+        Rispondi in prima persona come se fossi l'entità.
         """
         
         # Utilizziamo lo sciame per generare la risposta
@@ -297,40 +319,63 @@ class CausalSimulator:
             "response": response
         }
 
-    async def generate_strategic_report(self, simulation_results: Dict[str, Any]) -> str:
+    async def generate_strategic_report(self, simulation_results: Dict[str, Any]) -> Dict[str, Any]:
         """
-        🏺 [v8.1] ReportAgent Integration: Genera un report narrativo MiroFish-style.
+        🏺 [v12.7] SITREP Intelligence Report.
+        Genera un report deterministico, ancorato alle prove e privo di narrativa "fiction".
         """
-        summary = f"""
-        Analisi di Impatto Strategico (Monte Carlo 1000 iterazioni)
-        Punto di Innesco: {simulation_results.get('root_id')}
-        Nodi Influenzati: {len(simulation_results.get('affected_nodes', []))}
+        affected = simulation_results.get('affected_nodes', [])
+        summary = f"SOURCE_TRIGGER: {simulation_results.get('root_id')}\n"
+        summary += f"RELEVANT_SUBGRAPH_SIZE: {len(affected)}\n\n"
         
-        Top Impacted Nodes:
-        """
-        for n in simulation_results.get('affected_nodes', [])[:5]:
-            summary += f"- {n['title']}: {n['impact']} (Prob. Successo: {n['probability_positive']*100}%)\n"
+        evidence_ids = [n['id'] for n in affected[:10]]
+        
+        for n in affected[:5]:
+            summary += f"ENTITY: {n['title']} (ID: {n['id']}) | IMPACT: {n['impact']} | CONFIDENCE: {n.get('probability_positive', 0.5)*100}%\n"
             
         prompt = f"""
-        Analizza questi risultati di simulazione causale e scrivi un Report Strategico Sovrano.
-        Dati:
+        ### PROTOCOL: SOVEREIGN SITREP (v12.7)
+        ### DATA_STREAM:
         {summary}
         
-        Il report deve includere:
-        1. Executive Summary (Sintesi per il decision maker)
-        2. Analisi dei Rischi (Focus sui nodi con Worst Case negativo)
-        3. Opportunità Emergenti
-        4. Raccomandazioni Tattiche
+        ### GUIDELINES:
+        1. Stile Intelligence Militare: Linguaggio passivo, conciso, assenza di aggettivi emotivi.
+        2. Focus su Soglie di Attivazione Causale (Trigger Thresholds).
+        3. Identifica impatti di 2° e 3° grado (Cascading Failures).
+        4. OGNI affermazione o entità citata DEVE essere seguita dal suo [ID] (es: "Aumento dei tassi [node_123]").
+        5. Ogni conclusione deve essere ancorata ai dati forniti.
         
-        Usa un linguaggio da Intelligence Strategica.
+        ### STRUCTURE:
+        1. SITUATION (Overview deterministica)
+        2. OPERATIONAL IMPACTS (Grado 1, 2, 3)
+        3. THREATS & VULNERABILITIES
+        4. RECOMMENDED ACTIONABLE STEPS
         """
         
-        report = await self.engine.orchestrator.get_consensus_response(prompt, "Sovereign Strategic Report")
-        return report
+        report = await self.engine.orchestrator.get_consensus_response(prompt, "Sovereign SITREP Engine")
+        
+        # [v12.7] Emit Aegis Event for Audit-Grade Tracking
+        from retrieval.aegis_bus import aegis_bus
+        aegis_bus.emit("SITREP_GENERATED", {
+            "root_id": simulation_results.get('root_id'),
+            "affected_nodes_count": len(affected),
+            "evidence_ids": evidence_ids
+        })
+        
+        return {
+            "report": report,
+            "evidence_ids": evidence_ids
+        }
 
-    def _run_single_stochastic_pass(self, start_id: str, start_val: float, subgraph: Dict, depth: int, lens_weights: Dict) -> Dict[str, float]:
-        """Esegue un singolo passaggio di propagazione con rumore stocastico e lenti."""
-        noisy_start = start_val + np.random.normal(0, 0.05)
+    def _run_single_stochastic_pass(self, start_id: str, start_val: float, subgraph: Dict, depth: int, lens_weights: Dict, noise_seed: float = None) -> Dict[str, float]:
+        """Esegue un singolo passaggio di propagazione con rumore (Sobol/Pseudo) e lenti."""
+        # Se noise_seed è presente (0-1), lo usiamo per determinare il rumore iniziale
+        if noise_seed is not None:
+            initial_noise = (noise_seed - 0.5) * 0.1 # Scostamento [-0.05, 0.05]
+            noisy_start = start_val + initial_noise
+        else:
+            noisy_start = start_val + np.random.normal(0, 0.05)
+            
         impacts = {start_id: noisy_start}
         queue = [(start_id, noisy_start, 0)]
         
@@ -340,12 +385,13 @@ class CausalSimulator:
             
             edges = subgraph.get(nid, [])
             for edge in edges:
-                # [DEBUG] Verifica attributi RelationType
-                if not hasattr(RelationType, "ENHANCES"):
-                    self.logger.error(f"❌ DEBUG: RelationType attributes: {dir(RelationType)}")
-                
-                # Applica rumore stocastico + Modificatore Lente
-                edge_noise = np.random.normal(0, 0.1)
+                # Applica rumore stocastico (Usa noise_seed per coerenza se disponibile)
+                if noise_seed is not None:
+                    # Deriviamo un rumore locale deterministico dal seed globale
+                    # In una versione più avanzata useremmo una dimensione Sobol per ogni arco
+                    edge_noise = (hashlib.md5(f"{nid}_{edge.target_id}_{noise_seed}".encode()).digest()[0] / 255.0 - 0.5) * 0.2
+                else:
+                    edge_noise = np.random.normal(0, 0.1)
                 
                 # [v8.4] Defensive relation check
                 rel_str = str(edge.relation).split('.')[-1].lower()
@@ -468,3 +514,45 @@ class CausalSimulator:
             results[h_name] = await self.simulate_intervention(start_id, val * decay, iterations=50)
             
         return results
+
+    async def calculate_causal_gradient(self, target_id: str, desired_impact: float = 1.0) -> Dict[str, Any]:
+        """
+        📐 [v9.1] CAUSAL GRADIENT DESCENT.
+        Trova la minima variazione necessaria per influenzare il target verso il valore desiderato.
+        """
+        self.logger.info(f"📐 Calcolo Causal Gradient per Target: {target_id} (Desired: {desired_impact})")
+        
+        # 1. Identifica i potenziali driver (nodi che influenzano il target)
+        drivers = await self._run_retro_causal_search(target_id, depth=3)
+        potential_drivers = drivers.get("affected_nodes", [])[:10] # Top 10 driver
+        
+        gradients = []
+        for driver in potential_drivers:
+            did = driver["id"]
+            # Calcoliamo la sensibilità: delta_target / delta_driver
+            # Eseguiamo due micro-simulazioni per calcolare il gradiente locale
+            s1 = await self.simulate_intervention(did, intervention_value=0.1, iterations=100)
+            s2 = await self.simulate_intervention(did, intervention_value=0.2, iterations=100)
+            
+            impact1 = next((n["impact"] for n in s1["affected_nodes"] if n["id"] == target_id), 0.0)
+            impact2 = next((n["impact"] for n in s2["affected_nodes"] if n["id"] == target_id), 0.0)
+            
+            # Gradiente = (d_target) / (d_driver)
+            local_gradient = (impact2 - impact1) / 0.1
+            
+            if abs(local_gradient) > 0.001:
+                # Intervento necessario = Desired / Gradiente
+                required_intervention = desired_impact / local_gradient
+                gradients.append({
+                    "driver_id": did,
+                    "driver_title": driver["driver_title"] if "driver_title" in driver else driver["title"],
+                    "sensitivity": round(local_gradient, 4),
+                    "suggested_intervention": round(required_intervention, 3),
+                    "efficiency_score": round(abs(local_gradient), 3)
+                })
+        
+        return {
+            "target_id": target_id,
+            "desired_impact": desired_impact,
+            "optimal_interventions": sorted(gradients, key=lambda x: x["efficiency_score"], reverse=True)
+        }

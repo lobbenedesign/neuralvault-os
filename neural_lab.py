@@ -1,3 +1,4 @@
+import os
 import uuid
 import math
 import time
@@ -23,6 +24,35 @@ from utils.event_bus import NeuralEventType, NeuralEvent # [v6.0]
 import ast
 import traceback
 from index.node import RelationType
+from retrieval.agent_rewards import AgentRewardManager
+from retrieval.adversary_agent import SovereignAdversaryAgent
+
+class CognitivePresetManager:
+    """
+    [v9.0] Manages specialized cognitive mindsets for the swarm.
+    """
+    def __init__(self, storage_path: str = "vault_data/cognitive_presets.json"):
+        self.storage_path = storage_path
+        self._load_config()
+
+    def _load_config(self):
+        if os.path.exists(self.storage_path):
+            with open(self.storage_path, "r") as f:
+                self.config = json.load(f)
+        else:
+            self.config = {"active_preset": "default", "presets": {}}
+
+    def get_active_preset(self) -> Dict:
+        name = self.config.get("active_preset", "default")
+        return self.config["presets"].get(name, self.config["presets"].get("default", {}))
+
+    def set_preset(self, name: str):
+        if name in self.config["presets"]:
+            self.config["active_preset"] = name
+            with open(self.storage_path, "w") as f:
+                json.dump(self.config, f, indent=2)
+            return True
+        return False
 
 async def _global_forage_helper(forager, url, limit=5):
     """Helper globale per il foraging asincrono di pagine web (Unificato v1.8)."""
@@ -543,10 +573,21 @@ class VaultMoodEngine:
 
     def compute_mood(self) -> dict:
         nodes = list(self.vault._nodes.values())
-        if not nodes: return {"mood": "🟢", "status": "THRIVING", "score": 1.0}
+        if not nodes: return {"mood": "☀️", "status": "CLEAR_SKY", "score": 1.0}
         
+        now = time.time()
         orphan_count = len([n for n in nodes if not n.edges])
         orphan_rate = orphan_count / len(nodes)
+        
+        # 🧪 [v8.4] Epistemic Factors
+        all_edges = []
+        for n in nodes: all_edges.extend(n.edges)
+        
+        contradictions = len([e for e in all_edges if e.relation == RelationType.CONTRADICTS])
+        conflict_rate = contradictions / (len(all_edges) if all_edges else 1)
+        
+        # Freshness (Average age in days)
+        avg_age_days = sum((now - n.created_at) / 86400 for n in nodes) / len(nodes)
         
         # v1.1.0: Conteggio tombstone e ritenzione
         tombstone_count = len([n for n in nodes if n.metadata.get('lifecycle_state') == 'tombstone'])
@@ -554,15 +595,21 @@ class VaultMoodEngine:
         
         # Health Score (0-1)
         score = 1.0
-        score -= (orphan_rate * 0.5)
-        score -= (min(1.0, tombstone_count / 100) * 0.2)
-        score -= (min(1.0, cpu / 100) * 0.3)
+        score -= (orphan_rate * 0.3)
+        score -= (min(1.0, tombstone_count / 100) * 0.1)
+        score -= (min(1.0, cpu / 100) * 0.2)
+        score -= (min(1.0, conflict_rate * 10) * 0.4) # Heavy penalty for contradictions
         score = max(0.0, score)
         
-        if score > 0.8: mood, status = "🟢", "THRIVING"
-        elif score > 0.6: mood, status = "🟡", "STABLE"
-        elif score > 0.4: mood, status = "🟠", "STRESSED"
-        else: mood, status = "🔴", "CRITICAL"
+        # 🌦️ [Weather Mapping]
+        if conflict_rate > 0.05 or score < 0.3:
+            mood, status = "🌩️", "STORMY"
+        elif avg_age_days > 30 or score < 0.6:
+            mood, status = "🌥️", "OVERCAST"
+        elif score > 0.8:
+            mood, status = "☀️", "CLEAR_SKY"
+        else:
+            mood, status = "🌤️", "PARTLY_CLOUDY"
         
         return {
             "mood": mood,
@@ -570,37 +617,38 @@ class VaultMoodEngine:
             "score": round(score, 2),
             "metrics": {
                 "orphan_rate": f"{orphan_rate*100:.1f}%",
-                "tombstone_backlog": tombstone_count,
+                "conflict_rate": f"{conflict_rate*100:.1f}%",
+                "avg_age": f"{avg_age_days:.1f}d",
                 "cpu_load": f"{cpu}%"
             }
         }
 
 class AgentTrustNetwork:
     """
-    🛡️ [v1.1.0 Sovereign Trust]
+    🛡️ [v9.0 Sovereign Merit]
     Gestisce la reputazione dinamica degli agenti basata sull'accuratezza delle azioni.
+    Integrato con il modulo AgentRewardManager per persistenza e meritocrazia.
     """
-    def __init__(self, agent_ids: List[str]):
-        self.trust_scores = {aid: 0.7 for aid in agent_ids} # Default trust
+    def __init__(self, data_dir: str):
+        self.reward_manager = AgentRewardManager(os.path.join(data_dir, "agent_rewards.json"))
         self._lock = threading.Lock()
 
-    def update_trust(self, agent_id: str, success: bool):
+    def update_trust(self, agent_id: str, success: bool, reason: str = ""):
         with self._lock:
-            if agent_id not in self.trust_scores: return
-            current = self.trust_scores[agent_id]
-            if success:
-                # Trust aumenta lentamente
-                self.trust_scores[agent_id] = min(1.0, current + 0.01)
-            else:
-                # Trust cala rapidamente (Asimmetria della fiducia)
-                self.trust_scores[agent_id] = max(0.1, current - 0.05)
+            delta = 0.05 if success else -0.15
+            self.reward_manager.update_reward(agent_id, delta, reason or ("Success" if success else "Failure"))
 
     def get_threshold(self, agent_id: str, base_threshold: float = 0.7) -> float:
-        """Restituisce una soglia di validazione dinamica basata sul trust."""
-        trust = self.trust_scores.get(agent_id, 0.7)
-        # Più fiducia = soglia più bassa (meno scrutinio richiesto)
-        # Meno fiducia = soglia più alta (più scrutinio richiesto)
-        return base_threshold + (1.0 - trust) * 0.3
+        """Restituisce una soglia di validazione dinamica basata sul merito."""
+        merit = self.reward_manager.get_merit(agent_id)
+        # Più merito = soglia più bassa (più autonomia)
+        # Meno merito = soglia più alta (più controllo richiesto)
+        # Scaliamo il merito (0.1 - 2.0+) in un fattore di soglia
+        adjustment = (1.0 - min(1.5, merit)) * 0.2
+        return max(0.4, min(0.95, base_threshold + adjustment))
+
+    def get_merit(self, agent_id: str) -> float:
+        return self.reward_manager.get_merit(agent_id)
 
 class NeuralBlackboard:
     def __init__(self, vault_engine=None):
@@ -627,8 +675,8 @@ class NeuralBlackboard:
         # Retention: depends on node health or a high baseline
         retention = 99.5 if active_agents > 4 else 97.0
         
-        # v1.1.0: Mood Integration
-        mood_data = self.mood_engine.compute_mood() if self.mood_engine else {"mood": "🟢", "status": "STABLE"}
+        # v1.1.0: Mood Integration (Epistemic Weather v8.4)
+        mood_data = self.mood_engine.compute_mood() if self.mood_engine else {"mood": "☀️", "status": "CLEAR_SKY", "metrics": {}}
         
         return {
             "pressione_ops": f"{int(cpu * 12.5)} ops/sec",
@@ -638,7 +686,9 @@ class NeuralBlackboard:
             "stability": f"{stability_final:.1f}%",
             "reclaimed_mb": reclaimed,
             "mood": mood_data["mood"],
-            "mood_status": mood_data["status"]
+            "mood_status": mood_data["status"],
+            "score": mood_data.get("score", 1.0),
+            "epistemic_metrics": mood_data.get("metrics", {})
         }
 
         
@@ -678,6 +728,17 @@ class JanitorAgent:
         self.last_eat_time = 0; self.eaten_count = 0
         self.survey_cycles = 0 # 🛡️ Pause between tasks
         self.accuracy_stats = {"decisions": 0, "reversals": 0}
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Entropy Cleanup", "Orphan Detection", "Logical Scavenging"],
+            "archetype": self.identity["archetype"]
+        }
 
     def get_xyz(self, n):
         x = getattr(n, 'x', n.metadata.get('x'))
@@ -789,6 +850,17 @@ class DistillerAgent:
         self.last_mission_time = 0
         self.cooldown = 2.0 # [Phase 2] Cognitive Pacing
 
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Semantic Pruning", "Knowledge Refinement", "Noise Reduction"],
+            "archetype": self.identity["archetype"]
+        }
+
     def get_xyz(self, n):
         x = getattr(n, 'x', n.metadata.get('x'))
         y = getattr(n, 'y', n.metadata.get('y'))
@@ -838,17 +910,16 @@ class DistillerAgent:
         
         dist = ((self.pos['x']-tx)**2 + (self.pos['y']-ty)**2 + (self.pos['z']-tz)**2)**0.5
         if dist < 85000: # Larger completion radius
-            if random.random() < 0.3: # Higher probability
-                # Incremento gestito dall'Orchestratore v4.0.2
-                report = {
-                    "agent": "DI-007", 
-                    "action": "Semantic Pruning", 
-                    "target_id": self._target,
-                    "motivation": f"Pruned redundant arc at {self._target[:8]} to optimize HNSW traversal speed.",
-                    "savings": "0.01 MB (Graph Optimization)",
-                    "reclaimed": 0.01
-                }
-                self._target = None; return report
+            # Incremento gestito dall'Orchestratore v4.0.2
+            report = {
+                "agent": "DI-007", 
+                "action": "Semantic Pruning", 
+                "target_id": self._target,
+                "motivation": f"Pruned redundant arc at {self._target[:8]} to optimize HNSW traversal speed.",
+                "savings": "0.01 MB (Graph Optimization)",
+                "reclaimed": 0.01
+            }
+            self._target = None; return report
         else:
             self.status = f"Tracking target {self._target[:8]}"
         return None
@@ -862,7 +933,18 @@ class SnakeAgent:
         self.found = 0; self.harvested = 0; self.processed = 0
         self.is_returning = False
         self.attached_nodes = []
-        self.max_wagons = 100 # 🚀 [v4.0.1] Mega-Convoy Capacity
+        self.max_wagons = 50 # 🚀 [v4.0.1] Convoy Capacity (Reduced for more frequent updates)
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Semantic Connection", "Sprouting", "Ingress Monitoring"],
+            "archetype": self.identity["archetype"]
+        }
 
     def calculate_movement(self, nodes: dict):
         if not nodes: return None
@@ -881,6 +963,8 @@ class SnakeAgent:
                     "motivation": f"Delivered {delivered_count} orphans for LLM arbitration.",
                     "savings": "Knowledge Sorted"
                 }
+                if self.orch:
+                    self.orch.blackboard.post(SynapticSignal("SN-008", "Connector", f"🐍 SNAKE: Consegnati {delivered_count} nodi orfani al Core.", SignalType.MISSION_UPDATE))
                 self.attached_nodes = []
                 self.is_returning = False
                 return res
@@ -976,6 +1060,17 @@ class ReaperAgent:
         self.regeneration_timer = 0
         self.patrol_cycles = 0 # 🛰️ Mandatory orbit cycles after surgery
 
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Storage Compaction", "Tombstone Cleanup", "Garbage Collection"],
+            "archetype": self.identity["archetype"]
+        }
+
     def _idle_patrol(self, now):
         """Orbit around the Mother Nebula when no surgeries are required."""
         angle = now * 0.15
@@ -1016,6 +1111,8 @@ class ReaperAgent:
                     if self.regeneration_timer == 0:
                         self.regeneration_timer = 15
                         self.status = "Regenerating Memory Sector..."
+                        if self.orch:
+                            self.orch.blackboard.post(SynapticSignal("RP-001", "MAINTENANCE", f"🏥 REAPER: Rigenerazione settore memoria su {self.target_node.get('id', 'N/A')[:8]}", SignalType.MISSION_UPDATE))
                         return {"agent": "RP-001", "action": "Storage Surgery", "reclaimed": 0.12}
                     
                     self.regeneration_timer -= 1
@@ -1074,9 +1171,28 @@ class CustomAgent:
         self.processed = 0
 
     def calculate_movement(self, nodes: dict):
-        self.pos['x'] += random.uniform(-10000, 10000)
-        self.pos['y'] += random.uniform(-10000, 10000)
-        self.pos['z'] += random.uniform(-10000, 10000)
+        self.pos['x'] += random.uniform(-15000, 15000)
+        self.pos['y'] += random.uniform(-5000, 5000)
+        self.pos['z'] += random.uniform(-15000, 15000)
+        
+        # 🧠 [v12.5] Custom Mission Logic
+        if not hasattr(self, '_last_mission'): self._last_mission = time.time()
+        if time.time() - self._last_mission > 30: # Ogni 30 secondi esegue un "Mission Task"
+            self._last_mission = time.time()
+            self.processed += 1
+            self.status = f"EXECUTING MANDATE: {self.identity['role']}"
+            return {
+                "agent": self.identity["id"], 
+                "action": "Mission Task", 
+                "motivation": f"Executing custom directive: {self.prompt[:50]}...",
+                "savings": "Knowledge Expanded"
+            }
+        
+        if random.random() < 0.1:
+            self.status = "Analyzing Neural Patterns..."
+        elif random.random() < 0.1:
+            self.status = "Awaiting Orders..."
+            
         return None
 
 class SynthAgent:
@@ -1089,6 +1205,17 @@ class SynthAgent:
         self.sparks_generated = 0
         self.target_node = None
         self.team = [] # Sub-agents (Mini-Assistants)
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Creative Synthesis", "Hyper-Graph Discovery", "Semantic Sparking"],
+            "archetype": self.identity["archetype"]
+        }
 
     def spawn_team(self):
         roles = ["Drafting", "Critique", "Polishing"]
@@ -1137,14 +1264,26 @@ class SynthAgent:
             if random.random() < 0.25:
                 if not self.team: self.spawn_team() 
                 
-                # 🧠 [High #3] Semantic Synthesis Algorithm
+                # 🧠 [v9.0] Hyper-Graph Discovery Algorithm
                 if self.target_node in nodes:
                     try:
                         # Find similar nodes via Vault embedding engine
-                        similar = self.vault.get_similar_nodes(self.target_node, limit=3)
+                        similar = self.vault.get_similar_nodes(self.target_node, limit=5)
                         targets = [s[0] for s in similar if s[0] != self.target_node]
                         
-                        if targets:
+                        if len(targets) >= 2 and random.random() < 0.3:
+                            # Propose a Hyper-Edge {A, B} -> C
+                            node_a = targets[0]
+                            node_b = targets[1]
+                            return {
+                                "agent": "SY-009", 
+                                "action": "HYPER_GRAPH_PROPOSAL", 
+                                "target_id": self.target_node, 
+                                "source_ids": [node_a, node_b],
+                                "motivation": f"Multicausal linkage: Both {node_a[:8]} and {node_b[:8]} converge to form the context of {self.target_node[:8]}.",
+                                "type": "hyper"
+                            }
+                        elif targets:
                             sid2 = random.choice(targets)
                             return {
                                 "agent": "SY-009", 
@@ -1154,8 +1293,9 @@ class SynthAgent:
                                 "motivation": f"Semantic Discovery: Connected {self.target_node[:8]} and {sid2[:8]} via high embedding similarity (Cosine > 0.82).",
                                 "savings": "Emergent knowledge generated."
                             }
-                    except:
-                        pass # Fallback to random if engine busy
+                    except Exception as e:
+                        print(f"Synth Hyper-Graph Error: {e}")
+                        pass 
         except Exception as e:
             # Improved error capture
             print(f"⚠️ [SY-009] Swarm error: {e}")
@@ -1175,6 +1315,17 @@ class QuantumAgent:
         self.regeneration_timer = 0 
         self.is_fusing = False
         self.clusters_fused = 0
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Semantic Fusion", "Graph Centroiding", "Cluster Optimization"],
+            "archetype": self.identity["archetype"]
+        }
         
     def get_xyz(self, n):
         x = getattr(n, 'x', n.metadata.get('x'))
@@ -1273,6 +1424,18 @@ class AgentSmith:
         self.threats_blocked = 0
         self.last_audit = time.time()
         self.security_logs = [] # [v8.0] Registro eventi sicurezza
+        self.last_threat_time = 0
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Mesh Security", "Firewalling", "Peer Auditing"],
+            "archetype": self.identity["archetype"]
+        }
 
     def calculate_movement(self, nodes: Dict, peer_id: str = "") -> Optional[Dict]:
         """Pattugliamento perimetrale attorno al wormhole specifico (v7.5)."""
@@ -1405,6 +1568,17 @@ class SentinelAgent:
         self.last_gap_analysis = 0 # ⏱️ Time-based analysis trigger
         self.gap_history = [] # 📚 History of identified gaps to avoid repetition
         self.is_supersynapse = False # 🌈 Momentary flag for UI lightning
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Security Auditing", "Coherence Enforcement", "Integrity Verification"],
+            "archetype": self.identity["archetype"]
+        }
 
     def calculate_resonance(self, source_id: str, target_id: str) -> float:
         """
@@ -1589,10 +1763,20 @@ class R2D2Agent:
         self.galaxies_formed = 0
         self.target_pos = dict(self.pos)
         self.patrol_timer = 0
-
         self.last_action_time = time.time() - 6.0 # Accelerated first tick (2s wait instead of 8s)
         self.misplaced_alerts = []
         self.pruning_suggestions = []
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Warehouse Management", "Semantic Organization", "Chromatic Zoning"],
+            "archetype": self.identity["archetype"]
+        }
 
     def calculate_movement(self, nodes: dict):
         if not nodes: return None
@@ -1729,6 +1913,17 @@ class BridgerAgent:
         self.status = "Monitoring Grid..."
         self.bridges_total = 0
         self.is_syncing = False
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": self.identity["role"],
+            "capabilities": ["Codebase Bridging", "Cross-Referencing", "Semantic Linking"],
+            "archetype": self.identity["archetype"]
+        }
     
     def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
         """L'agente si muove verso i nodi che hanno appena ricevuto un bridge semantico."""
@@ -1823,7 +2018,7 @@ class SkyWalkerAgent:
     """FS-77 File-Sky-Walker: Autonomous High-Altitude Web Interceptor."""
     def __init__(self, engine, orch=None):
         self.vault = engine; self.orch = orch
-        self.identity = {"id": "FS-77", "name": "File-Sky-Walker", "role": AgentRole.RESEARCHER}
+        self.identity = {"id": "FS-77", "name": "File-Sky-Walker", "role": AgentRole.RESEARCHER, "archetype": "expert"}
         # [v16.0] Distributed Boot: Quadrant Alpha (Outer Rim)
         self.pos = {"x": 8000000.0, "y": 3000000.0, "z": 8000000.0}
         print(f"🛰️ [BOOT] FS-77 Skywalker Initialized at: {self.pos}")
@@ -1831,14 +2026,19 @@ class SkyWalkerAgent:
         self.web_hits = 0
         self.nodes_created = 0 # 🛰️ [v4.0.1] New sub-counter
         self.galaxies_created = 0 # 🌌 [v8.4] Satellite Galaxies
-        
-        # 📊 [v8.4] Session-Only Counters (Baseline handled by Orchestrator)
-        self.nodes_created = 0
-        self.web_hits = 0
-        self.galaxies_created = 0
-
         self.laser_active = False
         self.laser_target = {'x': 250000, 'y': 0, 'z': 250000} # [v8.0] - Reduced from 2M to 250k (10x closer)
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": "Researcher",
+            "capabilities": ["Web Foraging", "High-Altitude Interception", "Knowledge Injection"],
+            "archetype": "expert"
+        }
 
     def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
         """Pattugliamento Orbitale Alta Quota (Symmetric Border Patrol)."""
@@ -1983,8 +2183,8 @@ class SkyWalkerAgent:
                     return all_p
 
                 try:
-                    # [v25.0] Parallel Foraging: Skywalker now wait up to 600s
-                    all_pages = asyncio.run_coroutine_threadsafe(_forage_all_parallel(self.orch.forager, urls), self.orch.loop).result(timeout=600)
+                    # [v25.1] Optimization: Reduced timeout to 120s to trigger fallback faster
+                    all_pages = asyncio.run_coroutine_threadsafe(_forage_all_parallel(self.orch.forager, urls), self.orch.loop).result(timeout=120)
                     if all_pages: self.web_hits += 1
                 except Exception as e:
                     err_msg = str(e) if str(e) else type(e).__name__
@@ -2159,7 +2359,7 @@ class YodaAgent:
     """YO-001 Yoda-File-Searcher: Deep Semantic Pilgrim."""
     def __init__(self, engine, orch=None):
         self.vault = engine; self.orch = orch
-        self.identity = {"id": "YO-001", "name": "Yoda-File-Searcher", "role": "DEEP_SURVEYOR"}
+        self.identity = {"id": "YO-001", "name": "Yoda-File-Searcher", "role": "DEEP_SURVEYOR", "archetype": "expert"}
         # [v16.0] Distributed Boot: Quadrant Sigma (Outer Rim Deep)
         self.pos = {"x": -9000000.0, "y": -4000000.0, "z": -9000000.0}
         print(f"🟢 [BOOT] YO-001 Yoda Initialized at: {self.pos}")
@@ -2167,19 +2367,24 @@ class YodaAgent:
         self.nodes_examined = 0
         self.galaxies_created = 0
         self.web_hits = 0 # 📊 [v8.4.1 Fix]
-        
-        # 📊 [v8.4] Session-Only Counters (Baseline handled by Orchestrator)
-        self.nodes_examined = 0
-        self.galaxies_created = 0
-        self.web_hits = 0 
         self.nodes_introduced_session = 0
         self.last_galaxy_name = ""
         self.last_galaxy_dist = 0.0
         self.nodes_in_last_galaxy = 0
-
         self.laser_active = False
         self.laser_target = {"x": 0, "y": 0, "z": 0}
         self.last_pilgrimage_time = time.time() - 35.0 # Accelerated first mission (10s wait instead of 45s)
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": "Deep Surveyor",
+            "capabilities": ["Semantic Pilgrimage", "Internal Insight Synthesis", "Galaxy Forging"],
+            "archetype": "expert"
+        }
 
     def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
         now = time.time()
@@ -2263,7 +2468,6 @@ class YodaAgent:
             err_msg = str(e) if str(e) else type(e).__name__
             print(f"⚠️ [YO-001] Internal Synthesis Exception: {err_msg}")
             return []
-            print(f"❌ [YO-001] Internal Synthesis Failed: {e}")
         return []
 
     async def _refine_query_with_llm(self, query: str) -> str:
@@ -2321,7 +2525,11 @@ class YodaAgent:
 
         # Prendi il prossimo argomento dalla coda
         common_topic = self.mission_queue.pop(0)
-        self.nodes_examined += len(all_nodes) # Statistica simbolica
+        self.nodes_examined += 1 # Statistica simbolica per missione
+        
+        # 📢 [v8.4.2] Holographic Signal: Yoda Planning
+        if self.orch:
+            self.orch.blackboard.post(SynapticSignal("YO-001", "DEEP_SURVEYOR", f"🟢 YODA: Inizio Ricerca Profonda su '{common_topic}'", SignalType.MISSION_UPDATE))
         
         # Cerchiamo il nodo più vicino al centroide per l'ancoraggio fisico
         closest_node = None
@@ -2353,8 +2561,8 @@ class YodaAgent:
                 self.galaxy_anchor = {"x": galaxy_x, "y": galaxy_y, "z": galaxy_z}
                 
                 try:
-                    # [v25.1] Increased Timeout to 600s and depth limited to 2
-                    search_data = asyncio.run_coroutine_threadsafe(self._yoda_search_web(common_topic, limit=2), self.orch.loop).result(timeout=600) 
+                    # [v25.1] Reduced Timeout to 120s to trigger Internal Synthesis faster if engine hangs
+                    search_data = asyncio.run_coroutine_threadsafe(self._yoda_search_web(common_topic, limit=2), self.orch.loop).result(timeout=120) 
                     urls = search_data.get("urls", [])
                 except Exception as e:
                     err_msg = str(e) if str(e) else type(e).__name__
@@ -2486,7 +2694,7 @@ class MandalorianAgent:
     """DN-099 Mandalorian: Semantic Herder & Galaxy Weaver."""
     def __init__(self, engine, orch=None):
         self.vault = engine; self.orch = orch
-        self.identity = {"id": "DN-099", "name": "Mandalorian", "role": "GALAXY_HERDER"}
+        self.identity = {"id": "DN-099", "name": "Mandalorian", "role": "GALAXY_HERDER", "archetype": "expert"}
         # [v16.1] Deep Space Deployment: 20M-35M units from center
         self.pos = {"x": 25000000.0, "y": 0.0, "z": -25000000.0}
         print(f"🛰️ [BOOT] DN-099 Mandalorian Initialized at: {self.pos}")
@@ -2496,6 +2704,17 @@ class MandalorianAgent:
         self.last_herd_time = 0 # Innesco immediato al boot se esistono galassie
         self.laser_active = False
         self.laser_target = {"x": 0, "y": 0, "z": 0}
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": "Galaxy Herder",
+            "capabilities": ["Semantic Herding", "Galaxy Weaving", "Outer Rim Patrol"],
+            "archetype": "expert"
+        }
 
     def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
         now = time.time()
@@ -2668,6 +2887,9 @@ class MandalorianAgent:
             time.sleep(4) # Pausa drammatica mentre gli archi si generano visivamente
             
             self.optimized_arcs_session = num_tethers
+            self.herds_completed += 1
+            if self.orch:
+                self.orch.blackboard.post(SynapticSignal("DN-099", "RESEARCHER", "🛰️ MANDALORIAN: Costellazione unificata con successo nella Nebula Madre.", SignalType.MISSION_UPDATE))
             self.status = "MISSION_COMPLETE"
             time.sleep(5) # Mantieni lo stato per l'ologramma
 
@@ -2707,6 +2929,79 @@ class MandalorianAgent:
             "pos": self.pos,
             "status": self.status,
             "herds_session": getattr(self, 'herds_completed', 0)
+        }
+
+class CompressorAgent:
+    """NC-001 Compressor: Neural Implicit Optimization & Data Thinning."""
+    def __init__(self, engine, orch=None):
+        self.vault = engine; self.orch = orch
+        self.identity = {"id": "NC-001", "name": "Compressor", "role": "OPTIMIZATION", "archetype": "expert"}
+        # Orbiting the Core at 2M units
+        self.pos = {"x": 2000000.0, "y": 500000.0, "z": 0.0}
+        self.status = "Monitoring Neural Density..."
+        self.optimized_nodes_session = 0
+        self.is_training = False
+        self.training_progress = 0.0
+        self.compression_ratio = "0%"
+        self.last_run = time.time()
+
+    def get_capability_ld(self):
+        return {
+            "@context": "https://neuralvault.io/context/agent",
+            "@type": "SovereignAgent",
+            "id": self.identity["id"],
+            "name": self.identity["name"],
+            "role": "Optimization",
+            "capabilities": ["Neural Implicit Compression", "Data Thinning", "Codebook Optimization"],
+            "archetype": "expert"
+        }
+
+    def calculate_movement(self, nodes: Dict) -> Optional[Dict]:
+        now = time.time()
+        # Elliptical orbit around center
+        self.pos['x'] = 2000000 * math.cos(now * 0.1)
+        self.pos['z'] = 1500000 * math.sin(now * 0.1)
+        self.pos['y'] = 500000 + 100000 * math.sin(now * 0.05)
+
+        # Trigger optimization if many nodes exist and not already training
+        if now - self.last_run > 300: # Every 5 mins
+            self.last_run = now
+            if hasattr(self.vault, 'nic') and not self.vault.nic.is_training:
+                # Se abbiamo abbastanza nodi, addestriamo
+                all_vectors = [n.vector for n in self.vault._nodes.values() if n.vector is not None]
+                if len(all_vectors) >= 1024:
+                    self.status = "TRAINING: Optimizing Neural Codebook..."
+                    self.vault.nic.train_on_vault_async(np.array(all_vectors))
+                else:
+                    self.status = f"Idle: Need {1024 - len(all_vectors)} more nodes for NIC."
+
+        nic = getattr(self.vault, 'nic', None)
+        was_training = self.is_training
+        if nic:
+            self.is_training = nic.is_training
+            self.training_progress = nic.training_progress
+            self.compression_ratio = "85%" if nic.is_trained else "0%"
+
+        if self.is_training:
+            self.status = f"OPTIMIZING: {self.training_progress:.1f}%"
+            if not was_training and self.orch:
+                self.orch.blackboard.post(SynapticSignal("NC-001", "OPTIMIZATION", "🦾 COMPRESSOR: Avvio training del Neural Implicit Compressor.", SignalType.MISSION_UPDATE))
+        elif self.status.startswith("OPTIMIZING"):
+            self.status = "Optimization Complete."
+            self.optimized_nodes_session = len(self.vault._nodes)
+
+        return {"agent": "NC-001", "pos": dict(self.pos), "laser": False}
+
+    def get_status_report(self):
+        nic = getattr(self.vault, 'nic', None)
+        return {
+            "identity": self.identity,
+            "pos": self.pos,
+            "status": self.status,
+            "is_training": nic.is_training if nic else False,
+            "training_progress": nic.training_progress if nic else 0,
+            "compression_ratio": "85%" if nic and nic.is_trained else "0%",
+            "optimized_nodes_session": self.optimized_nodes_session
         }
 
 class NeuralLabOrchestrator:
@@ -2771,12 +3066,16 @@ class NeuralLabOrchestrator:
         self.skywalker = SkyWalkerAgent(engine, self)
         self.yoda = YodaAgent(engine, self)
         self.mandalorian = MandalorianAgent(engine, self)
+        self.compressor = CompressorAgent(engine, self)
+        self.adversary = SovereignAdversaryAgent(engine, self)
         
-        # ⚖️ [v4.3.1] Sovereign Intelligence Add-ons
+        from retrieval.formal_logic import FormalLogicEngine
         from retrieval.contradiction import ContradictionMapper
         from retrieval.contradiction_resolver import ContradictionResolver
         from evolution.sleep_engine import NeuralSleepEngine
-        self.contradiction_mapper = ContradictionMapper(engine, self)
+        
+        self.formal_logic = FormalLogicEngine()
+        self.contradiction_mapper = ContradictionMapper(engine, self, formal_logic=self.formal_logic)
         self.contradiction_resolver = ContradictionResolver(engine, self)
         self.sleep_engine = NeuralSleepEngine(engine)
         self.last_contradiction_scan = time.time()
@@ -2787,6 +3086,13 @@ class NeuralLabOrchestrator:
         self.prefetcher = AnticipatoryPrefetcher(engine)
         self.red_team = AutonomousRedTeam(engine)
 
+        from retrieval.temporal_decay import GlobalHealthScanner
+        self.health_scanner = GlobalHealthScanner(engine, self)
+        self.last_health_scan = time.time()
+        
+        # 🧠 [v9.0] Cognitive Presets
+        self.preset_mgr = CognitivePresetManager()
+        
         self.agents = {
             "JA-001": self.janitor,
             "DI-007": self.distiller,
@@ -2799,15 +3105,18 @@ class NeuralLabOrchestrator:
             "CB-003": self.bridger_agent,
             "FS-77": self.skywalker,
             "YO-001": self.yoda,
-            "DN-099": self.mandalorian
+            "DN-099": self.mandalorian,
+            "NC-001": self.compressor,
+            "AD-007": self.adversary
         }
         # v1.1.0: Repopulate Trust Network with real agent IDs
-        self.trust_network = AgentTrustNetwork(list(self.agents.keys()))
+        self.trust_network = AgentTrustNetwork(self.vault.data_dir)
         
         # 📡 [v6.0] Neural Event Bus Registration
         if hasattr(engine, 'events'):
             engine.events.subscribe(NeuralEventType.COURT_REQUIRED, self._on_court_required)
             engine.events.subscribe(NeuralEventType.EVOLUTION_ADVICE_NEEDED, self._on_evolution_advice_needed)
+            engine.events.subscribe(NeuralEventType.WIKI_GENERATED, self._on_wiki_generated)
 
         
         # 🛡️ v17.5.1 Production Hardening (Critical #7)
@@ -2828,7 +3137,8 @@ class NeuralLabOrchestrator:
         self.yoda_galaxy_ready = False # Flag per segnalare a SkyWalker che può partire
         self.autonomous_audit_queue = [] # ⚖️ Sovereign Court Escalation
         self._stop_event = threading.Event()
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=10) # 🚀 Expanded Dispatcher
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=10) # 🚀 Dedicated Agent Dispatcher
+        self.background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20) # 🛠️ Background Task Executor (Audit/Fusion)
         
         # 🛡️ v17.5 Advanced State & Validation (Critical #1, #6)
         self.node_states = {} 
@@ -2865,6 +3175,122 @@ class NeuralLabOrchestrator:
         self.agent007 = getattr(engine, 'agent007', None)
         self.agent007_lab = getattr(engine, 'agent007_lab', None)
         self.last_printed_mode = None
+
+    def _get_dynamic_agent_report(self) -> Dict:
+        """[v12.0] Genera un report dinamico includendo agenti core e custom."""
+        report = {}
+        for aid, agent in self.agents.items():
+            # Identity e Posizione base
+            data = {
+                "identity": getattr(agent, 'identity', {"id": aid, "name": "Unknown", "role": "Worker"}),
+                "pos": dict(getattr(agent, 'pos', {"x":0,"y":0,"z":0})),
+                "status": getattr(agent, 'status', 'Active')
+            }
+
+            # Mappatura Counter specifica per ruolo
+            id_upper = aid.upper()
+            if "JA-001" in id_upper:
+                data.update({
+                    "mode": getattr(agent, 'mode', 'Navigating'),
+                    "purged_session": getattr(agent, 'eaten_count', 0),
+                    "purged_total": getattr(agent, 'eaten_count', 0) + self.stats_baseline.get("JA-001", {}).get("purged", 0)
+                })
+            elif "DI-007" in id_upper:
+                data.update({
+                    "mode": getattr(agent, 'mode', 'Navigating'),
+                    "pruned_session": getattr(agent, 'pruned_count', 0),
+                    "pruned_total": getattr(agent, 'pruned_count', 0) + self.stats_baseline.get("DI-007", {}).get("pruned", 0)
+                })
+            elif "SN-008" in id_upper:
+                data.update({
+                    "found_session": getattr(agent, 'found', 0),
+                    "found_total": getattr(agent, 'found', 0) + self.stats_baseline.get("SN-008", {}).get("found", 0),
+                    "crafted_session": getattr(agent, 'harvested', 0),
+                    "crafted_total": getattr(agent, 'harvested', 0) + self.stats_baseline.get("SN-008", {}).get("harvested", 0),
+                    "deleted_session": getattr(agent, 'processed', 0),
+                    "deleted_total": getattr(agent, 'processed', 0) + self.stats_baseline.get("SN-008", {}).get("processed", 0)
+                })
+            elif "SY-009" in id_upper:
+                data.update({
+                    "sparks_session": getattr(agent, 'sparks_generated', 0),
+                    "sparks_total": getattr(agent, 'sparks_generated', 0) + self.stats_baseline.get("SY-009", {}).get("sparks", 0),
+                    "sub_agents": [s.to_dict() for s in getattr(agent, 'team', [])]
+                })
+            elif "RP-001" in id_upper:
+                data.update({
+                    "processed_session": getattr(agent, 'processed', 0),
+                    "processed_total": getattr(agent, 'processed', 0) + self.stats_baseline.get("RP-001", {}).get("processed", 0),
+                    "reclaimed_mb_session": getattr(agent, 'reclaimed_mb', 0.0),
+                    "reclaimed_mb_total": getattr(agent, 'reclaimed_mb', 0.0) + self.stats_baseline.get("RP-001", {}).get("reclaimed_mb", 0.0)
+                })
+            elif "QA-101" in id_upper:
+                data.update({
+                    "fused_clusters_session": getattr(agent, 'clusters_fused', 0),
+                    "fused_clusters_total": getattr(agent, 'clusters_fused', 0) + self.stats_baseline.get("QA-101", {}).get("fused_clusters", 0),
+                    "is_fusing": getattr(agent, 'is_fusing', False)
+                })
+            elif "SE-007" in id_upper:
+                data.update({
+                    "validated_session": getattr(agent, 'validated_count', 0),
+                    "validated_total": getattr(agent, 'validated_count', 0) + self.stats_baseline.get("SE-007", {}).get("validated", 0),
+                    "super_synapses_session": getattr(agent, 'super_synapses', 0),
+                    "super_synapses_total": getattr(agent, 'super_synapses', 0) + self.stats_baseline.get("SE-007", {}).get("super_synapses", 0)
+                })
+            elif "CB-003" in id_upper:
+                data.update({
+                    "bridges_session": getattr(agent, 'bridges_total', 0),
+                    "bridges_total": getattr(agent, 'bridges_total', 0) + self.stats_baseline.get("CB-003", {}).get("bridges", 0)
+                })
+            elif "FS-77" in id_upper:
+                data.update({
+                    "web_hits_session": getattr(agent, 'web_hits', 0),
+                    "nodes_introduced_session": getattr(agent, 'nodes_created', 0),
+                    "galaxies_session": getattr(agent, 'galaxies_created', 0)
+                })
+            elif "YO-001" in id_upper:
+                data.update({
+                    "nodes_examined_session": getattr(agent, 'nodes_examined', 0),
+                    "web_hits_session": getattr(agent, 'web_hits', 0),
+                    "galaxies_session": getattr(agent, 'galaxies_created', 0)
+                })
+            elif "DN-099" in id_upper:
+                data.update({
+                    "herds_session": getattr(agent, 'herds_completed', 0),
+                    "herds_total": getattr(agent, 'herds_completed', 0) + self.stats_baseline.get("DN-099", {}).get("herds", 0)
+                })
+            elif "NC-001" in id_upper:
+                data.update({
+                    "is_training": getattr(agent, 'is_training', False),
+                    "training_progress": getattr(agent, 'training_progress', 0.0),
+                    "compression_ratio": getattr(agent, 'compression_ratio', "0%"),
+                    "optimized_nodes_session": getattr(agent, 'optimized_nodes_session', 0)
+                })
+            elif id_upper.startswith("CU-"):
+                # Agenti Custom: usano counters generici
+                data.update({
+                    "processed_session": getattr(agent, 'processed', 0),
+                    "tasks_total": getattr(agent, 'processed', 0)
+                })
+            else:
+                # Generic fallback for unknown agents
+                data.update({
+                    "status": getattr(agent, 'status', 'Active'),
+                    "processed_session": getattr(agent, 'processed', 0) if hasattr(agent, 'processed') else 0
+                })
+            
+            report[aid] = data
+
+        # Smith Fleet (Special handling as it is a dictionary of agents)
+        report["AG-001"] = {
+            "identity": {"id": "AG-001", "name": "Agent-Smith", "role": "Mesh Security", "archetype": "guardian"},
+            "pos": list(self.smiths.values())[0].pos if self.smiths else {"x":0,"y":0,"z":0},
+            "status": "Fleet Active",
+            "inspections_session": sum(s.inspections for s in self.smiths.values()),
+            "threats_blocked_session": sum(s.threats_blocked for s in self.smiths.values()),
+            "fleet": {pid: {"pos": s.pos, "status": s.status} for pid, s in self.smiths.items()}
+        }
+        
+        return report
 
     def _update_smith_fleet(self):
         """Sincronizza la flotta di Agent Smith con i peer attivi."""
@@ -3115,8 +3541,9 @@ class NeuralLabOrchestrator:
         print("\n🛑 [Neural Lab] Arresto dei sistemi cinetici...")
         self._stop_event.set()
         if hasattr(self, 'executor'):
-            # Non aspettiamo i task pendenti (che potrebbero essere blocchi Ollama/Network)
             self.executor.shutdown(wait=False, cancel_futures=True)
+        if hasattr(self, 'background_executor'):
+            self.background_executor.shutdown(wait=False, cancel_futures=True)
         print("✅ [Neural Lab] Motori spenti.")
 
     def start_orchestra(self):
@@ -3138,6 +3565,18 @@ class NeuralLabOrchestrator:
         threading.Thread(target=self._codebase_watcher_loop, daemon=True).start()
         
         self.agent_health = {aid: {"failures": 0, "stasis_until": 0} for aid in list(self.agents.keys())}
+        
+        # 👤 [v12.6] Auto-Spawn Favorite Custom Agents
+        if self.custom_agents_config:
+            print(f"🕵️ [Sovereign Swarm] Scanning for favorite custom agents...")
+            for name, cfg in self.custom_agents_config.items():
+                if cfg.get("is_favorite"):
+                    try:
+                        self.spawn_custom_agent(name, cfg.get("role", "analyst"), cfg.get("prompt", ""), cfg.get("model", "llama3.2"))
+                        print(f"✅ [Swarm] Auto-loaded favorite agent: {name}")
+                    except Exception as e:
+                        print(f"⚠️ [Swarm] Failed to auto-load agent {name}: {e}")
+
         self._kinetic_thread = threading.Thread(target=self._run_kinetic_engine, daemon=True); self._kinetic_thread.start()
         
         # 💤 [v4.3.1] Sleep & Contradiction Background Loops (Offloaded to dedicated loop)
@@ -3174,7 +3613,9 @@ class NeuralLabOrchestrator:
             "YO-001": "yoda",
             "DN-099": "mandalorian",
             "AG-001": "smith",
-            "R2-D2": "r2d2"
+            "NC-001": "compressor",
+            "R2-D2": "r2d2",
+            "AD-007": "adversary"
         }
         return mapping.get(str(agent_id).strip())
 
@@ -3187,17 +3628,23 @@ class NeuralLabOrchestrator:
         if time.time() < health["stasis_until"]:
             return None 
             
-        attr_name = self._get_agent_attr(agent_id)
-        if not attr_name:
-            print(f"⚠️ [Orchestrator] UNKNOWN AGENT ID: '{agent_id}'")
-            return None
-            
-        agent = getattr(self, attr_name, None)
+        # 👤 Handle Custom Agents (CU-xxx) or Standard Agents
+        agent = None
+        if agent_id.startswith("CU-"):
+            agent = self.agents.get(agent_id)
+        else:
+            attr_name = self._get_agent_attr(agent_id)
+            if attr_name:
+                agent = getattr(self, attr_name, None)
+        
         if not agent: 
-            print(f"⚠️ [Orchestrator] AGENT INSTANCE MISSING: {attr_name} (ID: {agent_id})")
+            print(f"⚠️ [Orchestrator] AGENT INSTANCE MISSING: {agent_id}")
             return None
         
-        timeout = self.agent_timeouts.get(agent_id, 15.0)
+        # [v9.0] Meritocratic Timeout Scaling: high merit agents get up to 2x more time
+        base_timeout = self.agent_timeouts.get(agent_id, 15.0)
+        merit = self.trust_network.get_merit(agent_id) if hasattr(self, 'trust_network') else 1.0
+        timeout = base_timeout * min(2.0, max(0.5, merit)) 
         
         try:
             # ⏱️ Execute with granular agent-specific timeout
@@ -3253,6 +3700,7 @@ class NeuralLabOrchestrator:
                 # 🧠 [v8.4] Auto-Trigger NIC Training se raggiunto 1024 nodi
                 if hasattr(self.vault, 'nic') and self.vault.nic:
                     if len(nodes) >= 1024 and not self.vault.nic.is_trained and not self.vault.nic.is_training:
+                        # [v8.5] Optimized: Move vector collection INSIDE the check
                         vectors = [n.vector for n in nodes.values() if hasattr(n, 'vector') and n.vector is not None]
                         if len(vectors) >= 1024:
                             import numpy as np
@@ -3267,13 +3715,26 @@ class NeuralLabOrchestrator:
                         print(f"🕴️ [SMITH-{pid[:8]}] Status: {s.status}")
                         self._smith_last_status[pid] = s.status
 
-                # 🛡️ [STEP 3] Dynamic Safe Dispatching
-                for aid in list(self.agents.keys()):
+                # 🛡️ [STEP 3] Merit-based Dynamic Safe Dispatching
+                # Sort agents by merit before execution to ensure top-tier intelligence acts first
+                sorted_agent_ids = sorted(
+                    list(self.agents.keys()), 
+                    key=lambda aid: self.trust_network.get_merit(aid) if hasattr(self, 'trust_network') else 1.0, 
+                    reverse=True
+                )
+                
+                for aid in sorted_agent_ids:
                     # [v4.1.9] Sospensione granulare
                     if self.pause_agents: break
                     
                     res = self._safe_agent_step(aid, nodes)
                     if res: self._process_agent_action(res)
+
+                # 🌡️ [v9.0] Periodic Health Audit (Every 60 minutes)
+                if time.time() - self.last_health_scan > 3600:
+                    self.last_health_scan = time.time()
+                    if self.loop and self.loop.is_running():
+                        asyncio.run_coroutine_threadsafe(self.health_scanner.run_full_scan(), self.loop)
                 
                 if nodes:
                     # Logiche che richiedono nodi (es. fusioni, pruning)
@@ -3659,7 +4120,12 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         approved = votes[0] if fast_tracked else (sum(votes) > (len(active_judges) / 2.0))
 
         if approved:
-            if src_id in self.vault._nodes and dst_id in self.vault._nodes:
+            if edge_task.get("type") == "hyper":
+                # [v9.0] Proposta Iper-Grafo approvata
+                src_ids = src_id if isinstance(src_id, list) else [src_id]
+                self.vault.add_hyper_edge(src_ids, [dst_id], "multicausal", 0.95)
+                self.blackboard.post(SynapticSignal("COURT", AgentRole.ARCHITECT, f"✅ HYPER-GRAPH APPROVED: {len(src_ids)} sources -> {dst_id[:8]}", SignalType.SYSTEM_HEALING))
+            elif src_id in self.vault._nodes and dst_id in self.vault._nodes:
                 if self.vault._nodes[src_id].metadata.get("context", "user") == self.vault._nodes[dst_id].metadata.get("context", "user"):
                     self.vault.add_relation(src_id, dst_id, RelationType.SYNAPSE, 0.99)
                     self.blackboard.post(SynapticSignal("COURT", AgentRole.ARCHITECT, f"✅ APPROVED: {src_id[:8]}", SignalType.SYSTEM_HEALING))
@@ -3690,7 +4156,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         savings = result.get("savings", "0.01 MB cache optimized")
         
         # 🛡️ [v1.1.0 Trust Validation]
-        agent_trust = self.trust_network.trust_scores.get(aid, 0.7)
+        agent_trust = self.trust_network.get_merit(aid)
         if agent_trust < 0.5 and action:
              critical_actions = ["Neural Pruning", "Creative Spark", "Semantic Fusion", "Tombstone Cleanup"]
              if action in critical_actions:
@@ -3769,6 +4235,21 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             elif aid == "SY-009":
                 if action == "Creative Spark":
                     self.synth.sparks_generated += 1
+                elif action == "HYPER_GRAPH_PROPOSAL":
+                    # [v9.0] Sovereign Hyper-Graph Linkage
+                    source_ids = result.get("source_ids", [])
+                    target_id = result.get("target_id")
+                    if source_ids and target_id:
+                        # Escalation alla Supreme Court per convalida multicausale
+                        self.engine.events.emit_sync(NeuralEventType.COURT_REQUIRED, {
+                            "src": source_ids,
+                            "dst": target_id,
+                            "text": f"PROPOSTA IPER-GRAFO: {motivation}",
+                            "original_action": result,
+                            "timestamp": time.time(),
+                            "type": "hyper"
+                        })
+                        print(f"📐 [Hyper-Graph] Proposal escalated to Supreme Court: {len(source_ids)} sources -> {target_id[:8]}")
             elif aid == "SE-007":
                 if action in ["Audit Complete", "Source Validation", "Cross-Reference Audit"]:
                     self.sentinel.validated_count += 1
@@ -3808,6 +4289,11 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                 if action == "Semantic Grouping":
                     # organized count is managed inside R2D2Agent, but we log it here for history
                     pass
+            elif aid.startswith("CU-"):
+                if action == "Mission Task":
+                    # Custom agents manage their own 'processed' counter in calculate_movement, 
+                    # but we post a signal here for visibility
+                    self.blackboard.post(SynapticSignal(aid, "EXPERT", f"👤 {aid}: Mandato eseguito ({result.get('motivation', '')})", SignalType.MISSION_UPDATE))
 
             # Audit History Logging
             audit_entry = {
@@ -3893,7 +4379,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                         else:
                             self.blackboard.post(SynapticSignal("QUANTUM", AgentRole.ARCHITECT, f"🔬 FUSION DENIED: Context unique for {str(c_id)[:8]}.", SignalType.SYSTEM_NOTIFICATION))
                     except Exception as e: print(f"⚠️ [Quantum Error] {e}")
-                self.executor.submit(run_arbitrated_fusion, node.text, tid, audit_entry)
+                self.background_executor.submit(run_arbitrated_fusion, node.text, tid, audit_entry)
 
         elif action == "Source Validation":
             if tid in self.vault._nodes:
@@ -3943,7 +4429,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                 except Exception as e:
                     print(f"⚠️ [Sentinel Error] Audit failed: {e}")
             
-            self.executor.submit(real_validation, tid, node.text, node.metadata.get("source_uri"))
+            self.background_executor.submit(real_validation, tid, node.text, node.metadata.get("source_uri"))
 
     async def forage_web_topic(self, topic: str):
         """Alias per dispatch_skywalker_mission (compatibilità CRAG v4.2.0)."""
@@ -4038,7 +4524,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             
             # B. Bridger Anchor (Collegamento al centro)
             hub_topic = topic # In questa implementazione cerchiamo di collegare il topic scaricato al resto
-            asyncio.create_task(self.bridger_agent.bridge_specific_nodes(f"agent:FS-77 AND research_mission:{topic}"))
+            asyncio.run_coroutine_threadsafe(self.bridger_agent.bridge_specific_nodes(f"agent:FS-77 AND research_mission:{topic}"), self.loop)
             
             # C. Synth Insight
             self.blackboard.post(SynapticSignal("SY-009", AgentRole.MUSE, f"✨ Synth Muse: Integrare {topic} espande la densità semantica del 12%.", SignalType.KINETIC_EVENT))
@@ -4063,7 +4549,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             if self.skywalker.status.startswith("✅") or self.skywalker.status.startswith("⚠️"):
                 self.skywalker.status = "Scanning Horizon..."
         
-        asyncio.create_task(_reset_status())
+        asyncio.run_coroutine_threadsafe(_reset_status(), self.loop)
 
     def _calculate_vault_health(self) -> int:
         """Calcola l'Health Score (0-100) basato su stabilità, entropia e gap."""
@@ -4128,144 +4614,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             "health_score": self._calculate_vault_health(),
             "heatmap_enabled": True,
             "is_sleeping": self.sleep_engine.is_sleeping if hasattr(self, 'sleep_engine') else False,
-            "agents": {
-                "JA-001": {
-                    "identity": self.janitor.identity,
-                    "pos": dict(self.janitor.pos),
-                    "status": self.janitor.status,
-                    "mode": self.janitor.mode,
-                    "purged_session": self.janitor.eaten_count,
-                    "purged_total": self.janitor.eaten_count + self.stats_baseline.get("JA-001", {}).get("purged", 0)
-                },
-                "DI-007": {
-                    "identity": self.distiller.identity,
-                    "pos": dict(self.distiller.pos),
-                    "status": self.distiller.status,
-                    "mode": self.distiller.mode,
-                    "pruned_session": self.distiller.pruned_count,
-                    "pruned_total": self.distiller.pruned_count + self.stats_baseline.get("DI-007", {}).get("pruned", 0)
-                },
-                "SN-008": {
-                    "identity": self.snake.identity,
-                    "pos": dict(self.snake.pos),
-                    "status": "Active",
-                    "found_session": self.snake.found,
-                    "found_total": self.snake.found + self.stats_baseline.get("SN-008", {}).get("found", 0),
-                    "crafted_session": self.snake.harvested,
-                    "crafted_total": self.snake.harvested + self.stats_baseline.get("SN-008", {}).get("harvested", 0),
-                    "deleted_session": self.snake.processed,
-                    "deleted_total": self.snake.processed + self.stats_baseline.get("SN-008", {}).get("processed", 0)
-                },
-                "SY-009": {
-                    "identity": self.synth.identity,
-                    "pos": dict(self.synth.pos),
-                    "status": self.synth.status,
-                    "mode": "Dreaming",
-                    "sparks_session": self.synth.sparks_generated,
-                    "sparks_total": self.synth.sparks_generated + self.stats_baseline.get("SY-009", {}).get("sparks", 0),
-                    "sub_agents": [s.to_dict() for s in list(self.synth.team)]
-                },
-                "RP-001": {
-                    "identity": self.reaper.identity,
-                    "pos": dict(self.reaper.pos),
-                    "status": self.reaper.status,
-                    "processed_session": self.reaper.processed,
-                    "processed_total": self.reaper.processed + self.stats_baseline.get("RP-001", {}).get("processed", 0),
-                    "reclaimed_mb_session": getattr(self.reaper, 'reclaimed_mb', 0.0),
-                    "reclaimed_mb_total": getattr(self.reaper, 'reclaimed_mb', 0.0) + self.stats_baseline.get("RP-001", {}).get("reclaimed_mb", 0.0)
-                },
-                "QA-101": {
-                    "identity": self.quantum.identity,
-                    "pos": dict(self.quantum.pos),
-                    "status": self.quantum.status,
-                    "fused_clusters_session": getattr(self.quantum, 'clusters_fused', 0),
-                    "fused_clusters_total": getattr(self.quantum, 'clusters_fused', 0) + self.stats_baseline.get("QA-101", {}).get("fused_clusters", 0),
-                    "is_fusing": getattr(self.quantum, 'is_fusing', False)
-                },
-                "SE-007": {
-                    "identity": self.sentinel.identity,
-                    "pos": dict(self.sentinel.pos),
-                    "status": self.sentinel.status,
-                    "validated_session": getattr(self.sentinel, 'validated_count', 0),
-                    "validated_total": getattr(self.sentinel, 'validated_count', 0) + self.stats_baseline.get("SE-007", {}).get("validated", 0),
-                    "super_synapses_session": getattr(self.sentinel, 'super_synapses', 0),
-                    "super_synapses_total": getattr(self.sentinel, 'super_synapses', 0) + self.stats_baseline.get("SE-007", {}).get("super_synapses", 0),
-                    "is_supersynapse": getattr(self.sentinel, 'is_supersynapse', False)
-                },
-                "CB-003": {
-                    "identity": self.bridger_agent.identity,
-                    "pos": dict(self.bridger_agent.pos),
-                    "status": self.bridger_agent.status,
-                    "bridges_session": self.bridger_agent.bridges_total,
-                    "bridges_total": self.bridger_agent.bridges_total + self.stats_baseline.get("CB-003", {}).get("bridges", 0)
-                },
-                "FS-77": {
-                    "identity": self.skywalker.identity,
-                    "pos": dict(self.skywalker.pos),
-                    "status": self.skywalker.status,
-                    "web_hits_session": self.skywalker.web_hits,
-                    "nodes_introduced_session": self.skywalker.nodes_created,
-                    "galaxies_session": self.skywalker.galaxies_created,
-                    "laser": getattr(self.skywalker, 'laser_active', False),
-                    "laserTarget": getattr(self.skywalker, 'laser_target', {})
-                },
-                "YO-001": {
-                    "identity": self.yoda.identity,
-                    "pos": dict(self.yoda.pos),
-                    "status": self.yoda.status,
-                    "nodes_examined_session": self.yoda.nodes_examined,
-                    "nodes_examined_total": self.yoda.nodes_examined + self.stats_baseline.get("YO-001", {}).get("nodes_examined", 0),
-                    "web_hits_session": self.yoda.web_hits,
-                    "galaxies_session": self.yoda.galaxies_created,
-                    "nodes_introduced_session": getattr(self.yoda, 'nodes_introduced_session', 0),
-                    "last_galaxy_name": getattr(self.yoda, 'last_galaxy_name', ""),
-                    "last_galaxy_dist": getattr(self.yoda, 'last_galaxy_dist', 0.0),
-                    "nodes_in_last_galaxy": getattr(self.yoda, 'nodes_in_last_galaxy', 0),
-                    "laser": self.yoda.laser_active,
-                    "laserTarget": self.yoda.laser_target
-                },
-                "AG-001": {
-                    "identity": {"id": "AG-001", "name": "Agent-Smith", "role": "Mesh Security", "archetype": "guardian"},
-                    "pos": list(self.smiths.values())[0].pos if self.smiths else {"x":0,"y":0,"z":0},
-                    "status": "Fleet Active",
-                    "inspections_session": sum(s.inspections for s in self.smiths.values()),
-                    "inspections_total": sum(s.inspections for s in self.smiths.values()) + self.stats_baseline.get("AG-001", {}).get("inspections", 0),
-                    "threats_blocked_session": sum(s.threats_blocked for s in self.smiths.values()),
-                    "threats_blocked_total": sum(s.threats_blocked for s in self.smiths.values()) + self.stats_baseline.get("AG-001", {}).get("threats_blocked", 0),
-                    "fleet": {pid: {"pos": s.pos, "status": s.status} for pid, s in self.smiths.items()},
-                    "security_logs": [log for s in self.smiths.values() for log in s.security_logs][:30]
-                },
-                "DN-099": {
-                    "identity": self.mandalorian.identity,
-                    "pos": dict(self.mandalorian.pos),
-                    "status": self.mandalorian.status,
-                    "laser": self.mandalorian.laser_active,
-                    "laserTarget": self.mandalorian.laser_target,
-                    "herds_session": self.mandalorian.herds_completed,
-                    "herds_total": self.mandalorian.herds_completed + self.stats_baseline.get("DN-099", {}).get("herds", 0),
-                    "optimized_arcs_session": getattr(self.mandalorian, 'optimized_arcs_session', 0)
-                },
-                "NC-001": {
-                    "identity": {"id": "NC-001", "name": "Neural-Compressor", "role": "Semantic Quantizer", "archetype": "architect"},
-                    "pos": {"x": 0, "y": 0, "z": 0},
-                    "status": "Compressing..." if (hasattr(self.engine, 'nic') and getattr(self.engine.nic, 'is_training', False)) else ("Active" if hasattr(self.engine, 'nic') else "Offline"),
-                    "compression_ratio": "64x" if hasattr(self.engine, 'nic') else "N/A",
-                    "optimized_nodes_session": len(self.engine._nodes) if hasattr(self.engine, '_nodes') else 0,
-                    "optimized_nodes_total": (len(self.engine._nodes) if hasattr(self.engine, '_nodes') else 0) + self.stats_baseline.get("NC-001", {}).get("optimized_nodes", 0),
-                    "is_training": getattr(self.engine.nic, 'is_training', False) if hasattr(self.engine.nic, 'is_training') else False,
-                    "training_progress": getattr(self.engine.nic, 'training_progress', 0.0) if hasattr(self.engine.nic, 'is_training') else 0.0
-                },
-                "R2-D2": {
-                    "identity": self.r2d2.identity,
-                    "pos": dict(self.r2d2.pos),
-                    "status": self.r2d2.status,
-                    "organized_session": self.r2d2.organized_count,
-                    "organized_total": self.r2d2.organized_count + self.stats_baseline.get("R2-D2", {}).get("organized", 0),
-                    "galaxies_session": self.r2d2.galaxies_formed,
-                    "galaxies_total": self.r2d2.galaxies_formed + self.stats_baseline.get("R2-D2", {}).get("galaxies", 0),
-                    "is_operating": getattr(self.r2d2, 'is_operating', False)
-                }
-            },
+            "agents": self._get_dynamic_agent_report(),
             "blackboard": self.blackboard.get_recent(12),
             "court_actions": self.archiver.history[:20]
         }
@@ -4328,12 +4677,35 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         except Exception as e:
             print(f"⚠️ [Lab/Stats] Failed to save persistence: {e}")
 
-    def spawn_custom_agent(self, name: str, role: AgentRole, prompt: str, model: str = "llama3.2") -> str:
-        agent = CustomAgent(name, role, prompt, model)
+    def spawn_custom_agent(self, name: str, role: Any, prompt: str, model: str = "llama3.2") -> str:
+        # Convert string role to Enum if necessary
+        role_enum = role
+        if isinstance(role, str):
+            role_map = {
+                "archivist": AgentRole.ARCHIVIST, "analyst": AgentRole.ANALYST,
+                "creative": AgentRole.CREATIVE, "guardian": AgentRole.GUARDIAN,
+                "architect": AgentRole.ARCHITECT
+            }
+            role_enum = role_map.get(role.lower(), AgentRole.ANALYST)
+
+        agent = CustomAgent(name, role_enum, prompt, model)
         aid = agent.identity["id"]
         self.agents[aid] = agent
-        self.blackboard.post(SynapticSignal(aid, role, f"🧬 CUSTOM AGENT FORGED: {name} deployed with {model}.", SignalType.SYSTEM_NOTIFICATION))
+        
+        # 🏥 Initialize health for the new agent
+        if not hasattr(self, 'agent_health'): self.agent_health = {}
+        self.agent_health[aid] = {"failures": 0, "stasis_until": 0}
+        
+        self.blackboard.post(SynapticSignal(aid, role_enum, f"🧬 CUSTOM AGENT FORGED: {name} deployed with {model}.", SignalType.SYSTEM_NOTIFICATION))
         return aid
+
+    def toggle_favorite_agent(self, name: str, is_favorite: bool):
+        if name in self.custom_agents_config:
+            self.custom_agents_config[name]["is_favorite"] = is_favorite
+            with open(self.custom_agents_path, "w") as f:
+                json.dump(self.custom_agents_config, f)
+            return True
+        return False
 
     def get_status(self) -> Dict: return self.get_orchestra_report()
     def get_audit_ledger(self) -> List[Dict]: return self.mission_history
@@ -4387,7 +4759,7 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
         mission_id = f"miss_{uuid.uuid4().hex[:6]}"
         # Se la missione sembra una ricerca web, attiviamo Skywalker
         if any(w in mission_text.lower() for w in ["cerca", "trova", "ricerca", "search", "find"]):
-            asyncio.create_task(self.dispatch_skywalker_mission(mission_text))
+            asyncio.run_coroutine_threadsafe(self.dispatch_skywalker_mission(mission_text), self.loop)
         else:
             # Altrimenti postiamo sulla blackboard per gli agenti
             sig = SynapticSignal("SOVEREIGN_USER", AgentRole.MISSION_ARCHITECT, 
@@ -4404,17 +4776,19 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
 
     async def _call_ollama_for_agent(self, agent_name: str, prompt: str) -> str:
         """Invia un prompt a Ollama per un compito specifico di un agente (Asincrono con Semaforo)."""
-        if not hasattr(self, '_ollama_sem'):
-            self._ollama_sem = asyncio.Semaphore(2) # Massimo 2 inferenze simultanee
-            
-        base_url = self.settings.get("ollama_url", "http://localhost:11434")
-        model = self.settings.get_model("chat") or "llama3.2"
+        preset = self.preset_mgr.get_active_preset()
+        bias = preset.get("bias", {})
+        
+        full_prompt = f"### MINDSET: {preset.get('name', 'Standard')}\n{bias.get('meta_prompt', '')}\n\n### AGENT: {agent_name}\n\n{prompt}"
         
         async with self._ollama_sem:
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     resp = await client.post(f"{base_url}/api/generate", json={
-                        "model": model, "prompt": f"### AGENT: {agent_name}\n\n{prompt}", "stream": False
+                        "model": model, 
+                        "prompt": full_prompt, 
+                        "stream": False,
+                        "options": {"temperature": bias.get("temperature", 0.7)}
                     })
                     if resp.status_code == 200:
                         return resp.json().get("response", "Error: No response from model.")
@@ -4471,7 +4845,21 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
             if not jury: return "Consenso non raggiungibile: Nessun modello rilevato."
             
             # 2. Inchiesta Parallela con Timeout 45s
-            prompt = f"Contesto: {context}\n\nQ: {query}\nFornisci una risposta sintetica e tecnica."
+            # 🧠 [v9.0] Apply Cognitive Preset to Oracle thinking
+            preset = self.preset_mgr.get_active_preset()
+            bias = preset.get("bias", {})
+            
+            prompt = f"""[MINDSET: {preset.get('name', 'Standard')}]
+{bias.get('meta_prompt', '')}
+
+[CONTEXT]
+{context}
+
+[USER_QUERY]
+{query}
+
+Rispondi seguendo lo stile e il rigore del preset attivo. Fornisci una risposta sintetica e tecnica.
+"""
             
             async def get_model_opinion(model_name):
                 m_start = time.time()
@@ -4479,7 +4867,10 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
                     with SovereignAuditContext(self, model_name, "HighSpeed_Jury") as audit:
                         try:
                             r = await client.post(f"{self._get_ollama_url()}/api/generate", json={
-                                "model": model_name, "prompt": prompt, "stream": False
+                                "model": model_name, 
+                                "prompt": prompt, 
+                                "stream": False,
+                                "options": {"temperature": bias.get("temperature", 0.7)}
                             })
                             lat = (time.time() - m_start) * 1000
                             if r.status_code == 200:
@@ -4647,3 +5038,11 @@ Rispondi ESCLUSIVAMENTE in formato JSON:
 
         except Exception as e:
             return {"reasoning": f"Errore Oracolo: {str(e)}", "action": "REJECT", "verdict": "MANTIENI"}
+    async def _on_wiki_generated(self, event: NeuralEvent):
+        """😈 [Adversary Trigger] Sfida istantaneamente ogni nuova Wiki generata."""
+        data = event.data
+        page_name = data.get("page_name")
+        content = data.get("content", "")
+        
+        # Innesca l'attacco dell'avvocato del diavolo
+        await self.adversary.challenge_hypothesis(f"WIKI:{page_name}", content)

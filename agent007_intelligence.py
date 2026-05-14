@@ -13,7 +13,7 @@ import psutil
 
 class Agent007Intelligence:
     """
-    Agent007-march Intelligence Suite (v2.1.0)
+    Agent007-march Intelligence Suite (v9.0.0)
     ───────────────────────────────────────
     Gestisce l'estrazione discreta di entità (Hard Memory) e il ragionamento investigativo (ReACT).
     """
@@ -26,7 +26,7 @@ class Agent007Intelligence:
                 error_str = str(e).lower()
                 print(f"⚠️ [Agent007] Errore critico DB (WAL corruption?): {e}")
 
-                # [v4.3.1] Lock Awareness: Do NOT delete DB if it's just a lock conflict
+                # [v9.0.0] Lock Awareness: Do NOT delete DB if it's just a lock conflict
                 if "lock" in error_str or "process" in error_str:
                     print(f"🛑 [Agent007] CRITICAL: Hard Memory is LOCKED by another process.")
                     raise e
@@ -48,7 +48,7 @@ class Agent007Intelligence:
         else:
             self.con = duckdb.connect(":memory:")
         
-        # Inizializzazione Hard Memory Tables (v2.1.0)
+        # Inizializzazione Hard Memory Tables (v9.0.0)
         import threading
         self._lock = threading.Lock()
         
@@ -76,6 +76,18 @@ class Agent007Intelligence:
                 )
             """)
 
+            # 🎭 [v9.0.0] Persona-Graph RAG (PG-RAG) Table
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS agent007_personas (
+                    entity_id VARCHAR,
+                    category VARCHAR, -- 'OBLIGATION' | 'PRECEDENT' | 'LEXICON'
+                    content TEXT,
+                    evidence_node_id VARCHAR,
+                    extracted_at TIMESTAMP DEFAULT now(),
+                    PRIMARY KEY (entity_id, category, content)
+                )
+            """)
+
             self.con.execute("""
                 CREATE TABLE IF NOT EXISTS query_history (
                     id VARCHAR PRIMARY KEY,
@@ -88,9 +100,9 @@ class Agent007Intelligence:
             """)
         print("🕵️ Agent007-march: Intelligence Extension ACTIVE.")
 
-    def extract_entities(self, text: str, node_id: str = "unknown", fast_mode: bool = False):
+    async def extract_entities(self, text: str, node_id: str = "unknown", fast_mode: bool = False):
         """
-        Protocollo Agent007-NER v2.5.0: Estrazione Reale via Ollama con Fallback Euristico.
+        Protocollo Agent007-NER v9.0.0: Estrazione Reale via Ollama con Fallback Euristico.
         """
         entities = []
         relations = []
@@ -109,7 +121,7 @@ class Agent007Intelligence:
                 TESTO: {text}
                 """
                 
-                # v3.0.0: SWARM-ROUTED MODEL SELECTION
+                # v9.0.0: SWARM-ROUTED MODEL SELECTION
                 from utils.settings_manager import SwarmSettingsManager
                 settings = SwarmSettingsManager(self.engine.data_dir if self.engine else Path("./data"))
                 selected_model = settings.get_model("entity_extraction")
@@ -182,9 +194,14 @@ class Agent007Intelligence:
 
                         entities = data.get("entities", [])
                         relations = data.get("relations", [])
+                        
+                        # 🎭 [v9.0.0] Extract Personas (Behaviors) if entities were found
+                        if entities:
+                            await self._extract_personas_batch(text, entities, node_id, selected_model, base_url)
+                        
                         ollama_extracted = True
                         
-                        # Misurazione RAM Reale (v4.0)
+                        # Misurazione RAM Reale (v9.0.0)
                         ram_usage = psutil.Process().memory_info().rss / (1024 * 1024)
                         quality = 1.0 if len(entities) > 0 else 0.5
                         
@@ -221,7 +238,7 @@ class Agent007Intelligence:
                 if len(name) > 3:
                     entities.append({"name": name, "type": "Entity", "attributes": {"confidence": 0.7}})
 
-            # Heuristics per RELAZIONI: Logica Cross-Lingua Avanzata (v2.8.0)
+            # Heuristics per RELAZIONI: Logica Cross-Lingua Avanzata (v9.0.0)
             # Supporta multi-word entities e una gamma espansa di predicati verbali
             patterns = [
                 (r'\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*)\s+(è|era|sono|contiene|gestisce|definisce|eredita|implementa|collegato a|usa|is|was|are|contains|manages|defines|inherits|implements|linked to|uses|connected to)\s+([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*)\b', "Inference")
@@ -300,6 +317,49 @@ class Agent007Intelligence:
                 if "closed" in str(e).lower(): pass
                 else: print(f"⚠️ Error adding relation: {e}")
 
+    async def _extract_personas_batch(self, text, entities, source_node_id, model, base_url):
+        """
+        🕵️ Protocollo Persona-Graph RAG (PG-RAG): Ingegneria Inversa dell'Identità.
+        """
+        for ent in entities[:3]: # Limite a 3 entità per batch per evitare timeout
+            name = ent.get('name')
+            if not name: continue
+            
+            prompt = f"""
+            ### ROLE: REVERSE IDENTITY ENGINEER
+            ### TARGET: {name}
+            ### TASK: Analizza il testo ed estrai TRATTI COMPORTAMENTALI CERTIFICATI.
+            
+            Formatta la risposta ESCLUSIVAMENTE come JSON:
+            {{
+              "obligations": ["clausole firmate", "impegni presi"],
+              "precedents": ["reazioni passate", "decisioni storiche"],
+              "lexicon": ["termini tecnici frequenti", "stile comunicativo"]
+            }}
+            
+            TESTO: {text}
+            """
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(f"{base_url}/api/generate", json={
+                        "model": model, "prompt": prompt, "stream": False, "format": "json"
+                    })
+                    if resp.status_code == 200:
+                        data = json.loads(resp.json().get("response", "{}"))
+                        
+                        with self._lock:
+                            for cat, items in data.items():
+                                category = cat.upper()[:-1] if cat.endswith('s') else cat.upper()
+                                for item in items:
+                                    if len(item) < 5: continue
+                                    self.con.execute("""
+                                        INSERT OR REPLACE INTO agent007_personas 
+                                        (entity_id, category, content, evidence_node_id)
+                                        VALUES (?, ?, ?, ?)
+                                    """, (name, category, item, source_node_id))
+            except: pass
+
     def get_entity_context(self, entity_name: str) -> Dict[str, Any]:
         """Recupera il contesto 'Hard' di un'entità (Relazioni dirette)."""
         with self._lock:
@@ -377,7 +437,7 @@ class Agent007Intelligence:
 
 class Agent007Investigator:
     """
-    Motore ReACT v2.1.0 per l'Agente Analista.
+    Motore ReACT v9.0.0 per l'Agente Analista.
     Permette di pianificare indagini multi-hop nel Vault.
     """
     def __init__(self, intelligence: Agent007Intelligence):
@@ -394,10 +454,10 @@ class Agent007Investigator:
 
     def get_weakness_report(self, node_id: str) -> Dict[str, Any]:
         """
-        Analisi Forense v2.1.0: Recupera le vulnerabilità semantiche del nodo.
+        Analisi Forense v9.0.0: Recupera le vulnerabilità semantiche del nodo.
         Se non esiste un report, lo genera 'on-the-fly' basandosi sui dati correnti.
         """
-        # Simulazione recupero da DB Hard Memory (v2.5.0)
+        # Simulazione recupero da DB Hard Memory (v9.0.0)
         return {
             "node_id": node_id,
             "vulnerabilities": ["Coerenza logica limitata", "Mancanza di fonti primarie verificate"],

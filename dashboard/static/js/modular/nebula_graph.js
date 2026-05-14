@@ -49,6 +49,9 @@ function updateThreeScene(points, links = null) {
             const r = Math.floor(temp * 255);
             const b = Math.floor((1 - temp) * 255);
             displayColor = `rgb(${r}, 50, ${b})`;
+        } else if (window._showPartitions && p.partition_id !== undefined) {
+             const partitionColors = ["#ef4444", "#3b82f6", "#10b981", "#facc15", "#a855f7", "#ec4899", "#06b6d4", "#f97316"];
+             displayColor = partitionColors[p.partition_id % partitionColors.length];
         } else {
             displayColor = p.color || "#06b6d4";
             if (isLight && (displayColor === "#06b6d4" || displayColor === "#ffffff")) {

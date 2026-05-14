@@ -13,6 +13,8 @@ class NeuralEventType(str, Enum):
     SYSTEM_ALERT = "SYSTEM_ALERT"
     GALAXY_UPDATE = "GALAXY_UPDATE"
     SHADOW_SIMULATION_COMPLETED = "SHADOW_SIMULATION_COMPLETED"
+    WIKI_GENERATED = "WIKI_GENERATED"
+    TEMPORAL_SHIFT = "TEMPORAL_SHIFT"
 
 class NeuralEvent:
     def __init__(self, event_type: NeuralEventType, data: Dict[str, Any], priority: int = 1):
@@ -34,6 +36,10 @@ class NeuralEventBus:
         self.logger = logging.getLogger("NeuralEventBus")
         self.history: List[Dict] = []
         self.max_history = 100
+        try:
+            self.main_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.main_loop = None
 
     def subscribe(self, event_type: NeuralEventType, callback: Callable[[NeuralEvent], Awaitable[None]]):
         """Registra un listener per un tipo di evento."""
@@ -68,11 +74,21 @@ class NeuralEventBus:
     def emit_sync(self, event_type: NeuralEventType, data: Dict[str, Any], priority: int = 1):
         """Versione sincrona di emit per componenti legacy o thread-based."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.emit(event_type, data, priority))
+            # Tenta di recuperare il loop corrente nel thread chiamante
+            try:
+                current_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                current_loop = None
+
+            if current_loop and current_loop.is_running():
+                # Se siamo già in un thread con un loop attivo, usiamo quello
+                current_loop.create_task(self.emit(event_type, data, priority))
+            elif self.main_loop and self.main_loop.is_running():
+                # Se siamo in un thread senza loop (es. Kinetic Engine), usiamo il loop principale
+                asyncio.run_coroutine_threadsafe(self.emit(event_type, data, priority), self.main_loop)
             else:
-                loop.run_until_complete(self.emit(event_type, data, priority))
+                # Fallback: crea un loop temporaneo se possibile (molto raro in produzione)
+                asyncio.run(self.emit(event_type, data, priority))
         except Exception as e:
             self.logger.error(f"❌ Error in emit_sync: {e}")
 

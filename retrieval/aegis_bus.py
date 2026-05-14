@@ -27,15 +27,29 @@ class AegisEventBus:
     """[v9.0] Sovereign Event Bus for CQRS Shadow Logging."""
     def __init__(self, log_path: str = "vault_data/aegis_event_log.jsonl"):
         self.log_path = log_path
+        self.listeners = []
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
         print(f"🛡️ [Aegis] Event Bus Initialized: {self.log_path}")
 
+    def register_listener(self, callback):
+        """Register a projection or service to listen to events."""
+        self.listeners.append(callback)
+
     def emit(self, event_type: str, payload: Dict[str, Any]):
-        """Emit an event and persist it to the shadow log."""
+        """Emit an event, persist it, and notify listeners."""
         event = AegisEvent.create(event_type, payload)
         try:
+            # Persistence (Shadow Log)
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(event)) + "\n")
+            
+            # Real-time Projections (CQRS)
+            for listener in self.listeners:
+                try:
+                    listener(event_type, payload)
+                except Exception as le:
+                    print(f"⚠️ [Aegis] Listener Error: {le}")
+                    
             return event.identity
         except Exception as e:
             print(f"⚠️ [Aegis] Event Emission Error: {e}")

@@ -38,7 +38,11 @@ class HardwareTuner:
         ram = psutil.virtual_memory()
         
         # 2. Disk Footprint (Settoriale)
-        total, used, free = shutil.disk_usage(self.data_dir)
+        try:
+            if not self.data_dir.exists(): self.data_dir.mkdir(parents=True, exist_ok=True)
+            total, used, free = shutil.disk_usage(self.data_dir)
+        except:
+            total, used, free = 100 * (1024**3), 1 * (1024**3), 99 * (1024**3)
         
         # 3. CPU Core Mapping
         cpu_count = psutil.cpu_count(logical=True)

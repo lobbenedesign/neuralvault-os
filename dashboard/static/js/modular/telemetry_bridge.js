@@ -1,12 +1,45 @@
 function initSSE() {
     if (eventSource) eventSource.close();
+    // [v9.0] Initial inventory sync
+    if (typeof refreshVaultState === 'function') refreshVaultState();
+    
     eventSource = new EventSource(`/events?api_key=${VAULT_KEY}`);
     eventSource.onmessage = (e) => {
         const d = JSON.parse(e.data);
         if (d.points) updateThreeScene(d.points, d.links);
         
+        // [v11.5] Update Cycloscope HUD (DNA & Security bars)
+        if (typeof window.updateCycloscopeHUD === 'function') {
+            window.updateCycloscopeHUD(d);
+        }
+        
+        // --- 🧬 [v12.5] CRITICAL TELEMETRY (Hardware) ---
+        // We update this even in flight mode to ensure dashboard integrity
+        if (d.hardware) {
+            const hw = d.hardware;
+            const cpuVal = document.getElementById('hw-cpu-val');
+            const cpuBar = document.getElementById('hw-cpu-bar');
+            if (cpuVal) cpuVal.innerText = `${Math.round(hw.cpu.percent)}%`;
+            if (cpuBar) cpuBar.style.width = `${hw.cpu.percent}%`;
+
+            const ramVal = document.getElementById('hw-ram-val');
+            const ramBar = document.getElementById('hw-ram-bar');
+            if (ramVal) ramVal.innerText = `${hw.ram.used} / ${hw.ram.total} GB`;
+            if (ramBar) ramBar.style.width = `${hw.ram.percent}%`;
+
+            const gpuVal = document.getElementById('hw-gpu-val');
+            const gpuBar = document.getElementById('hw-gpu-bar');
+            if (gpuVal) gpuVal.innerText = `${Math.round(hw.gpu.percent)}%`;
+            if (gpuBar) gpuBar.style.width = `${hw.gpu.percent}%`;
+
+            const diskVal = document.getElementById('hw-disk-val');
+            const diskBar = document.getElementById('hw-disk-bar');
+            if (diskVal) diskVal.innerText = `${hw.disk.used} / ${hw.disk.total} GB`;
+            if (diskBar) diskBar.style.width = `${hw.disk.percent}%`;
+        }
+
         // --- 🚀 FLIGHT PERFORMANCE PROTOCOL ---
-        // Durante il volo congeliamo tutti i reflow DOM per ottenere 60 FPS stabili,
+        // Durante il volo congeliamo i reflow pesanti (grid, charts) per ottenere 60 FPS stabili,
         // aggiornando SOLO le posizioni 3D visive degli agenti (Yoda, Skywalker, Mando)
         if (window.isFlightModeActive) {
             if (d.lab && d.lab.agents) {
@@ -21,16 +54,13 @@ function initSSE() {
                     }
                     if (id.includes('YO-001') && window.yodaTargetPos) {
                         window.yodaTargetPos.set(data.pos.x * exp, data.pos.y * exp, data.pos.z * exp);
-                        if (window.yodaGroup && data.is_shooting && data.target_pos) {
-                            window.spawnYodaBullet(window.yodaGroup.position.clone(), new THREE.Vector3(data.target_pos.x * exp, data.target_pos.y * exp, data.target_pos.z * exp));
-                        }
                     }
                     if (id.includes('DN-099') && window.mandalorianTargetPos) {
                         window.mandalorianTargetPos.set(data.pos.x * exp, data.pos.y * exp, data.pos.z * exp);
                     }
                 }
             }
-            return; // Blocco totale aggiornamenti testo e CSS DOM
+            return; 
         }
 
         if (d.lab) refreshEvolutionChat(); // [v3.8.5] Real-time Evo Sync
@@ -180,7 +210,8 @@ function initSSE() {
         if (weather) {
             const cog = document.getElementById('metrics-data');
             if (cog) {
-                cog.innerText = `Ret: ${weather.retention || '0%'} | Stab: ${weather.stability || '0%'}`;
+                const conf = weather.epistemic_metrics?.conflict_rate || '0%';
+                cog.innerText = `Ret: ${weather.retention || '0%'} | Stab: ${weather.stability || '0%'} | Confl: ${conf}`;
                 if (weather.stability) {
                     cog.style.color = weather.stability.includes('99') ? '#10b981' : weather.stability.includes('98') ? '#3b82f6' : '#f59e0b';
                 }
@@ -188,14 +219,24 @@ function initSSE() {
             if (weather.mood) {
                 const light = document.getElementById('mood-light');
                 const text = document.getElementById('mood-text');
+                const container = document.getElementById('vault-mood-container');
                 if (light && text) {
-                    text.innerText = weather.mood_status || 'STABLE';
+                    text.innerText = `${weather.mood} ${weather.mood_status || 'STABLE'}`;
                     let color = '#10b981';
-                    if (weather.mood === '🟡') color = '#f59e0b';
-                    if (weather.mood === '🟠') color = '#ef4444';
+                    if (weather.mood === '☀️') color = '#10b981';
+                    if (weather.mood === '🌤️') color = '#4ade80';
+                    if (weather.mood === '🌥️') color = '#94a3b8';
+                    if (weather.mood === '🌩️') color = '#ef4444';
                     if (weather.mood === '🔴') color = '#ff0000';
+                    
                     light.style.background = color;
-                    light.style.boxShadow = `0 0 10px ${color}`;
+                    light.style.boxShadow = `0 0 15px ${color}`;
+
+                    // [v8.4] Tooltip for Epistemic Metrics
+                    if (container && weather.epistemic_metrics) {
+                        const m = weather.epistemic_metrics;
+                        container.title = `EPISTEMIC HEALTH:\n- Conflicts: ${m.conflict_rate || '0%'}\n- Freshness: ${m.avg_age || '0d'}\n- Orphans: ${m.orphan_rate || '0%'}\n- Integrity Score: ${Math.round((weather.score || 1) * 100)}%`;
+                    }
                 }
             }
         }
@@ -224,9 +265,15 @@ function initSSE() {
                                 id.toLowerCase().includes('ag') ? 'smith' : 
                                 id.toLowerCase().includes('nc') ? 'compressor' : 
                                 id.toLowerCase().includes('dn') ? 'mandalorian' : 
-                                id.toLowerCase().includes('r2') ? 'r2-d2' : 'bridger';
+                                id.toLowerCase().includes('r2') ? 'r2-d2' : 
+                                id.startsWith('CU-') ? id.toLowerCase() : 'bridger';
                 
-                const hud = document.getElementById(cleanId + "-hud-icon");
+                let hud = document.getElementById(cleanId + "-hud-icon");
+                if (!hud && id.startsWith('CU-')) {
+                    if (typeof window.createDynamicAgentHUD === 'function') {
+                        hud = window.createDynamicAgentHUD(id, agentData);
+                    }
+                }
                 if (hud) {
                     const hasActivity = (
                         (agentData.processed || 0) > 0 || 
@@ -242,7 +289,9 @@ function initSSE() {
                         (agentData.bridges || 0) > 0 || 
                         (agentData.web_hits || 0) > 0 || 
                         (agentData.nodes_forged || 0) > 0 ||
-                        (agentData.optimized_nodes || 0) > 0
+                        (agentData.optimized_nodes || 0) > 0 ||
+                        (agentData.optimized_nodes_session || 0) > 0 ||
+                        agentData.is_training === true
                     );
                     try {
                         const status = (agentData.status || "idle").toLowerCase();
@@ -693,6 +742,16 @@ function initSSE() {
                         mandalorianGroup.userData.status = agentData.status || "Herding";
                         mandalorianGroup.userData.laserTarget = agentData.target_pos;
                     }
+
+                    // [v12.0] GENERIC HANDLER for Custom Forged Agents (CU-)
+                    if (id.startsWith('CU-')) {
+                        const valEl = document.getElementById(`val-${id.toLowerCase()}-hud-icon`);
+                        if (valEl) {
+                            // Map typical counters
+                            const val = agentData.processed_session || agentData.crafted_session || agentData.found_session || 0;
+                            valEl.innerText = val;
+                        }
+                    }
                 }
             }
         }
@@ -822,3 +881,72 @@ function initSSE() {
         }
     };
 }
+
+/**
+ * 🔗 [v12.7] SOVEREIGN EVIDENCE BINDING
+ * Consente la verifica attiva dei nodi citati nei report SITREP.
+ */
+window.bindEvidenceLinks = (containerId) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // Pattern: [node_...] o [ID: node_...]
+    const nodePattern = /\[(node_[a-f0-9-]+)\]/gi;
+    
+    // Trova tutti i nodi di testo nel container e sostituisci il pattern con span cliccabili
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+    let textNode;
+    const nodesToReplace = [];
+
+    while (textNode = walker.nextNode()) {
+        if (textNode.nodeValue.match(nodePattern)) {
+            nodesToReplace.push(textNode);
+        }
+    }
+
+    nodesToReplace.forEach(node => {
+        const span = document.createElement('span');
+        span.innerHTML = node.nodeValue.replace(nodePattern, (match, id) => {
+            return `<span class="evidence-tag" onclick="window.selectNode('${id}')" title="Clicca per verificare la fonte nel Vault">${match}</span>`;
+        });
+        node.parentNode.replaceChild(span, node);
+    });
+
+    log(`🔗 [Traceability] Binding evidence links in ${containerId}`, "#10b981");
+};
+
+// Global click listener for any dynamically added [node_id] text
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.classList.contains('evidence-tag')) {
+        // Handled by inline onclick, but we can add telemetry here
+        if (typeof aegis_bus !== 'undefined') {
+            // Future: emit client-side telemetry to Aegis
+        }
+    }
+});
+
+// CSS Injection for Evidence Tags
+const style = document.createElement('style');
+style.textContent = `
+    .evidence-tag {
+        color: #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 800;
+        font-size: 0.8em;
+        transition: all 0.2s;
+        display: inline-block;
+        margin: 0 2px;
+    }
+    .evidence-tag:hover {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: #3b82f6;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        transform: translateY(-1px);
+    }
+`;
+document.head.appendChild(style);

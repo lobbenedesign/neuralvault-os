@@ -419,7 +419,10 @@ const NEURAL_LANG_PACK = {
     "label_polishing": ["PO", "PO"],
     "label_rgb_arcs": ["Archi RGB", "RGB Arcs"],
     "label_nodes_added": ["Nodi Forgiati", "Nodes Forged"],
-    "label_synaptic_integrity_check": ["Controllo Integrità Link Sinaptico: Verificato", "Synaptic Link Integrity Check: Verified"]
+    "label_synaptic_integrity_check": ["Controllo Integrità Link Sinaptico: Verificato", "Synaptic Link Integrity Check: Verified"],
+    "label_engine_telemetry": ["TELEMETRIA CORE MOTORE", "ENGINE CORE TELEMETRY"],
+    "label_locking_on": ["AGGANCIO TARGET", "LOCKING_ON"],
+    "label_nav_data": ["DATI NAVIGAZIONE NAVE", "SHIP NAVIGATION DATA"]
 };
 
 let currentLang = localStorage.getItem('neuralvault_lang') || 'it';
@@ -542,7 +545,9 @@ window.filterHoloHistory = (agentId) => {
     renderHologramHistory();
 };
 
-window.showHologram = (character, message, duration = 13000) => {
+window.showHologram = (character, message, params = {}, duration = 13000) => {
+    // [v12.0] NERD MODE Check
+    if (window.NERD_MODE_ACTIVE === false) return;
     // [v10.8] Prevents overlapping typewriter glitches
     if (hologramIsTyping && !window._openedFromHistory) return; 
     hologramIsTyping = true;
@@ -856,6 +861,12 @@ window.showSection = (s) => {
         // [v8.0] Phase 7: Auto-Init
         if (s === 'wiki') {
             window.refreshWikiList();
+            if (typeof window.renderWikiDashboard === 'function') {
+                window.renderWikiDashboard();
+            }
+            if (typeof window.updateMeritRanking === 'function') {
+                window.updateMeritRanking();
+            }
         } else {
             const hud = document.getElementById('wiki-epistemic-hud');
             if (hud) hud.style.display = 'none';
@@ -878,6 +889,8 @@ window.showSection = (s) => {
                 if (renderer) renderer.render(scene, camera);
             }, 50);
         }
+        // [v9.0] Auto-refresh inventory when entering overview
+        if (typeof refreshVaultState === 'function') refreshVaultState();
     }
     if (s === 'benchmark') { 
         refreshBenchmarks(); 
@@ -1103,9 +1116,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toggle) toggle.checked = true;
         refreshVaultState();
         // [Phase 3] Periodic Refresh Loops
-        setInterval(refreshBenchmarks, 30000); // 30s
-        setInterval(refreshCourtQueue, 15000);  // 15s
-        setInterval(refreshEvolutionChat, 10000); // 10s [v3.8.4] Autonomous Sync
+        setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
+        setInterval(refreshCourtQueue, 45000);  // 45s
+        setInterval(refreshEvolutionChat, 30000); // 30s
         refreshBenchmarks();
         refreshCourtQueue();
     } catch(e) {}
@@ -1139,21 +1152,119 @@ window.forgeCustomAgent = async () => {
     const name = isModal ? document.getElementById('custom-agent-name').value : document.getElementById('lab-forge-name').value;
     const role = isModal ? (document.getElementById('custom-agent-role')?.value || "analyst") : (document.getElementById('lab-forge-role')?.value || "analyst");
     const model = isModal ? document.getElementById('custom-agent-model').value : "llama3.2";
-    const prompt = isModal ? document.getElementById('custom-agent-prompt').value : document.getElementById('lab-forge-prompt').value;
+    
+    // [v12.0] Dual Prompt Handling: Backend Mandate + Frontend Personality
+    const backendPrompt = isModal ? document.getElementById('custom-agent-prompt').value : document.getElementById('lab-forge-prompt').value;
+    const frontendPersonality = isModal ? "" : document.getElementById('lab-forge-frontend').value;
+    
+    // Combine for the backend orchestrator
+    const finalPrompt = frontendPersonality ? `[BACKEND_MANDATE]: ${backendPrompt}\n[FRONTEND_PERSONALITY]: ${frontendPersonality}` : backendPrompt;
+
     if (!name) { log("⚠️ AGENT_FORGE: Identity name required.", "#ef4444"); return; }
     log("⚒️ FORGING: Initializing custom mandate for " + name + "...", "#a855f7");
     try {
         const response = await fetch('/api/swarm/spawn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, role, prompt, model, api_key: VAULT_KEY })
+            body: JSON.stringify({ name, role, prompt: finalPrompt, model, api_key: VAULT_KEY })
         });
         const res = await response.json();
         if (res.status === 'ok') {
             log("✅ DEPLOYED: Agent " + name + " is now active in the Nebula.", "#10b981");
-            if (isModal) closeAgentFactory();
+            
+            // [v11.5] Success Modal & Redirection
+            if (typeof window.showSovereignModal === 'function') {
+                window.showSovereignModal("🏺 AGENT FORGED SUCCESSFULLY", `
+                    L'agente <span style="color:#a855f7; font-weight:800;">${name}</span> (${role}) è stato inizializzato nel Vault.
+                    
+                    Lo sciame si è espanso per includere questa nuova capacità cognitiva.
+                    Verrai ora reindirizzato alla Memory Overview per monitorarne l'attività.
+                    
+                    <div style="margin-top: 1rem; height: 3px; background: rgba(168,85,247,0.2); border-radius: 2px; overflow: hidden;">
+                        <div id="modal-countdown-bar" style="width: 100%; height: 100%; background: #a855f7; transition: width 4s linear;"></div>
+                    </div>
+                `);
+                
+                // Start countdown animation
+                setTimeout(() => {
+                    const bar = document.getElementById('modal-countdown-bar');
+                    if (bar) bar.style.width = '0%';
+                }, 50);
+            } else {
+                alert(`Agent ${name} forged successfully!`);
+            }
+
+            // Close source modals if open
+            const factoryModal = document.getElementById('agent-factory-modal');
+            if (factoryModal) factoryModal.style.display = 'none';
+            const customModal = document.getElementById('custom-agent-modal');
+            if (customModal) customModal.style.display = 'none';
+
+            // Automatic Closure and Redirect after 4 seconds
+            setTimeout(() => {
+                const sovModal = document.getElementById('sovereign-intelligence-modal');
+                if (sovModal) sovModal.style.display = 'none';
+                
+                if (typeof window.showSection === 'function') {
+                    window.showSection('overview');
+                }
+            }, 4000);
+
+        } else {
+            log("❌ DEPLOY_ERROR: " + (res.message || "Unknown Failure"), "#ef4444");
+            alert("Errore durante la creazione dell'agente: " + (res.message || "Errore sconosciuto"));
         }
-    } catch (e) { log("❌ FORGE_ERR: Connection to orchestrator failed.", "#ef4444"); }
+    } catch (e) {
+        log("❌ FORGE_ERR: Connection to orchestrator failed.", "#ef4444");
+    }
+};
+
+// [v11.5] Alias for Legacy/Alternative UI buttons
+window.createCustomAgent = window.forgeCustomAgent;
+
+/**
+ * [v11.5] CYCLOSCOPE REAL-TIME HUD
+ * Updates the DNA and Integrity bars in the main dashboard.
+ */
+window.updateCycloscopeHUD = (data) => {
+    const dnaStatus = document.getElementById('cognitive-status');
+    const integrityScore = document.getElementById('integrity-score');
+    
+    // 1. DNA Status (Cognitive Profile)
+    if (dnaStatus) {
+        if (data.points && data.points.length > 0) {
+            const accel = data.hardware?.gpu?.backend || 'Metal/AVX';
+            dnaStatus.innerText = `DNA: ${accel} | Synced`;
+            dnaStatus.style.color = "#a855f7";
+        } else if (!data.points && data.hardware) {
+            // Keep status if we have hardware but points are throttled
+            if (dnaStatus.innerText === "Analyzing DNA...") {
+                const accel = data.hardware?.gpu?.backend || 'Metal/AVX';
+                dnaStatus.innerText = `DNA: ${accel} | Synced`;
+                dnaStatus.style.color = "#a855f7";
+            }
+        } else if (data.points === undefined) {
+            // Only show analyzing if it's the very first load or truly missing
+            dnaStatus.innerText = "Analyzing DNA...";
+            dnaStatus.style.color = "#94a3b8";
+        }
+    }
+    
+    // 2. Integrity Score (Security)
+    if (integrityScore) {
+        const score = data.weather?.score || 1.0;
+        const percent = Math.round(score * 100);
+        integrityScore.innerText = `${percent}% SECURE`;
+        
+        if (percent >= 90) {
+            integrityScore.style.color = "#4ade80";
+        } else if (percent >= 70) {
+            integrityScore.style.color = "#facc15";
+        } else {
+            integrityScore.style.color = "#ef4444";
+            integrityScore.innerText = `${percent}% VULNERABLE`;
+        }
+    }
 };
 
 window.broadcastCommand = async (command) => {
@@ -1291,7 +1402,8 @@ async function refreshVaultState() {
     try {
         const response = await fetch('/api/inventory', { headers: { 'X-API-KEY': VAULT_KEY }});
         const data = await response.json();
-        const sources = data.documents || [];
+        // [v9.0 Fix] API returns a direct list, not {documents: []}
+        const sources = Array.isArray(data) ? data : (data.documents || []);
         
         if (!sources || sources.length === 0) {
             list.innerHTML = '<div style="opacity:0.3; text-align:center; padding:1rem; font-size:0.6rem;">Vuoto. Nessun dato acquisito.</div>';
@@ -2796,83 +2908,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toggle) toggle.checked = true;
         refreshVaultState();
         // [Phase 3] Periodic Refresh Loops
-        setInterval(refreshBenchmarks, 30000); // 30s
-        setInterval(refreshCourtQueue, 15000);  // 15s
-        setInterval(refreshEvolutionChat, 10000); // 10s [v3.8.4] Autonomous Sync
+        setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
+        setInterval(refreshCourtQueue, 45000);  // 45s
+        setInterval(refreshEvolutionChat, 30000); // 30s
         refreshBenchmarks();
         refreshCourtQueue();
     } catch(e) {}
 });
-window.showSection = (s) => {
-    document.querySelectorAll('.view-container').forEach(v => v.style.display = 'none');
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    const bottomHUD = document.querySelector('.bottom-section');
-    if (bottomHUD) {
-        if (s === 'overview') {
-            document.body.classList.remove('full-height-mode');
-            bottomHUD.style.display = 'grid';
-        } else {
-            document.body.classList.add('full-height-mode');
-            bottomHUD.style.display = 'none';
-        }
-    }
-    const cycloHUD = document.getElementById('cycloscope-hud');
-    if (cycloHUD) {
-        cycloHUD.style.display = (s === 'overview') ? 'flex' : 'none';
-    }
-    const settingsTabs = ['network', 'galaxies', 'limbo'];
-    let targetView = s;
-    if (settingsTabs.includes(s)) {
-        targetView = 'settings';
-    }
-
-    const t = document.getElementById(`${targetView}-view`);
-    if (t) {
-        t.style.display = 'flex';
-        t.style.height = '100%';
-        if (settingsTabs.includes(s)) {
-            switchSettingsTab(s);
-        }
-        // [v8.0] Phase 7: Auto-Init
-        if (s === 'wiki') {
-            window.refreshWikiList();
-        } else {
-            const hud = document.getElementById('wiki-epistemic-hud');
-            if (hud) hud.style.display = 'none';
-        }
-        if (s === 'simulation') window.initSimulationGraph();
-    }
-    
-    // [SOVEREIGN PRIORITIZATION]
-    setPriorityFocus(false);
-    const nav = document.getElementById(`nav-${s}`);
-    if (nav) nav.classList.add('active');
-
-    if (targetView === 'overview') { 
-        if (!window.is3DInitialized) {
-            init3D(); 
-        } else {
-            // Se già inizializzato, forza un resize per ricalcolare il frustum
-            setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-                if (renderer) renderer.render(scene, camera);
-            }, 50);
-        }
-    }
-    if (s === 'benchmark') { 
-        refreshBenchmarks(); 
-        refreshRadar(); // 🧬 Trigger Radar Synthesis
-    }
-    if (s === 'analytics') {
-        refreshAnalytics();
-        refreshHistoricalEngine();
-    }
-    if (s === 'lab') { refreshHistoricalEngine(); }
-    if (s === 'settings') { 
-        switchSettingsTab('swarm'); 
-        refreshHubVisual(); // Ensure judge selects are populated
-    }
-};
 
 window.switchLabTab = (tab) => {
     document.querySelectorAll('[id^="lab-tab-content-"]').forEach(c => c.style.display = 'none');
@@ -2910,6 +2952,7 @@ window.renderCourtVerdicts = (history) => {
                act.includes("HOLD") || 
                act.includes("VERDICT") ||
                act.includes("COMMITTEE") ||
+               act.includes("ADVERSARIAL") ||
                entry.wisdom_recorded;
     }).slice(0, 50); // Increased slice for better scrolling history
 
@@ -3095,17 +3138,50 @@ window.renderAgentGrid = (labData) => {
                           status.includes('hold') ? '#f59e0b' : '#3b82f6';
         const isBlinking = status === 'active' || status === 'operating' ? 'pulse-active' : '';
         
+        const stats = [];
+        const idLower = id.toLowerCase();
+        
+        // Mapping terminologia specifica utente [v11.5]
+        if (idLower.includes('di')) stats.push(`ARCHI_POTATI: ${a.pruned_session || 0}`);
+        else if (idLower.includes('ja')) stats.push(`ELIMINATI: ${a.purged_session || 0}`);
+        else if (idLower.includes('sn')) {
+            stats.push(`TROVATI: ${a.found_session || 0}`);
+            stats.push(`GERMOGLIATI: ${a.sprouted_session || 0}`);
+        }
+        else if (idLower.includes('sy')) stats.push(`SPARKS: ${a.crafted_session || 0}`);
+        else if (idLower.includes('cb')) stats.push(`SUPER-PONTI: ${a.bridges_session || 0}`);
+        else if (idLower.includes('yo')) stats.push(`EXAMINED: ${a.processed_session || 0}`);
+        else if (idLower.includes('fs')) stats.push(`SEARCHES: ${a.web_hits_session || 0}`);
+        else if (idLower.includes('r2')) stats.push(`ORGANIZED: ${a.processed_session || 0}`);
+        else if (idLower.includes('nc')) stats.push(`NODES: ${a.node_count || 0}`);
+        else {
+            // Fallback per nuovi agenti come "ultra cluster"
+            if (a.processed_session !== undefined) stats.push(`SYNC: ${a.processed_session}`);
+            if (a.crafted_session !== undefined) stats.push(`SYN: ${a.crafted_session}`);
+        }
+        
+        const statsHtml = stats.map(s => `<span style="background:rgba(168,85,247,0.1); color:#a855f7; padding:2px 6px; border-radius:4px; font-size:0.5rem; font-weight:900; border:1px solid rgba(168,85,247,0.2);">${s}</span>`).join('');
+
         return `
-            <div class="agent-card-v2" onclick="window.toggleFollow('${id}')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-left: 4px solid ${statusColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 8px; transition: 0.3s; cursor: pointer;">
+            <div class="agent-card-v2" onclick="window.toggleFollow('${id}')" style="background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-left: 4px solid ${statusColor}; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 8px; transition: 0.3s; cursor: pointer; position: relative; overflow: hidden;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-size: 0.75rem; font-weight: 900; color: #fff; letter-spacing: 1px;">${id.toUpperCase()}</span>
-                    <span class="${isBlinking}" style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
+                    <span class="${isBlinking}" style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; box-shadow: 0 0 10px ${statusColor};"></span>
                 </div>
                 <div style="font-size: 0.55rem; color: ${statusColor}; font-weight: 800; text-transform: uppercase;">${a.status}</div>
-                <div style="font-size: 0.65rem; color: #94a3b8; line-height: 1.4; height: 40px; overflow: hidden; text-overflow: ellipsis;">${a.last_action || 'Nessuna missione recente...'}</div>
+                
+                <!-- [v11.5] Dynamic Success Counters -->
+                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0;">
+                    ${statsHtml}
+                </div>
+
+                <div style="font-size: 0.65rem; color: #94a3b8; line-height: 1.4; height: 40px; overflow: hidden; text-overflow: ellipsis; margin-top: 5px;">${a.last_action || 'Nessuna missione recente...'}</div>
+                
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
                     <div style="font-size: 0.5rem; color: #64748b;">LOAD: <span style="color: #fff;">${a.load || '0%'}</span></div>
-                    <button style="background: rgba(168, 85, 247, 0.1); border: 1px solid #a855f7; color: #a855f7; font-size: 0.5rem; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: 900;">HUD_FOCUS</button>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="event.stopPropagation(); window.focusAgent('${id}')" style="background: rgba(168, 85, 247, 0.1); border: 1px solid #a855f7; color: #a855f7; font-size: 0.5rem; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: 900;">FOCUS</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -3386,9 +3462,16 @@ window.onTimeTravel = (val) => {
         else if (val < 90) period.innerText = "RECENT";
         else period.innerText = "PRESENT";
     }
-    if (pointsMesh && pointsMesh.geometry.attributes.position) {
-        const total = pointsMesh.geometry.attributes.position.count;
-        pointsMesh.geometry.setDrawRange(0, Math.floor(total * timeTravelFactor));
+    
+    // 3D Nebula Time Travel
+    if (window.pointsMesh && window.pointsMesh.geometry.attributes.position) {
+        const total = window.pointsMesh.geometry.attributes.position.count;
+        window.pointsMesh.geometry.setDrawRange(0, Math.floor(total * timeTravelFactor));
+    }
+    
+    // 📖 [v9.5] Wiki Knowledge Time Travel
+    if (window.temporalShiftWiki) {
+        window.temporalShiftWiki(val);
     }
 };
 
@@ -3480,10 +3563,152 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toggle) toggle.checked = true;
         refreshVaultState();
         // [Phase 3] Periodic Refresh Loops
-        setInterval(refreshBenchmarks, 30000); // 30s
-        setInterval(refreshCourtQueue, 15000);  // 15s
-        setInterval(refreshEvolutionChat, 10000); // 10s [v3.8.4] Autonomous Sync
+        setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
+        setInterval(refreshCourtQueue, 45000);  // 45s
+        setInterval(refreshEvolutionChat, 30000); // 30s
         refreshBenchmarks();
         refreshCourtQueue();
     } catch(e) {}
+});
+
+/**
+ * 🕹️ NERD MODE Master Control (v12.0)
+ * Toggles the visibility of agent sprites, holograms, and flight controls.
+ */
+window.NERD_MODE_ACTIVE = true;
+window.toggleNerdMode = (isActive) => {
+    window.NERD_MODE_ACTIVE = isActive;
+    const log = (msg, color) => window.log ? window.log(msg, color) : console.log(msg);
+    
+    if (isActive) {
+        log("🕹️ NERD_MODE: Online. Agents & Flight HUD restored.", "#facc15");
+        document.body.classList.remove('stealth-mode');
+        // Enable Flight Toggle
+        const ft = document.getElementById('flight-toggle');
+        if (ft) {
+            ft.disabled = false;
+            ft.parentElement.style.opacity = "1";
+            ft.parentElement.style.pointerEvents = "all";
+        }
+    } else {
+        log("🕶️ NERD_MODE: Stealth. Pure Nebula visualization active.", "#94a3b8");
+        document.body.classList.add('stealth-mode');
+        // Disable Flight Toggle & Reset
+        const ft = document.getElementById('flight-toggle');
+        if (ft) {
+            if (ft.checked) {
+                ft.checked = false;
+                if (window.playerController) window.playerController.setPilotMode(false);
+            }
+            ft.disabled = true;
+            ft.parentElement.style.opacity = "0.3";
+            ft.parentElement.style.pointerEvents = "none";
+        }
+        // Hide active holograms
+        if (typeof window.hideHologram === 'function') window.hideHologram();
+    }
+    
+    // Notify 3D engine if necessary
+    if (window.refresh3DOverlay) window.refresh3DOverlay();
+};
+
+/**
+ * 🛠️ [v12.0] DYNAMIC AGENT HUD CREATOR
+ * Creates a new HUD item in the sidebar for custom forged agents.
+ */
+window.createDynamicAgentHUD = (id, agentData) => {
+    const stack = document.getElementById('agent-hud-stack');
+    if (!stack) return null;
+    
+    const hudId = id.toLowerCase() + "-hud-icon";
+    if (document.getElementById(hudId)) return document.getElementById(hudId);
+    
+    const name = agentData.name || id;
+    const role = agentData.role || "Expert";
+    
+    const item = document.createElement('div');
+    item.className = "agent-mission-item mt-2 inactive-agent";
+    item.id = hudId;
+    item.onclick = () => window.toggleFollow(id);
+    
+    // Custom logic to determine label from prompt if possible
+    let counterLabel = "Mission Tasks";
+    if (agentData.prompt && agentData.prompt.includes("[FRONTEND_PERSONALITY]")) {
+        // Simple heuristic to extract a label if mentioned like "Counter: Points"
+        const fp = agentData.prompt.split("[FRONTEND_PERSONALITY]")[1];
+        if (fp.includes("Contatore:") || fp.includes("Counter:")) {
+             const match = fp.match(/(?:Contatore|Counter):\s*([A-Za-z0-9_\-\s]+)/);
+             if (match) counterLabel = match[1].trim();
+        }
+    }
+
+    item.innerHTML = `
+        <div class="pacman-hud" style="background: #a855f7; border-radius: 50%; width: 20px; height: 20px;"></div>
+        <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="color:#fff; font-weight:800; font-size:0.55rem;">${id}: ${name}</div>
+                <i class="fas fa-microchip" style="font-size: 0.6rem; color: #a855f7;"></i>
+            </div>
+            <div class="stat-badge">
+                <span id="label-${hudId}">${counterLabel}</span>: <span id="val-${hudId}">0</span>
+            </div>
+        </div>
+    `;
+    
+    stack.appendChild(item);
+    return item;
+};
+
+// 🧠 [v9.0] COGNITIVE MINDSET CONTROLLER
+window.updateCognitiveMindset = async () => {
+    const selector = document.getElementById('mindset-select');
+    const activePreset = selector.value;
+    const apiKey = localStorage.getItem('neuralvault_api_key');
+    
+    log(`🧠 [Mindset] Switching to ${activePreset.toUpperCase()}...`, "#a855f7");
+    
+    try {
+        const response = await fetch('/api/system/presets', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-KEY': VAULT_KEY
+            },
+            body: JSON.stringify({ active_preset: activePreset })
+        });
+        
+        const data = await response.json();
+        if (data.status === 'success') {
+            showHologram('YODA', `Il cammino è cambiato. Ora operiamo con il mindset ${activePreset.toUpperCase()}.`);
+            // Flash color feedback
+            const container = document.getElementById('mindset-selector-container');
+            container.style.boxShadow = "0 0 50px #a855f7";
+            setTimeout(() => container.style.boxShadow = "0 10px 30px rgba(0,0,0,0.5)", 1000);
+        } else {
+            log("🚨 [Mindset] Failed to update preset.", "#ef4444");
+        }
+    } catch (error) {
+        console.error("Mindset Update Error:", error);
+    }
+};
+
+window.loadActivePreset = async () => {
+    const apiKey = localStorage.getItem('neuralvault_api_key');
+    try {
+        const response = await fetch('/api/system/presets', {
+            headers: { 'X-API-KEY': VAULT_KEY }
+        });
+        const data = await response.json();
+        if (data.active_preset) {
+            const selector = document.getElementById('mindset-select');
+            if (selector) selector.value = data.active_preset;
+        }
+    } catch (error) {
+        console.warn("Could not load initial preset.");
+    }
+};
+
+// Auto-load on boot
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(window.loadActivePreset, 2000);
 });
