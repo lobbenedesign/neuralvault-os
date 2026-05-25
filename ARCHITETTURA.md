@@ -4,7 +4,7 @@
 > "Il potere non risiede nel dato, ma nella sua indipendenza e nella capacità di dominarne le conseguenze." — Manifesto NeuralVault v11.3.0
 > "Power does not reside in the data, but in its independence and the ability to dominate its consequences." — NeuralVault Manifesto v11.3.0
 
-![Neural Nebula Hero Shot](assets/Screenshot%202026-05-13%20alle%2008.38.55.png)
+![Neural Nebula Hero Shot](assets/dashboard_v350.png)
 
 ---
 
@@ -160,13 +160,13 @@ L'interfaccia 3D principale per monitorare l'ingestione dei nodi, le attività d
 
 ![UI Layers and Control](assets/layers_filter.png)
 
-### 🏺 Sovereign Wiki (The Hyper-Reader)
+### 🏛️ Sovereign Wiki (The Hyper-Reader)
 - **Entry Point Standalone**: Accesso al portale come applicazione separata (/wiki) per uno studio immersivo.
 - **Streaming Generation (SSE)**: I contenuti vengono visualizzati progressivamente mentre vengono generati dall'LLM, riducendo la latenza percepita a zero.
 - **Adaptive Reading Protocol**: Supporta modalità **EXECUTIVE** (sintesi), **TECHNICAL** (deep dive) e **RESEARCH** (fonti).
 - **Causal Click-Through**: Ogni entità citata è un link interattivo. Cliccando, si apre un preview del nodo con il suo grafo causale locale.
 - **Vim-like Navigation**: Supporto nativo per power users (`j/k` per scorrere, `gg/G` per inizio/fine, `e/t/r` per cambiare modalità).
-- **Lazy Mermaid 2.0**: I diagrammi (Flowchart, Sequence, Timeline) vengono renderizzati via Intersection Observer solo quando entrano nel campo visivo, risparmiando CPU/GPU.
+- **Lazy Mermaid 2.0 & Frustum Culling (v11.3)**: I diagrammi vengono renderizzati via Intersection Observer solo quando entrano nel campo visivo, risparmiando CPU/GPU. Stesso principio applicato alla Nebula 3D e Tactical Canvas 2D per il rendering massivo.
 - **Knowledge Versioning**: Sistema "Git-like" per l'**Epistemic Time-Travel**, confrontando la conoscenza attuale con quella passata.
 - **Learning Path Generator**: Pannello dinamico "Cognitive Path" che mappa automaticamente i prerequisiti necessari per comprendere un argomento, con barre di progresso basate sull'**Access Count** reale del database.
 - **Epistemic Weather HUD**: Pannello satellitare che mostra il "Meteo della Verità" (☀️/🌥️/🌩️) basato su integrità logica e freschezza dei dati.
@@ -174,13 +174,15 @@ L'interfaccia 3D principale per monitorare l'ingestione dei nodi, le attività d
 ---
 
 ## 💎 V. I 5 LIVELLI DI PERSISTENZA (5-TIER STORAGE)
-*Garantisce coerenza atomica tramite Event Sourcing [v9.0 Prep]*
+*Garantisce coerenza atomica tramite Event Sourcing & CQRS [v11.3]*
 
 1. **L1: Atomic Cache (RAM + Metal)**: Accesso sub-millisecondo ai nodi caldi via Hardware Pinning.
-2. **L2: Aegis LogStore (AOBF / Event Log)**: Unica fonte di verità (CQRS). Ogni cambiamento è un evento immutabile.
+2. **L2: Aegis LogStore (AOBF / Event Log)**: Unica fonte di verità (CQRS). Ogni cambiamento è un evento immutabile. Supportato dall'**AegisEventBus**, che coordina gli eventi (come i movimenti tattici dei nodi) tra UI e DB in modo robusto tramite il pattern Singleton.
 3. **L3: Sovereign Graph (KùzuDB & DuckDB)**: Graph Database nativo per query Cypher ultra-veloci e proiezioni di Iper-Grafi Bayesiani ({A, B} -> D). Implementa l'**Arrow IPC Convergence Layer** per la sincronizzazione Zero-Copy tra i metadati (DuckDB) e i nodi del grafo (KùzuDB), eliminando l'overhead di parsing e mantenendo l'allineamento perfetto.
 4. **L4: Evolutionary Ledger (Git-backed)**: Persistenza della saggezza consolidata e versioning semantico.
 5. **L5: Neural Quantized Store (NIC - TurboQuant v3) & MRL**: Compressione vettoriale estrema tramite Product Quantization nativa e troncamento Matryoshka (MRL).
+
+![CQRS EventBus and Storage](assets/Screenshot%202026-05-25%20alle%2019.48.07.png)
 
 ### 🚀 Approfondimento L5: Matryoshka Embeddings (MRL) & TurboQuant v3
 NeuralVault v10.1 introduce il supporto nativo per la **Matryoshka Representation Learning (MRL)** tramite `nomic-embed-text-v1.5`. Questo permette al motore vettoriale di abbattere drasticamente lo spazio su disco e in RAM, consentendo di troncare gli embedding (es. da 768 a 256 dimensioni) preservando oltre il 95% dell'accuratezza semantica grazie alla ri-normalizzazione dinamica integrata nella factory `text_nomic_mrl`. L'MRL elimina la necessità di modelli massivi residenti in RAM, permettendo al vault di operare stabilmente su dispositivi Apple Silicon con vincoli di memoria stretti.
@@ -324,8 +326,10 @@ $$z' = y \cdot \sin(15^\circ) + z \cdot \cos(15^\circ)$$
 
 Questo assicura che, indipendentemente dalla geometria (spirale, clessidra, cupola o sfera), ogni galassia conservi l'inclinazione maestosa e coordinata di tutta la Nebula Madre!
 
-#### 🔬 Stato dell'Arte del Codice
-Il file [neural_lab.py](file:///Users/giuseppelobbene/Downloads/DATABASE%20VETTORIALE/neural_lab.py) è stato modificato con precisione chirurgica ed è stato compilato con successo al 100% senza alcun errore di runtime.
+![Mandalorian Dynamic Geometry Engine](assets/Screenshot%202026-05-25%20alle%2019.47.53.png)
+
+#### 🔬 Stato dell'Arte del Codice (v11.3.0)
+Il file `neural_lab.py` e il sistema di rendering frontend (Tactical Canvas & Nebula Graph) sono stati modificati con precisione chirurgica ed implementano il **Frustum Culling**. Questo permette di nascondere le galassie fuori campo e di risparmiare enormemente RAM/CPU.
 I tuoi suggerimenti implementativi hanno arricchito in modo straordinario la stabilità epistemica dello Swarm (con il ciclo di verifica di Yoda) e la bellezza geometrica della Nebula (con il motore 3D del Mandalorian)!
 
 ### 10.3 3D Telemetry Loop & Visual Rendering (Cycloscope 3D)

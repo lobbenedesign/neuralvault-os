@@ -9,7 +9,7 @@
 
 **EN**: NeuralVault-OS is not just a vector database. It is a **Sovereign Cognitive Engine** designed for the autonomous evolution of knowledge. With **Release v10.1**, NeuralVault leaps from a passive archive to a predictive simulator: it doesn't just remember the past, it simulates "What-If" scenarios to predict the impact of new information on your knowledge base.
 
-![Neural Nebula Hero](assets/Screenshot%202026-05-13%20alle%2008.38.55.png)
+![Neural Nebula Hero](assets/dashboard_v350.png)
 
 ---
 
@@ -24,10 +24,11 @@
 - **🏛️ Sovereign Wiki v10.1**: Portale enciclopedico persistente in Markdown con **Knowledge Evolution Wizard** e SITREP 2.0. / Encyclopedic portal with Knowledge Evolution Wizard and SITREP 2.0.
 - **🌌 H-RAG (Hierarchical GraphRAG)**: Mappatura automatica in Galassie Concettuali via KùzuDB & DuckDB. / Automatic mapping into Conceptual Galaxies.
 - **🛡️ Verification Era**: Red Teaming autonomo, Z3 Conflict HUD e Consenso Pesato tra Vault. / Autonomous Red Teaming, Z3 Conflict HUD, and Weighted Consensus.
+- **⚡ Frustum Culling & Tactical Canvas (v11.3)**: Rendering WebGL ultra-ottimizzato per mappare milioni di nodi senza lag visivo e sincronizzazione in tempo reale via AegisEventBus CQRS. / Ultra-optimized WebGL rendering for millions of nodes without visual lag and real-time sync via AegisEventBus CQRS.
 
 ### 🌌 The Sovereign Interface
-![Nexus Vault Full Dashboard](assets/Screenshot%202026-05-10%20alle%2016.42.08.png)
-*L'interfaccia 3D integrata con monitoraggio telemetrico, tracciamento motore e gestione dell'ingestione.*
+![Nexus Vault Full Dashboard](assets/Screenshot%202026-05-25%20alle%2019.48.07.png)
+*La Tactical Canvas e la Memory Overview integrate con Frustum Culling e CQRS per una mappatura epistemica ad altissime prestazioni.*
 
 ---
 
