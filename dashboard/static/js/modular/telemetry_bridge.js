@@ -6,8 +6,43 @@ function initSSE() {
     eventSource = new EventSource(`/events?api_key=${VAULT_KEY}`);
     eventSource.onmessage = (e) => {
         const d = JSON.parse(e.data);
-        if (d.points) updateThreeScene(d.points, d.links);
         
+        // 📡 [v9.0] Handle Broadcast Events
+        if (d.event === "SIMULATION_PROGRESS") {
+            if (typeof window.updateOracleProgress === 'function') window.updateOracleProgress(d.data);
+            return;
+        }
+        if (d.event === "SECURITY_THREAT") {
+            if (typeof window.showSecurityThreat === 'function') window.showSecurityThreat(d.data);
+            return;
+        }
+        if (d.event === "SIMULATION_COMPLETE") {
+            console.log("🏁 [Oracle] Simulation Complete Event Received.");
+            return;
+        }
+
+        if (d.points) {
+            const newCount = d.points.length;
+            const newLinksCount = d.links ? d.links.length : 0;
+            const now = Date.now();
+            // Solo se è cambiato il numero di nodi o di link, o se è la prima volta (undefined)
+            if (window._lastPointsCount !== newCount || window._lastLinksCount !== newLinksCount) {
+                if (!window._lastUpdateTime || now - window._lastUpdateTime > 1000) {
+                    updateThreeScene(d.points, d.links);
+                    window._lastPointsCount = newCount;
+                    window._lastLinksCount = newLinksCount;
+                    window._lastUpdateTime = now;
+                } else {
+                    if (window._pendingUpdate) clearTimeout(window._pendingUpdate);
+                    window._pendingUpdate = setTimeout(() => {
+                        updateThreeScene(d.points, d.links);
+                        window._lastPointsCount = newCount;
+                        window._lastLinksCount = newLinksCount;
+                        window._lastUpdateTime = Date.now();
+                    }, 1000 - (now - window._lastUpdateTime));
+                }
+            }
+        }        
         // [v11.5] Update Cycloscope HUD (DNA & Security bars)
         if (typeof window.updateCycloscopeHUD === 'function') {
             window.updateCycloscopeHUD(d);
@@ -49,14 +84,18 @@ function initSSE() {
                     const data = a[id];
                     if (!data.pos) continue;
                     
+                    const jitter = (Math.random() - 0.5) * 40000;
                     if (id.includes('FS-77') && window.skywalkerTargetPos) {
-                        window.skywalkerTargetPos.set(data.pos.x * exp, data.pos.y * exp, data.pos.z * exp);
+                        window.skywalkerTargetPos.set(data.pos.x * exp + jitter, data.pos.y * exp + jitter, data.pos.z * exp + jitter);
                     }
                     if (id.includes('YO-001') && window.yodaTargetPos) {
-                        window.yodaTargetPos.set(data.pos.x * exp, data.pos.y * exp, data.pos.z * exp);
+                        window.yodaTargetPos.set(data.pos.x * exp + jitter, data.pos.y * exp + jitter, data.pos.z * exp + jitter);
                     }
                     if (id.includes('DN-099') && window.mandalorianTargetPos) {
-                        window.mandalorianTargetPos.set(data.pos.x * exp, data.pos.y * exp, data.pos.z * exp);
+                        window.mandalorianTargetPos.set(data.pos.x * exp + jitter, data.pos.y * exp + jitter, data.pos.z * exp + jitter);
+                    }
+                    if (id.includes('PB-404') && window.pressmanTargetPos) {
+                        window.pressmanTargetPos.set(data.pos.x * exp + jitter, data.pos.y * exp + jitter, data.pos.z * exp + jitter);
                     }
                 }
             }
@@ -266,6 +305,7 @@ function initSSE() {
                                 id.toLowerCase().includes('nc') ? 'compressor' : 
                                 id.toLowerCase().includes('dn') ? 'mandalorian' : 
                                 id.toLowerCase().includes('r2') ? 'r2-d2' : 
+                                id.toLowerCase().includes('pb') ? 'pressman' :
                                 id.startsWith('CU-') ? id.toLowerCase() : 'bridger';
                 
                 let hud = document.getElementById(cleanId + "-hud-icon");
@@ -325,6 +365,14 @@ function initSSE() {
                         if(eintro) eintro.innerText = agentData.nodes_introduced_session || 0;
                         if(estatus) estatus.innerText = agentData.status || "Meditating...";
                         
+                        const sideYodaStatus = document.getElementById('sidebar-yoda-status');
+                        const sideYodaDot = document.getElementById('sidebar-yoda-dot');
+                        if (sideYodaStatus) sideYodaStatus.innerText = (agentData.status || "CONSENSUS").toUpperCase();
+                        if (sideYodaDot) {
+                            const isIdle = (agentData.status || "").toLowerCase().includes("idle") || (agentData.status || "").toLowerCase().includes("meditating");
+                            sideYodaDot.className = `status-dot ${isIdle ? 'status-inactive' : 'status-active'}`;
+                        }
+                        
                         yodaTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                         if (yodaGroup) {
                             yodaGroup.userData.laser = agentData.laser || false;
@@ -383,7 +431,7 @@ function initSSE() {
                         if(el) {
                             const newVal = agentData.processed_session || 0;
                             if (newVal > parseInt(el.innerText || "0")) {
-                                showHologram('REAPER', 'msg_reaper_healed', { n: newVal, mb: (agentData.reclaimed_mb_session || 0).toFixed(2) });
+                                showHologram('REAPER', 'msg_reaper_healed', { n: agentData.processed_session || 0, mb: (agentData.reclaimed_mb_session || 0).toFixed(2) });
                                 spawnReaperMonument({
                                     x: agentData.pos.x * exp,
                                     y: agentData.pos.y * exp,
@@ -392,8 +440,9 @@ function initSSE() {
                             }
                             el.innerText = newVal; 
                         }
+                        const jitter = (Math.random() - 0.5) * 60000;
                         if(rmb) rmb.innerText = (agentData.reclaimed_mb_session || 0).toFixed(2);
-                        reaperTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        reaperTargetPos.set(agentData.pos.x * exp + jitter, agentData.pos.y * exp + jitter, agentData.pos.z * exp + jitter);
                     }
                     if (id === 'DI-007') { 
                         const el = document.getElementById('val-distiller-pruned'); 
@@ -404,7 +453,8 @@ function initSSE() {
                             }
                             el.innerText = newVal;
                         }
-                        distillerTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        const jitter = (Math.random() - 0.5) * 60000;
+                        distillerTargetPos.set(agentData.pos.x * exp + jitter, agentData.pos.y * exp + jitter, agentData.pos.z * exp + jitter);
                     }
                     if (id === 'JA-001') { 
                         const el = document.getElementById('val-janitron-purged'); 
@@ -415,7 +465,8 @@ function initSSE() {
                             }
                             el.innerText = newVal;
                         }
-                        janitronTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        const jitter = (Math.random() - 0.5) * 60000;
+                        janitronTargetPos.set(agentData.pos.x * exp + jitter, agentData.pos.y * exp + jitter, agentData.pos.z * exp + jitter);
                     }
                     if (id === 'SN-008') { 
                         const found = document.getElementById('val-snake-found'); 
@@ -434,7 +485,8 @@ function initSSE() {
                             }
                             lastAgentStates[id] = agentData.status;
                         }
-                        snakeTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        const jitter = (Math.random() - 0.5) * 60000;
+                        snakeTargetPos.set(agentData.pos.x * exp + jitter, agentData.pos.y * exp + jitter, agentData.pos.z * exp + jitter);
                     }
                     if (id === 'QT-004' || id === 'QA-101') { 
                         const el = document.getElementById('val-quantum-fused'); 
@@ -450,7 +502,8 @@ function initSSE() {
                             }
                             el.innerText = newVal;
                         }
-                        quantumTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        const jitter = (Math.random() - 0.5) * 60000;
+                        quantumTargetPos.set(agentData.pos.x * exp + jitter, agentData.pos.y * exp + jitter, agentData.pos.z * exp + jitter);
                     }
                     if (id === 'SE-007') { 
                         const el = document.getElementById('val-sentinel-validated'); 
@@ -529,6 +582,14 @@ function initSSE() {
                         if(searches) searches.innerText = agentData.web_hits_session || 0;
                         if(stext) stext.innerText = agentData.status || "Scanning Horizon...";
                         
+                        const sideSkyStatus = document.getElementById('sidebar-skywalker-status');
+                        const sideSkyDot = document.getElementById('sidebar-skywalker-dot');
+                        if (sideSkyStatus) sideSkyStatus.innerText = (agentData.status || "FORAGING").toUpperCase();
+                        if (sideSkyDot) {
+                            const isIdle = (agentData.status || "").toLowerCase().includes("idle") || (agentData.status || "").toLowerCase().includes("scanning");
+                            sideSkyDot.className = `status-dot ${isIdle ? 'status-inactive' : 'status-active'}`;
+                        }
+                        
                         skywalkerTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
 
                         if (agentData.status && agentData.status !== (lastAgentStates[id] || "")) {
@@ -579,7 +640,7 @@ function initSSE() {
                             if (isInjecting) {
                                 const now = Date.now();
                                 if (!window._lastSkywalkerFire || (now - window._lastSkywalkerFire > 500)) {
-                                    triggerSkywalkerLaserStorm(agentData.pos); 
+                                    if (window.triggerSkywalkerLaserStorm) window.triggerSkywalkerLaserStorm(agentData.pos); 
                                     window._lastSkywalkerFire = now;
                                 }
                             }
@@ -702,7 +763,7 @@ function initSSE() {
                             else cardEl.classList.add('inactive-agent');
                         }
 
-                                                if (agentData.pos) {
+                        if (agentData.pos) {
                             r2d2TargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                         }
 
@@ -714,6 +775,14 @@ function initSSE() {
                                 showHologram('R2D2', 'msg_r2d2_audit');
                             }
                             lastAgentStates[id] = agentData.status;
+                        }
+                        
+                        const sideR2Status = document.getElementById('sidebar-r2d2-status');
+                        const sideR2Dot = document.getElementById('sidebar-r2d2-dot');
+                        if (sideR2Status) sideR2Status.innerText = (agentData.status || "ORGANIZING").toUpperCase();
+                        if (sideR2Dot) {
+                            const isIdle = (agentData.status || "").toLowerCase().includes("idle") || (agentData.status || "").toLowerCase().includes("waiting");
+                            sideR2Dot.className = `status-dot ${isIdle ? 'status-inactive' : 'status-active'}`;
                         }
                     }
 
@@ -741,6 +810,28 @@ function initSSE() {
                         mandalorianTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
                         mandalorianGroup.userData.status = agentData.status || "Herding";
                         mandalorianGroup.userData.laserTarget = agentData.target_pos;
+                    }
+
+                    // 🖨️ PB-404 PRESSMAN
+                    if (id.includes('PB-404')) {
+                        if (window.pressmanTargetPos) {
+                            window.pressmanTargetPos.set(agentData.pos.x * exp, agentData.pos.y * exp, agentData.pos.z * exp);
+                        }
+                        if (window.pressmanGroup) {
+                            window.pressmanGroup.userData.isPressing = agentData.is_pressing || false;
+                        }
+                        const arts = document.getElementById('val-pressman-artifacts');
+                        if (arts) arts.innerText = agentData.artifacts_session || 0;
+                        const pstat = document.getElementById('val-pressman-status');
+                        if (pstat) pstat.innerText = agentData.status || "Idle";
+                        
+                        const sidePbStatus = document.getElementById('sidebar-paperboy-status');
+                        const sidePbDot = document.getElementById('sidebar-paperboy-dot');
+                        if (sidePbStatus) sidePbStatus.innerText = (agentData.status || "BROADCAST").toUpperCase();
+                        if (sidePbDot) {
+                            const isIdle = (agentData.status || "").toLowerCase().includes("idle") || (agentData.status || "").toLowerCase().includes("waiting");
+                            sidePbDot.className = `status-dot ${isIdle ? 'status-inactive' : 'status-active'}`;
+                        }
                     }
 
                     // [v12.0] GENERIC HANDLER for Custom Forged Agents (CU-)

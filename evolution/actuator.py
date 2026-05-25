@@ -16,6 +16,8 @@ class EvolutionActuator:
     """
     def __init__(self, project_root: str):
         self.root = Path(project_root)
+        self.pending_dir = self.root / "pending_patches"
+        self.pending_dir.mkdir(exist_ok=True)
 
     def apply_fix(self, file_path: str, line_number: int, new_content: str) -> Dict:
         """
@@ -62,15 +64,28 @@ class EvolutionActuator:
             
             test_results = self.run_integrity_tests()
             
+            # [SAFE EVOLUTION V11: HUMAN-IN-THE-LOOP]
+            # Ripristiniamo SEMPRE il backup originale, non modifichiamo più i file core direttamente.
+            os.replace(backup_path, full_path)
+            
             if not test_results["success"]:
-                # ROLLBACK IMMEDIATO: i test sono falliti
-                os.replace(backup_path, full_path)
                 return {"success": False, "error": f"Integrity Test Failed: {test_results['error']}"}
             
-            # Se valida, confermiamo e rimuoviamo il backup
+            # Se valida, generiamo la patch e la salviamo in pending_patches/
+            diff_content = self.dry_run_diff(file_path, line_number, new_content)
+            if not diff_content:
+                diff_content = f"New content or diff error for {file_path}:\n{new_content}"
+                
+            import time
+            patch_filename = f"patch_{os.path.basename(file_path)}_{int(time.time())}.diff"
+            patch_path = self.pending_dir / patch_filename
+            
+            with open(patch_path, "w") as f:
+                f.write(diff_content)
+            
             if backup_path.exists(): os.remove(backup_path)
-            logger.info(f"✅ [Actuator] Fix applied and VERIFIED via Test Suite: {file_path}")
-            return {"success": True, "file": file_path, "test_output": test_results.get("output")}
+            logger.info(f"🛡️ [Human-in-the-Loop] Fix verified. Patch saved to {patch_path} waiting for manual git merge.")
+            return {"success": True, "file": file_path, "patch_path": str(patch_path), "status": "pending_human_review", "test_output": test_results.get("output")}
 
         except Exception as e:
             return {"success": False, "error": str(e)}

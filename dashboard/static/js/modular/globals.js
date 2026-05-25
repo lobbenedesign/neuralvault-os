@@ -16,6 +16,7 @@ var synthGroup, synthLabel, synthMesh, synthMouth, synthSparkGroup, synthSparkTi
 var skywalkerGroup, skywalkerLabel, yodaGroup, yodaLabel;
 var r2d2Group, r2d2Label, compressorGroup, compressorLabel;
 var mandalorianGroup, mandalorianLabel;
+var pressmanGroup, pressmanLabel, pressmanPapers = [], pressmanNewspapers;
 var smithFleetGroups = {}; // 🕶️ Security fleet by peerId
 var smithTargetPositions = {}; 
 var smithLabel; 
@@ -35,6 +36,7 @@ var sentinelTargetPos = new THREE.Vector3(-500000, -500000, 500000);
 var synthTargetPos = new THREE.Vector3(0, 500000, 0);
 var bridgerTargetPos = new THREE.Vector3(0, 0, 0);
 var r2d2TargetPos = new THREE.Vector3(-600000, -400000, 600000);
+var pressmanTargetPos = new THREE.Vector3(500000 * 4, 500000 * 4, 500000 * 4);
 
 // --- ⏱️ Timing & Animation State ---
 let janitronFlashTime = 0;
@@ -74,6 +76,7 @@ let nebulaQuality = 'HD';
 let clusterFocus = true;
 let radarChart = null; 
 let nebulaExpansionFactor = 1.0;
+let galaxyRepulsionFactor = 25.0; // Dynamic multiplier for galaxy node repulsion
 let is3DInitialized = false;
 let isRenderLoopActive = false;
 

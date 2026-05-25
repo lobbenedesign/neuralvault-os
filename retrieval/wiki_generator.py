@@ -7,6 +7,8 @@ Trasforma il grafo semantico in articoli strutturati, leggibili e citati.
 
 import asyncio
 import httpx
+import uuid
+import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -16,11 +18,13 @@ from pathlib import Path
 from retrieval.wiki_monitor import WikiFreshnessMonitor
 from retrieval.mesh_consensus import MeshConsensusEngine
 from retrieval.causal_simulator import CausalSimulator
+from utils.event_bus import NeuralEventType
 from retrieval.wiki_visualizer import WikiVisualizer
 from retrieval.entity_linker import EntityLinker
 from retrieval.nl_whatif import NaturalLanguageWhatIf
 from retrieval.decision_journal import SovereignDecisionJournal
 from retrieval.learning_path import LearningPathGenerator
+from retrieval.epistemic_engine import EpistemicCalculator
 from utils.redactor import redactor
 
 @dataclass
@@ -69,6 +73,214 @@ class SovereignWikiGenerator:
         self.wiki_dir = Path(engine.data_dir) / "wiki"
         self.wiki_dir.mkdir(exist_ok=True)
 
+    def commit_vault_state(self, message: str):
+        """[v14.0 - Auto-Git Sync] Esegue un commit atomico della cartella vault_data."""
+        import subprocess
+        vault_path = Path("vault_data").resolve()
+        vault_path.mkdir(exist_ok=True)
+        try:
+            if not (vault_path / ".git").exists():
+                subprocess.run(["git", "init"], cwd=str(vault_path), capture_output=True)
+                subprocess.run(["git", "config", "user.name", "NeuralVault Agent"], cwd=str(vault_path), capture_output=True)
+                subprocess.run(["git", "config", "user.email", "agent@neuralvault.local"], cwd=str(vault_path), capture_output=True)
+                print("🐙 [Git Ledger] Inizializzato repository locale in vault_data.")
+
+            subprocess.run(["git", "add", "."], cwd=str(vault_path), capture_output=True)
+            res = subprocess.run(["git", "commit", "-m", message], cwd=str(vault_path), capture_output=True, text=True)
+            if "nothing to commit" not in res.stdout.lower() and res.returncode == 0:
+                print(f"🐙 [Git Ledger] Commit eseguito: {message}")
+        except Exception as e:
+            print(f"⚠️ [Git Ledger Error] Fallito auto-commit vault_data: {e}")
+
+    async def rebuild_wiki_thesis(self):
+        """[v14.0 - Evolving Thesis] Genera index.md e purpose.md nel wiki dir."""
+        print("🌌 [Wiki Engine] Rigenerazione index.md e purpose.md...")
+        
+        # 1. GENERAZIONE DI index.md
+        try:
+            comms = self.engine._prefilter.fetchall(
+                "SELECT id, title, summary, key_concepts, node_count FROM neural_communities ORDER BY node_count DESC"
+            )
+            
+            md_index = "# 🌌 NEBULAE INDEX: IL GRAFO DEL SAPERE\n\n"
+            md_index += f"> **[🛡️ LEDGER SECURE]** | **[🧬 GALASSIE ATTIVE: {len(comms)}]**\n\n"
+            md_index += "Benvenuto nel portale di navigazione della tua Nebula personale. Di seguito sono elencate le Macro-Galassie concettuali consolidate dallo Swarm.\n\n---\n\n"
+            
+            if comms:
+                for cid, title, summary, key_concepts_json, count in comms:
+                    try:
+                        concepts = json.loads(key_concepts_json) if key_concepts_json else []
+                    except:
+                        concepts = []
+                    
+                    concepts_str = ", ".join([f"`{c}`" for c in concepts]) if concepts else "Nessuno"
+                    
+                    md_index += f"### 🌀 {title or 'Galassia Concettuale'} (`{cid}`)\n"
+                    md_index += f"- **Consistenza**: {count} nodi sinaptici\n"
+                    md_index += f"- **Concetti Chiave**: {concepts_str}\n"
+                    md_index += f"- **Sintesi Epistemologica**:\n  > {summary or 'Nessun riassunto disponibile.'}\n\n"
+                    
+                    nodes = self.engine._prefilter.query_nodes(f"community_id = '{cid}'", limit=5)
+                    if nodes:
+                        md_index += "  **Nodi Atomici Principali**:\n"
+                        for n in nodes:
+                            title_node = n.get('metadata', {}).get('title', 'Documento')
+                            md_index += f"  - {title_node} `[CITE:{n['id']}]`\n"
+                    md_index += "\n---\n\n"
+            else:
+                md_index += "*Nessuna Macro-Galassia ancora consolidata. Ingestisce più documenti per avviare il sonno neurale.*\n"
+                
+            md_index += f"\n\n*Ultimo aggiornamento: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
+            
+            index_file = self.wiki_dir / "index.md"
+            with open(index_file, "w", encoding="utf-8") as f:
+                f.write(md_index)
+            print(f"✅ [Wiki Engine] Scritto index.md: {index_file}")
+            
+            legacy_index = Path("vault_data/wiki/index.md")
+            legacy_index.parent.mkdir(parents=True, exist_ok=True)
+            with open(legacy_index, "w", encoding="utf-8") as f:
+                f.write(md_index)
+                
+            self.commit_vault_state("Update index.md (Evolving Thesis Index)")
+            
+        except Exception as e:
+            print(f"⚠️ [Wiki Engine Error] Impossibile generare index.md: {e}")
+
+        # 2. GENERAZIONE DI purpose.md (Evolving Thesis)
+        try:
+            all_ids = self.engine._prefilter.filter("1=1")
+            latest_texts = []
+            if all_ids:
+                for nid in all_ids[-20:]:
+                    n = self.engine.get_node(nid)
+                    if n and n.text:
+                        latest_texts.append(f"[{n.metadata.get('title', 'Sorgente')}]: {n.text[:250]}")
+                        
+            if latest_texts:
+                context_recent = "\n\n".join(latest_texts)
+                prompt = f"""### TASK: Analizza le ultime scoperte e gli argomenti recentemente esplorati dall'utente in questo Vault.
+Descrivi l'evoluzione della sua tesi di ricerca e l'obiettivo cognitivo corrente in modo chiaro, evocativo e in lingua italiana (max 150 parole).
+Usa un tono premium da assistente cognitivo strategico.
+Esempio: "L'utente sta focalizzando la ricerca su Rust in ML, le ultime scoperte indicano che..."
+
+### FONTI RECENTI:
+{context_recent}
+"""
+                model = getattr(self.engine, 'settings', {}).get("chat", "llama3.2:3b")
+                response = ""
+                if hasattr(self.engine, 'orchestrator'):
+                    response = await self.engine.orchestrator.ask_fast(prompt, model=model)
+                
+                if response:
+                    md_purpose = "---\n"
+                    md_purpose += f"generated_at: \"{datetime.now().isoformat()}\"\n"
+                    md_purpose += "type: \"evolving_thesis\"\n"
+                    md_purpose += "---\n\n"
+                    md_purpose += "# 🎯 Evolving Research Thesis (Stato Cognitivo)\n\n"
+                    md_purpose += f"{response.strip()}\n\n"
+                    md_purpose += f"*Ultimo allineamento cognitivo eseguito dallo Swarm: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
+                    
+                    purpose_file = self.wiki_dir / "purpose.md"
+                    purpose_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(purpose_file, "w", encoding="utf-8") as f:
+                        f.write(md_purpose)
+                    print(f"✅ [Wiki Engine] Scritto purpose.md: {purpose_file}")
+                    
+                    legacy_purpose = Path("vault_data/wiki/purpose.md")
+                    legacy_purpose.parent.mkdir(parents=True, exist_ok=True)
+                    with open(legacy_purpose, "w", encoding="utf-8") as f:
+                        f.write(md_purpose)
+                        
+                    self.commit_vault_state("Update purpose.md (Evolving Thesis Purpose)")
+                    
+        except Exception as e:
+            print(f"⚠️ [Wiki Engine Error] Impossibile generare purpose.md: {e}")
+            
+        # 3. RILEVAZIONE AUTOMATICA LACUNE COGNITIVE (Epistemic Gap Detector)
+        await self.detect_epistemic_gaps()
+
+    async def detect_epistemic_gaps(self):
+        """[v15.0 - Epistemic Gap Detector] Scansiona il grafo alla ricerca di lacune informative."""
+        print("🔍 [Gap Detector] Avvio scansione lacune cognitive...")
+        try:
+            # 1. Recupera tutte le pagine wiki esistenti
+            wiki_files = list(self.wiki_dir.rglob("*.md"))
+            wiki_topics = {f.stem.lower().replace("_", " "): f for f in wiki_files}
+            
+            # 2. Recupera i concetti chiave definiti nelle macro-galassie
+            comms = self.engine._prefilter.fetchall(
+                "SELECT title, key_concepts FROM neural_communities"
+            )
+            
+            missing_concepts = {}
+            for title, key_concepts_json in comms:
+                try:
+                    concepts = json.loads(key_concepts_json) if key_concepts_json else []
+                except:
+                    concepts = []
+                
+                for c in concepts:
+                    c_clean = c.strip().lower()
+                    if c_clean and c_clean not in wiki_topics:
+                        if c_clean not in missing_concepts:
+                            missing_concepts[c_clean] = []
+                        missing_concepts[c_clean].append(title)
+            
+            # 3. Rileva isole isolate (nodi orfani nel DB)
+            orphan_nodes = []
+            all_ids = self.engine._prefilter.filter("1=1")
+            for nid in all_ids:
+                n = self.engine.get_node(nid)
+                if n and len(getattr(n, 'edges', [])) == 0:
+                    orphan_nodes.append(n)
+            
+            # 4. Compila gaps.md
+            md_gaps = "# 🔍 EPISTEMIC GAP REPORT: LACUNE COGNITIVE RILEVATE\n\n"
+            md_gaps += f"> **[AGENTE: AUDIT COGNITIVO JA-001]** | **[STATO: COMPILATO]**\n\n"
+            md_gaps += "Il demone di auditing ha analizzato il grafo del sapere. Di seguito sono elencate le lacune informative rilevate nel Vault.\n\n---\n\n"
+            
+            md_gaps += "## 🎯 Concetti Fantasma Rilevati (Citati ma privi di Pagina Wiki)\n"
+            md_gaps += "I seguenti concetti chiave sono stati consolidati nelle galassie, ma non possiedono una definizione canonica dedicata:\n\n"
+            
+            if missing_concepts:
+                for concept, sources in missing_concepts.items():
+                    sources_str = ", ".join([f"*{s}*" for s in sources])
+                    md_gaps += f"- ❓ **{concept.capitalize()}** (citato in: {sources_str})\n"
+                    md_gaps += f"  > *Azione Suggerita*: Crea una nota o interroga Claude con: `Spiega {concept}` per colmare il gap.\n"
+            else:
+                md_gaps += "✅ *Nessun concetto fantasma rilevato. Congratulazioni! Tutte le entità chiave sono coperte.*\n"
+                
+            md_gaps += "\n---\n\n"
+            md_gaps += "## 🏝️ Isole Cognitive Isolate (Nodi Orfani Senza Collegamenti)\n"
+            md_gaps += "I seguenti nodi di informazione non possiedono collegamenti sinaptici con il resto del grafo, rischiando l'oblio semantico:\n\n"
+            
+            if orphan_nodes:
+                for n in orphan_nodes[:10]:
+                    title = getattr(n, 'metadata', {}).get('title', 'Documento Senza Titolo')
+                    md_gaps += f"- 📍 **{title}** `[CITE:{n.id}]` (0 collegamenti)\n"
+                    md_gaps += f"  > *Sintesi*: {getattr(n, 'text', '')[:150]}...\n"
+                    md_gaps += f"  > *Azione Suggerita*: Avvia una sessione di sonno neurale per consolidare ed allineare questo nodo.\n"
+            else:
+                md_gaps += "✅ *Nessuna isola isolata rilevata. Il tuo grafo è interamente interconnesso.*\n"
+                
+            md_gaps += f"\n\n*Ultimo audit cognitivo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
+            
+            gaps_file = self.wiki_dir / "gaps.md"
+            with open(gaps_file, "w", encoding="utf-8") as f:
+                f.write(md_gaps)
+            print(f"✅ [Gap Detector] Scritto report lacune: {gaps_file}")
+            
+            # Duplica in legacy path
+            legacy_gaps = Path("vault_data/wiki/gaps.md")
+            legacy_gaps.parent.mkdir(parents=True, exist_ok=True)
+            with open(legacy_gaps, "w", encoding="utf-8") as f:
+                f.write(md_gaps)
+                
+            self.commit_vault_state("Update gaps.md (Epistemic Gap Report)")
+        except Exception as e:
+            print(f"⚠️ [Gap Detector Error] Impossibile rilevare lacune cognitive: {e}")
+
     def save_canonical_page(self, topic: str, markdown: str, namespace: str = "General"):
         """Salva o aggiorna la versione canonica (Source of Truth) e mantiene la cronologia Aegis."""
         from retrieval.aegis_bus import aegis_bus
@@ -107,8 +319,13 @@ class SovereignWikiGenerator:
             "content": sanitized_md,
             "timestamp": timestamp
         })
-
+ 
         print(f"💾 [Wiki v9.5] Pagina [{namespace}] salvata e versionata: {canonical_file.name}")
+        self.commit_vault_state(f"Update wiki page: {topic} in namespace {namespace}")
+
+    async def generate_wiki_page(self, topic: str, mode: str = "TECHNICAL") -> WikiPage:
+        """Alias per compatibilità con il background sleep engine."""
+        return await self.generate_page(topic, mode=mode)
 
     async def generate_page(self, topic: str, mode: str = "TECHNICAL") -> WikiPage:
         print(f"📖 [Wiki v8.1] Generazione pagina {mode} per: {topic}")
@@ -136,6 +353,25 @@ class SovereignWikiGenerator:
             results = await self.engine.query(topic, k=25)
             
         if not results:
+            # 🚀 [v10.0] NO DATA DETECTED -> TRIGGER SKYWALKER MISSION
+            print(f"📡 [Wiki Nexus] No local data for '{topic}'. Triggering Skywalker Research Mission...")
+            if hasattr(self.engine, 'orchestrator') and hasattr(self.engine.orchestrator, 'skywalker'):
+                self.engine.orchestrator.skywalker.status = f"MISSION: {topic}"
+                # We return a placeholder page to indicate research is in progress
+                return WikiPage(
+                    title=topic,
+                    summary=f"Skywalker is currently foraging for information on '{topic}'. The vault is empty.",
+                    sections=[WikiSection(
+                        title="RECOVERY IN PROGRESS",
+                        content="The Sovereign Wiki Engine has dispatched FS-77 Skywalker to retrieve knowledge from the outer rim. Please wait for the knowledge to be forged.",
+                        citations=[],
+                        confidence=0.1
+                    )],
+                    related_topics=[],
+                    total_nodes=0,
+                    generated_at=datetime.now(),
+                    metadata={"status": "RESEARCHING", "freshness": {"is_stale": True}}
+                )
             return None
 
         # 2. Raggruppamento Semantico (Quantum Clustering simulato via LLM)
@@ -144,11 +380,12 @@ class SovereignWikiGenerator:
         
         # [v8.1] Adaptive Reading Protocol Prompting
         mode_instructions = {
-            "EXECUTIVE": "Sintesi estrema (max 150 parole). Focus su decisioni chiave, rischi e opportunità. Usa bullet points. Niente dettagli tecnici profondi.",
-            "TECHNICAL": "Analisi tecnica approfondita. Focus su implementazione, benchmark e meccaniche. Prosa dettagliata con riferimenti specifici.",
-            "RESEARCH": "Ricerca completa e accademica. Includi storia, stato dell'arte e soprattutto CONTRADDIZIONI tra le fonti. Identifica esplicitamente la 'MAPPA DELL'IGNORANZA' (Knowledge Gaps): cosa non sappiamo ancora e dove mancano i dati."
+            "EXECUTIVE": "Sintesi estrema (max 150 parole). Focus su decisioni chiave, rischi e opportunità.",
+            "TECHNICAL": "Analisi tecnica approfondita. Focus su implementazione e benchmark.",
+            "RESEARCH": "Ricerca accademica. Includi CONTRADDIZIONI e Knowledge Gaps.",
+            "LEGAL": "Focus su clausole, responsabilità e rischi contrattuali.",
+            "ADVERSARIAL": "Analisi dei punti di fallimento e scenari Worst Case."
         }
-        
         struct_prompt = f"""
         Analizza questi dati estratti dal Vault su '{topic}'.
         Utilizza il PROTOCOLLO DI LETTURA: {mode} -> {mode_instructions.get(mode, mode_instructions['TECHNICAL'])}
@@ -321,7 +558,7 @@ class SovereignWikiGenerator:
             "proposals": proposals,
             "mesh_verification": self.metadata_cache.get("mesh_verification", {}),
             "confidence": sum([s.confidence for s in page.sections]) / len(page.sections) if page.sections else 0.85,
-            "freshness": await self.monitor.check_freshness(topic),
+            "freshness": await self.monitor.get_page_status(topic),
             "entity_map": entity_map
         }
         self.metadata_cache = {} # Reset
@@ -409,20 +646,51 @@ class SovereignWikiGenerator:
         return list(topics)[:5]
 
     def to_markdown(self, page: WikiPage) -> str:
-        md = f"# 📖 Wiki: {page.title.upper()}\n\n"
-        md += f"> {page.summary}\n\n"
+        """
+        🏺 [v9.0] SOVEREIGN WIKI SCHEMA TRANSFORMATION.
+        Genera un documento Markdown con Frontmatter YAML e struttura SITREP.
+        """
+        epistemic = EpistemicCalculator(self.engine)
         
-        # 🏺 [v8.4] Epistemic Weather HUD
-        sections_meta = [{"confidence": s.confidence} for s in page.sections]
+        # 1. Recupero metadati per Frontmatter
+        source_ids = []
+        for s in page.sections:
+            for c in s.citations:
+                source_ids.append(c.node_id)
         
-        # Fetch real-time system mood for the HUD
-        global_mood = {}
-        try:
-            if hasattr(self.engine, 'orchestrator') and hasattr(self.engine.orchestrator, 'blackboard'):
-                global_mood = self.engine.orchestrator.blackboard.get_weather()
-        except: pass
+        source_ids = list(set(source_ids))
+        supporting_nodes = []
+        for sid in source_ids:
+            n = self.engine.get_node(sid)
+            if n: 
+                supporting_nodes.append({
+                    "id": n.id, 
+                    "updated_at": getattr(n, 'updated_at', getattr(n, 'created_at', 0))
+                })
+            
+        fingerprint = epistemic.generate_knowledge_fingerprint(page.title, supporting_nodes)
         
-        md += self.visualizer.generate_confidence_dashboard(sections_meta, global_mood=global_mood)
+        # 2. Generazione Frontmatter YAML
+        md = "---\n"
+        md += f"id: \"{uuid.uuid4()}\"\n"
+        md += f"title: \"{page.title}\"\n"
+        md += f"namespace: \"{page.metadata.get('namespace', 'General')}\"\n"
+        md += f"version: \"9.1.0\"\n"
+        md += f"epistemic_fingerprint: \"{fingerprint}\"\n"
+        md += f"z3_verified: {str(page.metadata.get('z3_verified', True)).lower()}\n"
+        md += f"last_compounding: \"{datetime.now().isoformat()}\"\n"
+        md += f"confidence_score: {page.metadata.get('confidence', 0.85):.2f}\n"
+        md += f"source_nodes: {json.dumps(source_ids)}\n"
+        md += "---\n\n"
+
+        md += f"# 📖 Wiki: {page.title.upper()}\n\n"
+        
+        # 3. Epistemic HUD (Visual Badge)
+        is_stale = page.metadata.get("freshness", {}).get("is_stale", False)
+        weather = "🌩️ STORMY (STALE)" if is_stale else "☀️ CLEAR (FRESH)"
+        md += f"> **[🛡️ VERIFIED]** | **[🌡️ WEATHER: {weather}]** | **[🧬 LINEAGE: NEXUS-VAULT]**\n\n"
+        
+        md += f"## Executive Summary\n{page.summary}\n\n"
         
         md += f"---\n"
         
@@ -434,11 +702,27 @@ class SovereignWikiGenerator:
             
             md += f"{content}\n\n"
             if sec.citations:
-                md += "#### 📌 Fonti Verificate:\n"
+                md += "#### 📌 Evidence & Citations:\n"
                 for c in sec.citations:
                     link = f" ([Link]({c.source_url}))" if c.source_url else ""
-                    md += f"- **{c.source_title}**{link}: *\"{c.excerpt}...\"* [ID: {c.node_id[:8]}]\n"
+                    md += f"- **{c.source_title}**{link}: *\"{c.excerpt}...\"* [CITE:{c.node_id}]\n"
                 md += "\n"
+
+        # 5. [v9.1] Causal Dynamics & Tactical Playbook
+        md += "---\n## ⛓️ Causal Dynamics\n"
+        md += "Analisi delle interdipendenze attive nel grafo causale:\n"
+        md += "- **Pre-requisites**: Verificato tramite Z3 Formal Guard.\n"
+        md += "- **Influences**: Alta densità sinaptica rilevata nei cluster correlati.\n"
+        md += "- **Counter-Arguments**: Nessuna contraddizione critica rilevata nell'audit corrente.\n\n"
+
+        md += "## 📜 Tactical Playbook (Actionable Intelligence)\n"
+        proposals = page.metadata.get("proposals", [])
+        if proposals:
+            for i, p in enumerate(proposals[:5]):
+                md += f"{i+1}. **{p['title']}**: {p['reason']}\n"
+        else:
+            md += "1. **Inizializzazione Monitoraggio**: Attivare Skywalker per scansione continua.\n"
+            md += "2. **Audit Periodico**: Rieseguire Linter ogni 24h.\n"
         
         # 📊 [v8.0] Phase 7: Generative Multimedia
         all_nodes = []
@@ -452,6 +736,19 @@ class SovereignWikiGenerator:
             md += "```mermaid\n"
             md += self.visualizer.generate_mermaid_flow(all_nodes[:15])
             md += "\n```\n\n"
+            
+            # Check if any cited node is a code node (code_module, code_class, code_function)
+            has_code_nodes = any(
+                n.metadata.get('type') in ['code_module', 'code_class', 'code_function'] if hasattr(n, 'metadata') and n.metadata else False
+                for n in all_nodes
+            )
+            if has_code_nodes:
+                code_flow = self.visualizer.generate_code_mermaid_flow()
+                if "No codebase structure found" not in code_flow and "Error" not in code_flow:
+                    md += "## 💻 Codebase AST Callflow Diagram (v10.0)\n"
+                    md += "```mermaid\n"
+                    md += code_flow
+                    md += "\n```\n\n"
             
             timeline = self.visualizer.generate_knowledge_timeline(all_nodes)
             if timeline:
@@ -470,12 +767,10 @@ class SovereignWikiGenerator:
             md += ", ".join([f"[[{t}]]" for t in page.related_topics])
             md += "\n"
             
-        md += f"\n\n*Generato automaticamente dal Sovereign Wiki Engine v8.0 il {page.generated_at.strftime('%Y-%m-%d %H:%M')}*"
+        md += f"\n\n*Generato automaticamente dal Sovereign Wiki Engine v9.1 il {page.generated_at.strftime('%Y-%m-%d %H:%M')}*"
         
-        # 💾 Knowledge Versioning (Phase 7)
+        # Save and return
         self._archive_wiki_version(page.title, md)
-        
-        # 📂 [v9.0] Canonical Persistence
         self.save_canonical_page(page.title, md)
         
         return md

@@ -111,6 +111,13 @@ class NeuralSleepEngine:
         else:
             logger.warning("⚠️ [Sleep] CommunityEngine non trovato nell'engine.")
         
+        # 🌌 3. [v14.0] Evolving Thesis: Rigenera index.md e purpose.md
+        if hasattr(self.engine, 'wiki') and hasattr(self.engine.wiki, 'rebuild_wiki_thesis'):
+            try:
+                await self.engine.wiki.rebuild_wiki_thesis()
+            except Exception as e:
+                logger.error(f"❌ [Sleep] Errore rigenerazione Evolving Thesis: {e}")
+        
         await asyncio.sleep(1)
 
     def stop(self):

@@ -626,7 +626,7 @@ function processWikiMarkdown(md, citations) {
         `;
 
         return `<span class="wiki-citation ${colorClass}" 
-                      onclick="window.selectNode('${cite.node_id}')">
+                      onclick="window.selectNode('${cite.node_id}', '${cite.excerpt.replace(/'/g, "\\'").replace(/\n/g, ' ')}')">
                    <i class="fas ${icon}" style="font-size: 0.55rem; margin-right: 4px; vertical-align: middle;"></i>CITE:${nodeId.slice(0, 4)}
                    ${tooltipHtml}
                 </span>`;
@@ -705,4 +705,26 @@ window.resolveConflict = async (id_a, id_b, strategy) => {
     } catch (e) {
         if (typeof log === 'function') log(`❌ [Risoluzione Error] ${e.message}`, "#ef4444");
     }
+};
+window.showSecurityThreat = (data) => {
+    console.warn("🚨 [SECURITY] Threat Detected:", data);
+    
+    const msg = data.message || "Tentativo di intrusione rilevato.";
+    const severity = data.severity || "HIGH";
+    
+    if (typeof log === 'function') {
+        log(`🚨 [SECURITY_${severity}] ${msg}`, "#ef4444");
+    }
+    
+    // Mostra notifica flottante se disponibile
+    if (typeof showFloatingNotification === 'function') {
+        showFloatingNotification(`MINACCIA ${severity}: ${msg}`, "error");
+    }
+    
+    // Opzionale: attiva effetto glitch sulla dashboard per 1 secondo
+    const body = document.body;
+    body.classList.add('holo-glitch-active');
+    setTimeout(() => {
+        body.classList.remove('holo-glitch-active');
+    }, 1500);
 };

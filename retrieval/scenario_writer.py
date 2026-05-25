@@ -80,22 +80,34 @@ class SovereignScenarioWriter:
         chaining_clause = f"CONTESTO CRONOLOGICO PRECEDENTE (NON CONTRADDIRE):\n{past_context}" if past_context else "Questo è l'inizio della linea temporale."
         
         return f"""
-        Sei il Sovereign Scenario Writer. Scrivi un report SITREP deterministico.
+        ### ROLE: SOVEREIGN SITREP WRITER (v9.1)
+        ### HORIZON: {horizon}
         
-        ORIZZONTE: {horizon}
         {chaining_clause}
         
+        ### COGNITIVE CONTEXT:
         {lens}
         {style}
+        
+        ### MATHEMATICAL RAILS:
         {rails}
         
-        EVIDENZE DOCUMENTALI:
+        ### DOCUMENTARY EVIDENCE:
         {evidence_list}
         
-        REGOLE:
-        1. RISPETTA IL PASSATO: Integra le informazioni del contesto cronologico precedente.
-        2. ANCORAGGIO: Usa solo i dati dei nodi citati. Ogni affermazione deve avere un [ID].
-        3. STILE: Intelligence Strategica professionale. No aggettivi emotivi.
+        ### RIGID REPORTING TEMPLATE (MANDATORY):
+        ---
+        1. [CONDITION]: Stato attuale del sistema basato sui nodi.
+        2. [VECTOR]: Direzione del cambiamento (Impatto Primario).
+        3. [CASCADING_IMPACT]: Effetti di 2° e 3° ordine (Effetto Domino).
+        4. [STRATEGIC_TRIGGER]: Punto di non ritorno o soglia di attivazione.
+        5. [ACTION_RECOM]: 3 step concreti [CITE:ID].
+        ---
+        
+        ### RULES:
+        1. STILE: Intelligence Militare. Prosa fredda, tecnica, zero enfasi.
+        2. ANCORAGGIO: Ogni affermazione DEVE terminare con un [CITE:node_id].
+        3. NO FICTION: Se non c'è evidenza per un orizzonte temporale, indica "PROIEZIONE STOCASTICA BASATA SU [CITE:ID]".
         """
 
     def _get_previous_state(self, scenario_id: str) -> str:

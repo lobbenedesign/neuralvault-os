@@ -34,6 +34,11 @@ class TestNeuralVaultCore(unittest.TestCase):
         )
 
     def tearDown(self):
+        if hasattr(self, 'engine') and self.engine:
+            try:
+                self.engine.close()
+            except Exception:
+                pass
         if self.test_dir.exists():
             shutil.rmtree(self.test_dir)
 
@@ -50,9 +55,9 @@ class TestNeuralVaultCore(unittest.TestCase):
         self.assertEqual(node.text, text)
         
         # Query semantica
-        results = self.engine.query("Cos'è NeuralVault?", k=1)
+        results = asyncio.run(self.engine.query("Cos'è NeuralVault?", k=1))
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0].node_id, node_id)
+        self.assertEqual(results[0].node.id, node_id)
 
     def test_node_deletion(self):
         """Testa l'eliminazione atomica (Pillar 2)."""

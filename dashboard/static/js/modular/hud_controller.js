@@ -2,6 +2,7 @@ const NEURAL_LANG_PACK = {
     "system_status": ["STATO SISTEMA", "SYSTEM STATUS"],
     "kernel_online": ["KERNEL ONLINE", "KERNEL ONLINE"],
     "nav_overview": ["PANORAMICA MEMORIA", "MEMORY OVERVIEW"],
+    "nav_tactical": ["GRAPH LAB", "GRAPH LAB"],
     "nav_lab": ["LABORATORIO NEURALE", "NEURAL LABORATORY"],
     "nav_analytics": ["ANALISI AVANZATA", "ADVANCED ANALYTICS"],
     "nav_benchmark": ["LLM BENCHMARK HUB", "LLM BENCHMARK HUB"],
@@ -118,13 +119,15 @@ const NEURAL_LANG_PACK = {
     "msg_jarjar_anomaly": ["Mee-sa pensa che un nodo è inciampato! Ma non preoccuparti, lo sciame lo ha riacciuffato appena in tempo... Oops!", "Me-sa thinks a node tripped! But don't worry, the swarm caught it just in time... Oops!"],
     "msg_snake_connecting": ["Connessione semantica stabilita! Sto germogliando nuovi archi tra i cluster.", "Semantic connection established! Sprouting new arcs between clusters."],
     "msg_kirby_synthesis": ["Poyo! (Sintesi LLM in corso... Sto collegando nodi distanti per generare nuove intuizioni creative)", "Poyo! (LLM Synthesis in progress... Connecting distant nodes to generate new creative sparks)"],
-    "msg_kirby_evolution": ["Poyo! (Sviluppo neurale in corso... Kirby sta espandendo i confini della tua Nebula creativa)", "Poyo! (Neural development in progress... Kirby is expanding the boundaries of your creative Nebula)"],
+    "msg_kirby_evolution": ["Poyo! (Sviluppo neurale in corso... Kirby sta espandendo i concetti della tua Nebula creativa)", "Poyo! (Neural development in progress... Kirby is expanding the boundaries of your creative Nebula)"],
     "msg_chewie_maintenance": ["RRRWWGGGHH! (Manutenzione sistema in corso... Sto pulendo i buffer e ottimizzando l'uso della RAM)", "RRRWWGGGHH! (System maintenance in progress... Cleaning buffers and optimizing RAM usage)"],
     "msg_chewie_sync": ["RRRWWGGGHH! (Sincronizzazione Mesh completata. Tutti i nodi sono ora allineati con il ledger sovrano)", "RRRWWGGGHH! (Mesh Synchronization complete. All nodes are now aligned with the sovereign ledger)"],
     "msg_r2d2_grouping": ["Beep-boop-whistle! Sistemazione magazzino in corso... Ho raggruppato {n} nodi per affinità cromatica e semantica.", "Beep-boop-whistle! Warehouse organization in progress... Grouped {n} nodes by chromatic and semantic affinity."],
     "msg_r2d2_audit": ["Beep-beep-boop! Audit completato. Ho individuato {n} nodi fuori posto e li ho riallineati.", "Beep-beep-boop! Positioning audit complete. {n} misplaced nodes identified and re-aligned."],
     "msg_yoda_galaxy": ["Attraverso la Forza, {g} nuove galassie ho visto. La nuova galassia '{name}' ha {n} nodi e dista {dist} unità dalla Nebula madre.", "Through the Force, {g} new galaxies I have seen. The new galaxy '{name}' has {n} nodes and is {dist} units away from the Mother Nebula."],
     "msg_mando_unity": ["Questo è il Cammino. Ho raggruppato {n} galassie simili; rimosso archi ridondanti e creato un ponte neurale con soli {arcs} archi.", "This is the Way. I have grouped {n} similar galaxies; removed redundant arcs and created a neural bridge with only {arcs} arcs."],
+    "msg_mando_galaxy": ["Questo è il Cammino. Ho trovato una galassia orfana di {x} nodi nel {y} alla distanza di {z} unità dalla Nebula.", "This is the Way. I found an orphan galaxy of {x} nodes in {y} at a distance of {z} units from the Nebula."],
+    "msg_reaper_clean": ["Ho completato la mietitura. {n} nodi orfani sono stati archiviati per risparmiare risorse.", "Reaping complete. {n} orphan nodes have been archived to save resources."],
     "msg_skywalker_success": ["Target acquisito! Ho estratto {n} nuovi nodi e creato {g} nuove galassie dai sistemi esterni. Il kernel è ora più denso.", "Target acquired! Extracted {n} new nodes and created {g} new galaxies from external systems. Kernel density increased."],
     "msg_sentinel_superbridge": ["Protocollo Supremo attivato. Ho forgiato un Super-Ponte tra {n} cluster critici. Stabilità incrementata.", "Supreme Protocol activated. Forged a Super-Bridge between {n} critical clusters. Stability increased."],
     "msg_synth_spark": ["Poyo! Una scintilla creativa è scoccata tra {n} idee distanti. Nuova connessione semantica generata!", "Poyo! A creative spark ignited between {n} distant ideas. New semantic connection generated!"],
@@ -440,6 +443,19 @@ window.toggleLanguage = () => {
     applyLanguage();
     // \uD83C\uDF0D = 🌍
     log("\uD83C\uDF0D LANG: Switching to " + currentLang.toUpperCase(), "#3b82f6");
+};
+
+/**
+ * 🏛️ [v9.2] Toggle Bottom HUD (Sliding Effect)
+ */
+window.toggleBottomHUD = () => {
+    const isCollapsed = document.body.classList.toggle('bottom-collapsed');
+    log(isCollapsed ? "📉 HUD: Collapsing Knowledge Hub..." : "📈 HUD: Restoring Knowledge Hub...", "#a855f7");
+    
+    // Force 3D Resize if active
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, 450); // Matches CSS transition duration
 };
 
 function applyLanguage() {
@@ -829,81 +845,123 @@ function spawnSmithLightning(smithGroup, targetPos, aggressive = false) {
 }
 
 window.showSection = (s) => {
+    console.log("🚀 [HUD] showSection triggered for:", s);
+    
+    let targetView = s;
+
+    // 🛑 PAUSE BACKEND AGENTS WHEN IN GRAPH LAB (TACTICAL)
+    if (typeof window.setPriorityFocus === 'function') {
+        window.setPriorityFocus(s === 'tactical');
+    }
+
+    if (s === 'tactical') {
+        setTimeout(() => {
+            if (!window.tacticalCanvas && typeof TacticalCanvas !== 'undefined') {
+                window.initTacticalCanvas();
+            }
+            if (window.tacticalCanvas && window.vaultPoints) {
+                window.tacticalCanvas.updateData(window.vaultPoints);
+            }
+        }, 100);
+    }
+
     document.querySelectorAll('.view-container').forEach(v => v.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    
     const bottomHUD = document.querySelector('.bottom-section');
     if (bottomHUD) {
         if (s === 'overview') {
             document.body.classList.remove('full-height-mode');
+            document.body.classList.remove('cycloscope-immersion'); // Clean up lingering immersion
+            document.body.classList.remove('bottom-collapsed');    // Fully restore bottom HUD state
             bottomHUD.style.display = 'grid';
+            
+            try {
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                }
+            } catch (e) {
+                console.warn("[HUD] exitFullscreen failed", e);
+            }
         } else {
             document.body.classList.add('full-height-mode');
+            document.body.classList.remove('bottom-collapsed');
             bottomHUD.style.display = 'none';
         }
     }
+    
     const cycloHUD = document.getElementById('cycloscope-hud');
     if (cycloHUD) {
         cycloHUD.style.display = (s === 'overview') ? 'flex' : 'none';
     }
-    const settingsTabs = ['network', 'galaxies', 'limbo'];
-    let targetView = s;
-    if (settingsTabs.includes(s)) {
-        targetView = 'settings';
+    
+    const meritLeaderboard = document.getElementById('merit-leaderboard');
+    if (meritLeaderboard) {
+        meritLeaderboard.style.display = (s === 'analytics') ? 'block' : 'none';
     }
 
-    const t = document.getElementById(`${targetView}-view`);
+    const settingsTabs = ['network', 'galaxies', 'limbo'];
+    let actualTarget = targetView;
+    if (settingsTabs.includes(s)) {
+        actualTarget = 'settings';
+    }
+
+    const t = document.getElementById(`${actualTarget}-view`);
     if (t) {
         t.style.display = 'flex';
         t.style.height = '100%';
-        if (settingsTabs.includes(s)) {
-            switchSettingsTab(s);
+        t.classList.add('view-active');
+        
+        // Auto-Init logic
+        if (actualTarget === 'wiki') {
+            if (typeof window.refreshWikiList === 'function') window.refreshWikiList();
         }
-        // [v8.0] Phase 7: Auto-Init
-        if (s === 'wiki') {
-            window.refreshWikiList();
-            if (typeof window.renderWikiDashboard === 'function') {
-                window.renderWikiDashboard();
-            }
-            if (typeof window.updateMeritRanking === 'function') {
-                window.updateMeritRanking();
-            }
-        } else {
-            const hud = document.getElementById('wiki-epistemic-hud');
-            if (hud) hud.style.display = 'none';
+        if (s === 'simulation') {
+            if (typeof window.initSimulationGraph === 'function') window.initSimulationGraph();
         }
-        if (s === 'simulation') window.initSimulationGraph();
     }
-    
-    // [SOVEREIGN PRIORITIZATION]
-    setPriorityFocus(false);
+
+    // Highlight navigation item
     const nav = document.getElementById(`nav-${s}`);
     if (nav) nav.classList.add('active');
 
-    if (targetView === 'overview') { 
+    if (actualTarget === 'overview') { 
         if (!window.is3DInitialized) {
             init3D(); 
         } else {
-            // Se già inizializzato, forza un resize per ricalcolare il frustum
-            setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-                if (renderer) renderer.render(scene, camera);
-            }, 50);
+            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50);
         }
-        // [v9.0] Auto-refresh inventory when entering overview
         if (typeof refreshVaultState === 'function') refreshVaultState();
     }
-    if (s === 'benchmark') { 
-        refreshBenchmarks(); 
-        refreshRadar(); // 🧬 Trigger Radar Synthesis
-    }
-    if (s === 'analytics') {
-        refreshAnalytics();
-        refreshHistoricalEngine();
-    }
+    if (s === 'benchmark') { refreshBenchmarks(); refreshRadar(); }
+    if (s === 'analytics') { refreshAnalytics(); refreshHistoricalEngine(); refreshSemanticComposition(); }
     if (s === 'lab') { refreshHistoricalEngine(); }
-    if (s === 'settings') { 
-        switchSettingsTab('swarm'); 
-        refreshHubVisual(); // Ensure judge selects are populated
+    if (s === 'settings') { switchSettingsTab('swarm'); refreshHubVisual(); }
+    if (s === 'vrag2d') { setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50); }
+    if (settingsTabs.includes(s)) { switchSettingsTab(s); refreshHubVisual(); }
+};
+
+window.toggleWikiSection = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const header = el.previousElementSibling;
+    const icon = header.querySelector('.fa-chevron-down') || header.querySelector('.fa-chevron-up');
+    
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        if (icon) {
+            icon.style.transform = 'rotate(180deg)';
+        }
+        // [v9.6] Force Graph Recalculation if visible
+        if (id === 'wiki-mini-graph-container' && window.cytoscape) {
+            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50);
+        }
+    } else {
+        el.style.display = 'none';
+        if (icon) {
+            icon.style.transform = 'rotate(0deg)';
+        }
     }
 };
 
@@ -916,6 +974,7 @@ window.switchLabTab = (tab) => {
     if (btn) btn.classList.add('active-tab');
     if (tab === 'forge') renderModelHubTable();
     if (tab === 'court') refreshCourt();
+    if (tab === 'intercepts') refreshLLMIntercepts();
 };
 
 // 🏛️ SOVEREIGN SUPREME COURT: Verdict Filtering & Human Overrides
@@ -977,20 +1036,56 @@ window.renderCourtVerdicts = (history) => {
                 <span style="color:#64748b; font-family:'JetBrains Mono'; font-size:0.55rem; background:rgba(0,0,0,0.2); padding:2px 8px; border-radius:4px;">${entry.timestamp}</span>
             </div>
             <div style="color:#e2e8f0; margin-bottom: 15px; line-height: 1.6; font-family:'Inter'; font-weight:400; font-size:0.7rem;">${entry.reasoning || entry.motivation || "No reasoning provided."}</div>
-            <div style="display:flex; gap: 10px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+            <div style="display:flex; gap: 10px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; margin-bottom: 8px;">
                 <button onclick="window.selectNode('${entry.target_id || entry.node_id}')" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #3b82f6; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(59, 130, 246, 0.2)'" onmouseout="this.style.background='rgba(59, 130, 246, 0.1)'">INSPECT_NODE</button>
                 ${!entry.wisdom_recorded ? `
                     <button onclick="window.recordWisdom('${btoa(entry.reasoning || "")}', true)" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.2)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.1)'">APPROVE</button>
                     <button onclick="window.recordWisdom('${btoa(entry.reasoning || "")}', false)" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">REJECT</button>
                 ` : `<span style="color:#4ade80; font-size:0.55rem; font-weight:900; display:flex; align-items:center; letter-spacing:1px;"><i class="fas fa-check-double" style="margin-right:8px;"></i> SOVEREIGN_DECISION_EXECUTED</span>`}
             </div>
+            ${entry.thinking ? `
+            <div style="margin-top: 12px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px; width: 100%;">
+                <details style="outline: none;">
+                    <summary style="cursor: pointer; color: #a855f7; font-weight: 800; letter-spacing: 1px; font-size: 0.55rem; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none;">
+                        <i class="fas fa-brain"></i> RAGIONAMENTO COGNITIVO COMPLETO (DEEP THINKING)
+                    </summary>
+                    <div style="margin-top: 8px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(168, 85, 247, 0.2); padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono'; font-size: 0.55rem; line-height: 1.4; color: #cbd5e1; max-height: 250px; overflow-y: auto;">
+                        <div style="margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                            <span style="color: #ef4444; font-weight: 900; text-transform: uppercase;">Prosecutor [${entry.thinking.prosecutor_model || 'Standard'} - ${entry.thinking.prosecutor_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #fda4af;">${entry.thinking.prosecutor_thought || 'N/A'}</pre>
+                        </div>
+                        <div style="margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                            <span style="color: #10b981; font-weight: 900; text-transform: uppercase;">Defender [${entry.thinking.defender_model || 'Standard'} - ${entry.thinking.defender_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #a7f3d0;">${entry.thinking.defender_thought || 'N/A'}</pre>
+                        </div>
+                        <div>
+                            <span style="color: #3b82f6; font-weight: 900; text-transform: uppercase;">Arbitrator [${entry.thinking.arbitrator_model || 'Standard'} - ${entry.thinking.arbitrator_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #bfdbfe;">${entry.thinking.arbitrator_thought || 'N/A'}</pre>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            ` : ''}
         `;
         list.appendChild(card);
     });
 };
 
-async function selectNode(id) {
+window.selectNode = async function(id, highlightText = null) {
     currentInspectedNodeId = id;
+    
+    // Smoothly fly to the selected node in the 2D Tactical Canvas
+    if (window.flyToTacticalNode) {
+        window.flyToTacticalNode(id);
+    }
+    
+    // --- Aggiorna Document & Source Code Inspector (Graph Lab) ---
+    const glViewer = document.getElementById('graph-lab-code-viewer');
+    const glRefs = document.getElementById('graph-lab-code-references-list');
+    if (glViewer) {
+        glViewer.innerHTML = `<div style="text-align:center; padding: 2rem; color: #3b82f6;"><i class="fas fa-spinner fa-spin"></i> Parsing AST...</div>`;
+    }
+
     const modal = document.getElementById('node-inspector-modal');
     const txtEl = document.getElementById('node-text');
     const metaEl = document.getElementById('node-meta');
@@ -1001,7 +1096,6 @@ async function selectNode(id) {
 
     if (modal) {
         modal.style.display = 'flex';
-        // Reset state
         if (auditArea) auditArea.style.display = 'none';
         if (linksEl) linksEl.innerHTML = '';
         if (mediaCont) mediaCont.classList.add('hidden');
@@ -1011,20 +1105,56 @@ async function selectNode(id) {
 
     try {
         const r = await fetch(`/api/node/${id}`, { headers: { 'X-API-KEY': VAULT_KEY }});
-        if (!r.ok) {
-            const errText = await r.text();
-            throw new Error(`Server Error: ${r.status} - ${errText.substring(0, 50)}`);
-        }
+        if (!r.ok) throw new Error("API Node Error");
         const d = await r.json();
         
-        if (d.error) {
-            if (txtEl) txtEl.innerText = `Errore: ${d.error}`;
-            return;
+        // --- Fetch Mermaid (Sprint 2) ---
+        let mermaidCode = "";
+        try {
+            const m_r = await fetch(`/api/node/${id}/mermaid`, { headers: { 'X-API-KEY': VAULT_KEY }});
+            if (m_r.ok) {
+                const m_d = await m_r.json();
+                if (m_d.mermaid) mermaidCode = m_d.mermaid;
+            }
+        } catch(e) { console.warn("Mermaid fetch failed", e); }
+
+        // --- Update Graph Lab Inspector ---
+        if (glViewer) {
+            let astHtml = "";
+            if (mermaidCode) {
+                astHtml = `<div style="margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem;">
+                    <span style="font-size:0.55rem; color:#8b5cf6; font-weight:800; text-transform:uppercase;">AST / Callflow Visualization</span>
+                    <pre class="mermaid" style="background:rgba(0,0,0,0.2); padding:1rem; border-radius:8px; margin-top:0.5rem; text-align:center;">${mermaidCode}</pre>
+                </div>`;
+            }
+            glViewer.innerHTML = astHtml + `<pre style="white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #e2e8f0;">${d.text || "No text available"}</pre>`;
+            
+            // Inizializza mermaid
+            if (window.mermaid) {
+                setTimeout(() => { window.mermaid.init(undefined, document.querySelectorAll('.mermaid')); }, 100);
+            }
+        }
+        
+        if (glRefs && d.connections) {
+            glRefs.innerHTML = '';
+            d.connections.forEach(conn => {
+                glRefs.innerHTML += `<div style="font-size:0.55rem; padding: 0.3rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:4px; cursor:pointer;" onclick="selectNode('${conn.node}')">
+                    <span style="color:#3b82f6;">${conn.relation}</span> &rarr; ${conn.node.substring(0,6)}
+                </div>`;
+            });
+            if (d.connections.length === 0) glRefs.innerHTML = `<span style="font-size: 0.55rem; color: #475569; font-style: italic; text-align: center; margin-top: 1rem;">No links found</span>`;
         }
 
-        if (txtEl) txtEl.innerText = d.text || "Nodo senza contenuto testuale.";
+        let displayText = d.text || "Nodo senza contenuto testuale.";
+        if (highlightText && d.text) {
+            const escaped = highlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escaped})`, 'gi');
+            displayText = d.text.replace(regex, '<mark style="background: rgba(168, 85, 247, 0.4); color: #fff; padding: 0 4px; border-radius: 4px; border: 1px solid #a855f7;">$1</mark>');
+            if (txtEl) txtEl.innerHTML = displayText;
+        } else {
+            if (txtEl) txtEl.innerText = displayText;
+        }
         
-        // Metadata formatting
         if (metaEl) {
             const metaObj = d.metadata || {};
             metaEl.innerHTML = `
@@ -1036,13 +1166,11 @@ async function selectNode(id) {
             `;
         }
 
-        // Multimedia Preview
         if (d.preview && mediaCont && mediaImg) {
             mediaImg.src = d.preview;
             mediaCont.classList.remove('hidden');
         }
 
-        // Synaptic Connections (Navigable)
         if (linksEl && d.connections) {
             if (d.connections.length === 0) {
                 linksEl.innerHTML = '<div style="font-size:0.6rem; opacity:0.4;">Nessuna connessione sinaptica diretta rilevata.</div>';
@@ -1064,6 +1192,7 @@ async function selectNode(id) {
         console.error(e);
     }
 }
+
 
 async function verifyNodeCoherence() {
     if (!currentInspectedNodeId) return;
@@ -1088,6 +1217,8 @@ async function verifyNodeCoherence() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (window.__hudInitialized) return;
+    window.__hudInitialized = true;
     applyLanguage();
     const localTheme = localStorage.getItem('neuralvault_theme');
     const themeToggle = document.getElementById('theme-checkbox');
@@ -1112,13 +1243,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.classList.remove('light-theme');
             localStorage.setItem('neuralvault_theme', 'dark');
         }
+        
+        // Populate Telegram Settings
+        if (settings.telegram_token) {
+            const tokenInput = document.getElementById('telegram-token');
+            if (tokenInput) tokenInput.value = settings.telegram_token;
+        }
+        if (settings.telegram_user_id) {
+            const userIdInput = document.getElementById('telegram-user-id');
+            if (userIdInput) userIdInput.value = settings.telegram_user_id;
+        }
+        if (settings.telegram_token && settings.telegram_user_id) {
+            const statusIndicator = document.getElementById('telegram-status-indicator');
+            const statusText = document.getElementById('telegram-status-text');
+            if (statusIndicator) statusIndicator.style.background = '#10b981';
+            if (statusText) statusText.innerText = 'Link: Connesso';
+        }
+
         const toggle = document.getElementById('auto-evolve-toggle');
         if (toggle) toggle.checked = true;
         refreshVaultState();
         // [Phase 3] Periodic Refresh Loops
         setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
         setInterval(refreshCourtQueue, 45000);  // 45s
-        setInterval(refreshEvolutionChat, 30000); // 30s
+        setInterval(refreshEvolutionChat, 60000); // 60s [Throttled]
         refreshBenchmarks();
         refreshCourtQueue();
     } catch(e) {}
@@ -1396,6 +1544,104 @@ async function refreshAnalytics() {
     }
 }
 
+window.refreshSemanticComposition = async function() {
+    const barsContainer = document.getElementById('semantic-composition-bars');
+    const totalNodesEl = document.getElementById('semantic-total-nodes');
+    const insightText = document.getElementById('semantic-insight-text');
+    const canvas = document.getElementById('semantic-composition-chart');
+    
+    if (!barsContainer) return;
+    
+    try {
+        const response = await fetch('/api/analytics/semantic', { headers: { 'X-API-KEY': VAULT_KEY } });
+        if (!response.ok) throw new Error("Semantic Uplink Degraded");
+        
+        const data = await response.json();
+        
+        if (data.status !== 'success' || data.total_nodes === 0) {
+            barsContainer.innerHTML = '<div style="font-size: 0.65rem; color: #8b949e; font-family: \'JetBrains Mono\'; text-align: center; padding: 1.5rem;">🌌 IL VAULT È VUOTO. NESSUNA COMPOSIZIONE DISPONIBILE.</div>';
+            if (totalNodesEl) totalNodesEl.innerText = '0';
+            return;
+        }
+        
+        // Update total nodes counter
+        if (totalNodesEl) totalNodesEl.innerText = data.total_nodes;
+        
+        // Render dynamic progress bars
+        barsContainer.innerHTML = '';
+        data.composition.forEach(cat => {
+            const bar = document.createElement('div');
+            bar.style.cssText = "display: flex; flex-direction: column; gap: 4px; width: 100%;";
+            bar.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem;">
+                    <span style="color: #fff; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas ${cat.icon}" style="color: ${cat.color}; width: 14px;"></i>
+                        ${cat.title}
+                    </span>
+                    <span style="font-family: 'JetBrains Mono'; font-weight: 900; color: ${cat.color};">
+                        ${cat.percentage}% <span style="color: #64748b; font-size: 0.6rem; font-weight: normal;">(${cat.count} nodi)</span>
+                    </span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="width: ${cat.percentage}%; height: 100%; background: ${cat.color}; border-radius: 4px; box-shadow: 0 0 8px ${cat.color}; transition: width 1s cubic-bezier(0.1, 0.8, 0.2, 1);"></div>
+                </div>
+            `;
+            barsContainer.appendChild(bar);
+        });
+        
+        // Render dynamic dynamic AI Insight
+        if (insightText && data.insight) {
+            insightText.innerText = data.insight;
+        }
+        
+        // Draw the gorgeous Donut Chart on Canvas
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = 200 * dpr;
+            canvas.height = 200 * dpr;
+            canvas.style.width = '200px';
+            canvas.style.height = '200px';
+            ctx.scale(dpr, dpr);
+            
+            const cx = 100;
+            const cy = 100;
+            const radius = 80;
+            const thickness = 16;
+            
+            ctx.clearRect(0, 0, 200, 200);
+            
+            // Draw background track
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = thickness;
+            ctx.stroke();
+            
+            let startAngle = -Math.PI / 2;
+            
+            data.composition.forEach(cat => {
+                if (cat.percentage === 0) return;
+                const sliceAngle = (cat.percentage / 100) * (2 * Math.PI);
+                
+                // Draw arc slice
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
+                ctx.strokeStyle = cat.color;
+                ctx.lineWidth = thickness;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                
+                startAngle += sliceAngle;
+            });
+        }
+        
+    } catch (e) {
+        console.error("Semantic Composition Error:", e);
+        barsContainer.innerHTML = `<div style="font-size: 0.65rem; color: #ef4444; font-family: 'JetBrains Mono'; text-align: center; padding: 1.5rem;">❌ ERROR_SECTOR_ANALYSIS: ${e.message}</div>`;
+    }
+};
+
 async function refreshVaultState() {
     const list = document.getElementById('knowledge-inventory-list');
     if (!list) return;
@@ -1410,11 +1656,14 @@ async function refreshVaultState() {
             return;
         }
         list.innerHTML = sources.map(s => {
-            const raw = s.source || "Unknown";
+            let raw = s.source || "Unknown";
+            if (raw === "undefined" || raw === "null" || !raw) {
+                raw = "Unknown Source";
+            }
             let displaySource = raw;
             let typeIcon = s.type === 'web' ? 'fa-globe' : (s.type === 'image' ? 'fa-image' : 'fa-file-alt');
             // 🏷️ Smart Source Parsing (Domain / Filename / Extension)
-            let extension = "";
+            let extension = "DATA";
             let filename = "";
             if (raw.startsWith('http')) {
                 try {
@@ -1430,20 +1679,33 @@ async function refreshVaultState() {
                 extension = filename.includes('.') ? filename.split('.').pop() : 'file';
             }
             
+            if (!filename || filename === "undefined") {
+                filename = displaySource;
+            }
+            if (filename === "undefined") {
+                filename = "Unknown Source";
+            }
+            if (displaySource === "undefined") {
+                displaySource = "Unknown Source";
+            }
+            if (!extension || extension === "undefined") {
+                extension = "DATA";
+            }
+            
             const extColor = extension === 'pdf' ? '#ef4444' : extension === 'py' || extension === 'js' ? '#3b82f6' : '#a855f7';
             return `
-                <div class="inventory-item" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:0.8rem; border-radius:12px; display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; border-left: 3px solid ${extColor};">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:32px; height:32px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:${extColor};">
+                <div class="inventory-item" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:0.8rem; border-radius:12px; display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; border-left: 3px solid ${extColor}; width: 100%; box-sizing: border-box; overflow: hidden;">
+                    <div style="display:flex; align-items:center; gap:12px; min-width: 0; flex: 1; margin-right: 8px;">
+                        <div style="width:32px; height:32px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:${extColor}; flex-shrink: 0;">
                             <i class="fas ${typeIcon}"></i>
                         </div>
-                        <div>
-                            <div style="color:#fff; font-size:0.75rem; font-weight:800;">${filename || displaySource}</div>
-                            <div style="color:#8b949e; font-size:0.55rem; text-transform:uppercase; letter-spacing:1px;">${displaySource} • <span style="color:${extColor}; font-weight:900;">${extension.toUpperCase()}</span></div>
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="color:#fff; font-size:0.75rem; font-weight:800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${filename || displaySource}</div>
+                            <div style="color:#8b949e; font-size:0.55rem; text-transform:uppercase; letter-spacing:1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displaySource} • <span style="color:${extColor}; font-weight:900;">${extension.toUpperCase()}</span></div>
                         </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="color:#4ade80; font-size:0.6rem; font-weight:900;">${s.node_count} NODI</div>
+                    <div style="text-align:right; flex-shrink: 0;">
+                        <div style="color:#4ade80; font-size:0.6rem; font-weight:900;">${s.nodes || 0} NODI</div>
                         <div style="color:#a855f7; font-size:0.5rem; font-weight:600;">${s.edges || 0} ARCHI</div>
                     </div>
                 </div>
@@ -1453,7 +1715,99 @@ async function refreshVaultState() {
     } catch(e) {
         console.error("InventoryRefreshErr:", e);
     }
+    
+    // [v10.0] Pillar #6: Persona Sync
+    if (typeof refreshUserPersona === 'function') {
+        refreshUserPersona();
+    }
 }
+
+// --- 🧬 [v10.0] Pillar #6: Epistemic Dashboard Logic ---
+
+async function refreshUserPersona() {
+    try {
+        const r = await fetch('/api/user/persona', { headers: { 'X-API-KEY': VAULT_KEY } });
+        const data = await r.json();
+        if (data.status === 'success') {
+            renderPersonaTraits(data.persona);
+        }
+    } catch (e) {
+        console.error("Persona sync failed", e);
+    }
+}
+
+function renderPersonaTraits(traits) {
+    const list = document.getElementById('persona-traits-list');
+    const fill = document.getElementById('persona-alignment-fill');
+    if (!list) return;
+
+    if (!traits || traits.length === 0) {
+        list.innerHTML = `<div style="font-size: 0.5rem; color: #64748b;">Awaiting operator input...</div>`;
+        if (fill) fill.style.width = '0%';
+        return;
+    }
+
+    list.innerHTML = '';
+    let totalStrength = 0;
+    
+    // Mostriamo i top 3 tratti rilevati
+    traits.slice(0, 3).forEach(trait => {
+        totalStrength += trait.strength;
+        const color = trait.strength > 0.7 ? '#3b82f6' : (trait.strength > 0.4 ? '#8b5cf6' : '#94a3b8');
+        list.innerHTML += `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 4px 8px; border-radius: 4px; border-left: 2px solid ${color}; transition: 0.3s;">
+                <span style="font-size: 0.55rem; color: #e2e8f0; font-weight: 800; letter-spacing: 0.5px;">${trait.category}</span>
+                <span style="font-size: 0.5rem; color: ${color}; font-family: 'JetBrains Mono'; font-weight: 900;">${Math.round(trait.strength * 100)}%</span>
+            </div>
+        `;
+    });
+
+    if (fill) {
+        // Calcoliamo la forza media dell'allineamento
+        const avg = (totalStrength / Math.min(traits.length, 3)) * 100;
+        fill.style.width = `${Math.min(100, avg)}%`;
+        
+        // Se allineamento è alto, cambiamo colore al box
+        const container = document.getElementById('user-persona-container');
+        if (container) {
+            if (avg > 70) container.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+            else container.style.borderColor = 'rgba(59, 130, 246, 0.2)';
+        }
+    }
+}
+
+window.triggerProjectAction = async () => {
+    const project_id = document.getElementById('tactical-item-name').innerText;
+    // Identifichiamo l'azione corretta basandoci sul contesto del cluster (placeholder per ora)
+    const action = "DEEP_RESEARCH"; 
+    
+    console.log(`🚀 [HUD] Triggering actionable project: ${action} on ${project_id}`);
+    
+    // Micro-animazione sul bottone
+    const btn = event.currentTarget;
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-satellite-dish fa-spin"></i> UPLINKING...';
+        btn.style.opacity = '0.7';
+    }
+    
+    try {
+        const r = await fetch('/api/project/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-KEY': VAULT_KEY },
+            body: JSON.stringify({ project_id, action })
+        });
+        const data = await r.json();
+        if (data.status === 'success') {
+            if (typeof showNotification === 'function') {
+                showNotification(`MISSION_ENGAGED: Skywalker target set to ${project_id}`, "success");
+            }
+            if (btn) btn.innerHTML = '<i class="fas fa-check"></i> MISSION_ACTIVE';
+        }
+    } catch (e) {
+        console.error("Project action failed", e);
+        if (btn) btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> UPLINK_ERROR';
+    }
+};
 // --- 🧪 EVOLUTION MODE CORE LOGIC ---
 window.toggleEvolutionMode = async () => {
     const toggle = document.getElementById('evolution-mode-toggle');
@@ -1498,6 +1852,11 @@ window.toggleEvolutionMode = async () => {
 window.refreshEvolutionChat = async () => {
     const history = document.getElementById('evolution-chat-history');
     if (!history) return;
+
+    // Check if evolution mode toggle is active. If not, bypass polling to preserve CPU/network resources.
+    const evoToggle = document.getElementById('evolution-mode-toggle');
+    if (evoToggle && !evoToggle.checked) return;
+
     try {
         const r = await fetch('/api/lab/evolution/suggestions', { headers: { 'X-API-KEY': VAULT_KEY }});
         const suggestions = await r.json();
@@ -1678,6 +2037,7 @@ async function setPriorityFocus(active) {
         }
     } catch(e) { console.error("Priority Shift Failed:", e); }
 }
+window.setPriorityFocus = setPriorityFocus;
 
 // [v4.1] Sovereign UI Utilities
 window.toggleSymmetry = () => {
@@ -2044,6 +2404,25 @@ window.updateRecommendations = async () => {
     }
 };
 
+window.toggleRealSplade = async (enabled) => {
+    if (enabled) {
+        const confirmed = await showSovereignConfirm(
+            "ATTIVAZIONE REAL SPLADE (NAVER)",
+            "L'attivazione del modello SPLADE nativo richiede circa 1GB di RAM/VRAM aggiuntiva e il download di componenti 'transformers'. Il sistema potrebbe rallentare durante l'inizializzazione. Procedere?",
+            "ATTIVA CORE PESANTE",
+            "ANNULLA"
+        );
+        
+        if (!confirmed) {
+            document.getElementById('real-splade-toggle').checked = false;
+            return;
+        }
+    }
+    
+    showSovereignNotification(enabled ? "Inizializzazione SPLADE Core..." : "Ripristino Espansione LLM...", enabled ? "warning" : "info");
+    await updateSwarmConfig('use_real_splade', enabled);
+};
+
 window.updateSwarmConfig = async (key, val) => {
     try {
         const r = await fetch('/config', {
@@ -2207,22 +2586,25 @@ window.refreshNetworkPeers = async () => {
         
         container.innerHTML = peers.map(p => {
             const isPaused = p.paused || false;
+            const isOffline = !p.isDemo && (!p.last_seen || (Date.now()/1000 - p.last_seen >= 60));
+            const isDisabled = isPaused || isOffline;
             return `
-            <div class="glass-card" style="padding: 1.5rem; background: ${isPaused ? 'rgba(15, 23, 42, 0.8)' : 'rgba(15, 23, 42, 0.4)'}; border: 1px solid ${isPaused ? 'rgba(239, 68, 68, 0.4)' : (p.isDemo ? 'rgba(168, 85, 247, 0.4)' : 'rgba(59, 130, 246, 0.2)')}; border-radius: 16px; display: flex; flex-direction: column; gap: 1rem; position: relative; overflow: hidden; opacity: ${isPaused ? '0.7' : '1'}; transition: all 0.3s ease;">
-                <div style="position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: ${isPaused ? '#ef4444' : (p.isDemo ? '#a855f7' : (p.source === 'discovery' ? '#10b981' : '#3b82f6'))};"></div>
+            <div class="glass-card" style="padding: 1.5rem; background: ${isDisabled ? 'rgba(15, 23, 42, 0.8)' : 'rgba(15, 23, 42, 0.4)'}; border: 1px solid ${isPaused ? 'rgba(239, 68, 68, 0.4)' : (isOffline ? 'rgba(100, 116, 139, 0.4)' : (p.isDemo ? 'rgba(168, 85, 247, 0.4)' : 'rgba(59, 130, 246, 0.2)'))}; border-radius: 16px; display: flex; flex-direction: column; gap: 1rem; position: relative; overflow: hidden; opacity: ${isDisabled ? '0.6' : '1'}; transition: all 0.3s ease;">
+                <div style="position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: ${isPaused ? '#ef4444' : (isOffline ? '#64748b' : (p.isDemo ? '#a855f7' : (p.source === 'discovery' ? '#10b981' : '#3b82f6')))};"></div>
                 ${p.isDemo ? '<div style="position:absolute; top:0; right:0; background:#a855f7; color:#fff; font-size:0.5rem; padding:2px 8px; font-weight:900;">DEMO MODE</div>' : ''}
                 ${isPaused ? '<div style="position:absolute; top:10px; right:10px; color:#ef4444; font-size:0.6rem; font-weight:900;"><i class="fas fa-pause-circle"></i> PAUSA</div>' : ''}
+                ${isOffline && !isPaused ? '<div style="position:absolute; top:10px; right:10px; color:#64748b; font-size:0.6rem; font-weight:900;"><i class="fas fa-exclamation-triangle"></i> SCOLLEGATO</div>' : ''}
                 
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 800; color: #fff; font-size: 0.8rem; font-family: 'JetBrains Mono'; text-decoration: ${isPaused ? 'line-through' : 'none'};">${p.id.substring(0, 15)}${p.id.length > 15 ? '...' : ''}</div>
+                    <div style="font-weight: 800; color: #fff; font-size: 0.8rem; font-family: 'JetBrains Mono'; text-decoration: ${isDisabled ? 'line-through' : 'none'};">${p.id.substring(0, 15)}${p.id.length > 15 ? '...' : ''}</div>
                     <div style="font-size: 0.5rem; padding: 3px 8px; border-radius: 20px; background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2);">${p.source.toUpperCase()}</div>
                 </div>
                 <div style="font-size: 0.65rem; color: #94a3b8; font-family: 'JetBrains Mono';">${p.url}</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.8rem;">
                     <div style="font-size: 0.55rem; color: #64748b;">LAST_SEEN: ${p.last_seen ? new Date(p.last_seen * 1000).toLocaleTimeString() : 'NEVER'}</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 5px; color: ${isPaused ? '#64748b' : (p.last_seen && (Date.now()/1000 - p.last_seen < 60) ? '#10b981' : '#ef4444')}; font-size: 0.55rem; font-weight: 800;">
-                            <i class="fas fa-circle" style="font-size: 0.4rem;"></i> ${isPaused ? 'PAUSED' : (p.last_seen && (Date.now()/1000 - p.last_seen < 60) ? 'ONLINE' : 'OFFLINE')}
+                        <div style="display: flex; align-items: center; gap: 5px; color: ${isPaused ? '#64748b' : (isOffline ? '#64748b' : '#10b981')}; font-size: 0.55rem; font-weight: 800;">
+                            <i class="fas fa-circle" style="font-size: 0.4rem;"></i> ${isPaused ? 'PAUSED' : (isOffline ? 'OFFLINE' : 'ONLINE')}
                         </div>
                         <button onclick="window.togglePausePeer('${p.id}', ${!isPaused})" class="peer-action-btn" title="${isPaused ? 'Riattiva Peer' : 'Metti in Pausa'}" style="color:${isPaused ? '#10b981' : '#f59e0b'};">
                             <i class="fas fa-${isPaused ? 'play' : 'pause'}"></i>
@@ -2504,7 +2886,8 @@ window.toggleFollow = (agentId) => {
         'FS-77': window.skywalkerGroup, 
         'SY-009': window.synthGroup, 
         'CB-003': window.bridgerGroup,
-        'NC-001': window.compressorGroup
+        'NC-001': window.compressorGroup,
+        'PB-404': window.pressmanGroup
     };
     
     // Add Smith Fleet first member if available
@@ -2540,7 +2923,7 @@ window.toggleFollow = (agentId) => {
             'SN-008': 'snake-hud-icon', 'QA-101': 'quantum-hud-icon', 'SE-007': 'sentinel-hud-icon',
             'SY-009': 'synth-hud-icon', 'CB-003': 'bridger-hud-icon', 'FS-77': 'skywalker-hud-icon',
             'R2-D2': 'r2-d2-hud-icon', 'YO-001': 'yoda-hud-icon', 'DN-099': 'mandalorian-hud-icon',
-            'AG-001': 'smith-hud-icon', 'NC-001': 'compressor-hud-icon'
+            'AG-001': 'smith-hud-icon', 'NC-001': 'compressor-hud-icon', 'PB-404': 'pressman-hud-icon'
         }[baseId];
         
         if (hudId) {
@@ -2879,42 +3262,6 @@ async function resolveVerdict(idx, action) {
     } catch(e) { log("❌ COURT_ERR: Connessione alla Gran Giuria interrotta.", "#ef4444"); }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    applyLanguage();
-    const localTheme = localStorage.getItem('neuralvault_theme');
-    const themeToggle = document.getElementById('theme-checkbox');
-    if (localTheme === 'light') {
-        document.body.classList.add('light-theme');
-        if (themeToggle) themeToggle.checked = true;
-    }
-    window.showSection('overview');
-    init3D();
-    initSSE();
-    initCharts();
-    refreshModels();
-    updateRecommendations();
-    startUptimeCounter();
-    try {
-        const r = await fetch('/api/system/settings', { headers: { 'X-API-KEY': VAULT_KEY }});
-        const settings = await r.json();
-        if (settings.theme === 'light') {
-            document.body.classList.add('light-theme');
-            localStorage.setItem('neuralvault_theme', 'light');
-        } else if (settings.theme === 'dark') {
-            document.body.classList.remove('light-theme');
-            localStorage.setItem('neuralvault_theme', 'dark');
-        }
-        const toggle = document.getElementById('auto-evolve-toggle');
-        if (toggle) toggle.checked = true;
-        refreshVaultState();
-        // [Phase 3] Periodic Refresh Loops
-        setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
-        setInterval(refreshCourtQueue, 45000);  // 45s
-        setInterval(refreshEvolutionChat, 30000); // 30s
-        refreshBenchmarks();
-        refreshCourtQueue();
-    } catch(e) {}
-});
 
 window.switchLabTab = (tab) => {
     document.querySelectorAll('[id^="lab-tab-content-"]').forEach(c => c.style.display = 'none');
@@ -2925,6 +3272,7 @@ window.switchLabTab = (tab) => {
     if (btn) btn.classList.add('active-tab');
     if (tab === 'forge') renderModelHubTable();
     if (tab === 'court') refreshCourt();
+    if (tab === 'intercepts') refreshLLMIntercepts();
 };
 
 // 🏛️ SOVEREIGN SUPREME COURT: Verdict Filtering & Human Overrides
@@ -2987,13 +3335,36 @@ window.renderCourtVerdicts = (history) => {
                 <span style="color:#64748b; font-family:'JetBrains Mono'; font-size:0.55rem; background:rgba(0,0,0,0.2); padding:2px 8px; border-radius:4px;">${entry.timestamp}</span>
             </div>
             <div style="color:#e2e8f0; margin-bottom: 15px; line-height: 1.6; font-family:'Inter'; font-weight:400; font-size:0.7rem;">${entry.reasoning || entry.motivation || "No reasoning provided."}</div>
-            <div style="display:flex; gap: 10px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+            <div style="display:flex; gap: 10px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; margin-bottom: 8px;">
                 <button onclick="window.selectNode('${entry.target_id || entry.node_id}')" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #3b82f6; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(59, 130, 246, 0.2)'" onmouseout="this.style.background='rgba(59, 130, 246, 0.1)'">INSPECT_NODE</button>
                 ${!entry.wisdom_recorded ? `
                     <button onclick="window.recordWisdom('${btoa(entry.reasoning || "")}', true)" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.2)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.1)'">APPROVE</button>
                     <button onclick="window.recordWisdom('${btoa(entry.reasoning || "")}', false)" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; font-size: 0.55rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight:800; text-transform:uppercase; transition:0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">REJECT</button>
                 ` : `<span style="color:#4ade80; font-size:0.55rem; font-weight:900; display:flex; align-items:center; letter-spacing:1px;"><i class="fas fa-check-double" style="margin-right:8px;"></i> SOVEREIGN_DECISION_EXECUTED</span>`}
             </div>
+            ${entry.thinking ? `
+            <div style="margin-top: 12px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px; width: 100%;">
+                <details style="outline: none;">
+                    <summary style="cursor: pointer; color: #a855f7; font-weight: 800; letter-spacing: 1px; font-size: 0.55rem; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none;">
+                        <i class="fas fa-brain"></i> RAGIONAMENTO COGNITIVO COMPLETO (DEEP THINKING)
+                    </summary>
+                    <div style="margin-top: 8px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(168, 85, 247, 0.2); padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono'; font-size: 0.55rem; line-height: 1.4; color: #cbd5e1; max-height: 250px; overflow-y: auto;">
+                        <div style="margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                            <span style="color: #ef4444; font-weight: 900; text-transform: uppercase;">Prosecutor [${entry.thinking.prosecutor_model || 'Standard'} - ${entry.thinking.prosecutor_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #fda4af;">${entry.thinking.prosecutor_thought || 'N/A'}</pre>
+                        </div>
+                        <div style="margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                            <span style="color: #10b981; font-weight: 900; text-transform: uppercase;">Defender [${entry.thinking.defender_model || 'Standard'} - ${entry.thinking.defender_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #a7f3d0;">${entry.thinking.defender_thought || 'N/A'}</pre>
+                        </div>
+                        <div>
+                            <span style="color: #3b82f6; font-weight: 900; text-transform: uppercase;">Arbitrator [${entry.thinking.arbitrator_model || 'Standard'} - ${entry.thinking.arbitrator_mode || 'Emulated'}]</span>
+                            <pre style="white-space: pre-wrap; margin: 4px 0 0 0; font-family: inherit; color: #bfdbfe;">${entry.thinking.arbitrator_thought || 'N/A'}</pre>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            ` : ''}
         `;
         list.appendChild(card);
     });
@@ -3343,8 +3714,8 @@ window.switchSettingsTab = (tabId) => {
     
     // Refresh dei dati specifici per ogni tab
     if (tabId === 'network') {
-        window.refreshNetworkPeers();
-        window.refreshSovereignIdentity();
+        if (typeof window.refreshNetworkPeers === 'function') window.refreshNetworkPeers();
+        if (typeof window.refreshSovereignIdentity === 'function') window.refreshSovereignIdentity();
     }
     if (tabId === 'limbo') window.refreshLimboList();
     if (tabId === 'galaxies') window.refreshGalaxiesList();
@@ -3464,9 +3835,14 @@ window.onTimeTravel = (val) => {
     }
     
     // 3D Nebula Time Travel
-    if (window.pointsMesh && window.pointsMesh.geometry.attributes.position) {
-        const total = window.pointsMesh.geometry.attributes.position.count;
-        window.pointsMesh.geometry.setDrawRange(0, Math.floor(total * timeTravelFactor));
+    if (window.pointsMesh) {
+        if (window.pointsMesh.isInstancedMesh) {
+            const total = window.vaultPoints ? window.vaultPoints.length : window.pointsMesh.count;
+            window.pointsMesh.count = Math.floor(total * timeTravelFactor);
+        } else if (window.pointsMesh.geometry && window.pointsMesh.geometry.attributes.position) {
+            const total = window.pointsMesh.geometry.attributes.position.count;
+            window.pointsMesh.geometry.setDrawRange(0, Math.floor(total * timeTravelFactor));
+        }
     }
     
     // 📖 [v9.5] Wiki Knowledge Time Travel
@@ -3481,6 +3857,18 @@ window.toggleVisibilityMenu = () => {
         const isHidden = menu.classList.contains('hidden');
         menu.classList.toggle('hidden');
         menu.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+            const expMenu = document.getElementById('expansion-menu');
+            if (expMenu) {
+                expMenu.classList.add('hidden');
+                expMenu.style.display = 'none';
+            }
+            const repMenu = document.getElementById('galaxy-repulsion-menu');
+            if (repMenu) {
+                repMenu.classList.add('hidden');
+                repMenu.style.display = 'none';
+            }
+        }
     }
 };
 
@@ -3508,6 +3896,11 @@ window.toggleExpansionMenu = () => {
         menu.style.display = 'flex';
         document.getElementById('visibility-menu').classList.add('hidden');
         document.getElementById('visibility-menu').style.display = 'none';
+        const repMenu = document.getElementById('galaxy-repulsion-menu');
+        if (repMenu) {
+            repMenu.classList.add('hidden');
+            repMenu.style.display = 'none';
+        }
     } else {
         menu.style.display = 'none';
     }
@@ -3534,42 +3927,6 @@ window.toggleCycloscopeFullscreen = () => {
     }
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
-    applyLanguage();
-    const localTheme = localStorage.getItem('neuralvault_theme');
-    const themeToggle = document.getElementById('theme-checkbox');
-    if (localTheme === 'light') {
-        document.body.classList.add('light-theme');
-        if (themeToggle) themeToggle.checked = true;
-    }
-    window.showSection('overview');
-    init3D();
-    initSSE();
-    initCharts();
-    refreshModels();
-    updateRecommendations();
-    startUptimeCounter();
-    try {
-        const r = await fetch('/api/system/settings', { headers: { 'X-API-KEY': VAULT_KEY }});
-        const settings = await r.json();
-        if (settings.theme === 'light') {
-            document.body.classList.add('light-theme');
-            localStorage.setItem('neuralvault_theme', 'light');
-        } else if (settings.theme === 'dark') {
-            document.body.classList.remove('light-theme');
-            localStorage.setItem('neuralvault_theme', 'dark');
-        }
-        const toggle = document.getElementById('auto-evolve-toggle');
-        if (toggle) toggle.checked = true;
-        refreshVaultState();
-        // [Phase 3] Periodic Refresh Loops
-        setInterval(refreshBenchmarks, 90000); // 90s [v25.1]
-        setInterval(refreshCourtQueue, 45000);  // 45s
-        setInterval(refreshEvolutionChat, 30000); // 30s
-        refreshBenchmarks();
-        refreshCourtQueue();
-    } catch(e) {}
-});
 
 /**
  * 🕹️ NERD MODE Master Control (v12.0)
@@ -3660,40 +4017,7 @@ window.createDynamicAgentHUD = (id, agentData) => {
 };
 
 // 🧠 [v9.0] COGNITIVE MINDSET CONTROLLER
-window.updateCognitiveMindset = async () => {
-    const selector = document.getElementById('mindset-select');
-    const activePreset = selector.value;
-    const apiKey = localStorage.getItem('neuralvault_api_key');
-    
-    log(`🧠 [Mindset] Switching to ${activePreset.toUpperCase()}...`, "#a855f7");
-    
-    try {
-        const response = await fetch('/api/system/presets', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-KEY': VAULT_KEY
-            },
-            body: JSON.stringify({ active_preset: activePreset })
-        });
-        
-        const data = await response.json();
-        if (data.status === 'success') {
-            showHologram('YODA', `Il cammino è cambiato. Ora operiamo con il mindset ${activePreset.toUpperCase()}.`);
-            // Flash color feedback
-            const container = document.getElementById('mindset-selector-container');
-            container.style.boxShadow = "0 0 50px #a855f7";
-            setTimeout(() => container.style.boxShadow = "0 10px 30px rgba(0,0,0,0.5)", 1000);
-        } else {
-            log("🚨 [Mindset] Failed to update preset.", "#ef4444");
-        }
-    } catch (error) {
-        console.error("Mindset Update Error:", error);
-    }
-};
-
 window.loadActivePreset = async () => {
-    const apiKey = localStorage.getItem('neuralvault_api_key');
     try {
         const response = await fetch('/api/system/presets', {
             headers: { 'X-API-KEY': VAULT_KEY }
@@ -3701,10 +4025,50 @@ window.loadActivePreset = async () => {
         const data = await response.json();
         if (data.active_preset) {
             const selector = document.getElementById('mindset-select');
-            if (selector) selector.value = data.active_preset;
+            if (selector) {
+                selector.value = data.active_preset;
+                
+                // Sync global state and visual variables on boot
+                const presetToMindset = {
+                    "default": "DEFAULT",
+                    "analista_minsky": "MINSKY",
+                    "creativo_de_bono": "DE_BONO",
+                    "custode_federale": "GUARDIAN"
+                };
+                const mindsetId = presetToMindset[data.active_preset] || "DEFAULT";
+                window.currentMindset = mindsetId;
+                
+                if (typeof MINDSET_DATA !== 'undefined' && MINDSET_DATA[mindsetId]) {
+                    const color = MINDSET_DATA[mindsetId].color;
+                    document.documentElement.style.setProperty('--accent-color', color);
+                    document.documentElement.style.setProperty('--glow-color', color + "44");
+                    
+                    if (mindsetId === 'MINSKY') {
+                        document.body.style.filter = "contrast(1.1) saturate(0.9)";
+                    } else if (mindsetId === 'DE_BONO') {
+                        document.body.style.filter = "hue-rotate(280deg) saturate(1.2)";
+                    } else {
+                        document.body.style.filter = "none";
+                    }
+                    
+                    const status = document.getElementById('cognitive-status');
+                    const icon = document.querySelector('#cognitive-dna-hud i');
+                    if (status) {
+                        status.innerText = `DNA: ${MINDSET_DATA[mindsetId].name.it}`;
+                        status.style.color = color;
+                    }
+                    if (icon) icon.style.color = color;
+
+                    const label = document.getElementById('label-system-status');
+                    if (label) {
+                        label.innerText = `SYSTEM: ${mindsetId}`;
+                        label.style.color = color;
+                    }
+                }
+            }
         }
     } catch (error) {
-        console.warn("Could not load initial preset.");
+        console.warn("Could not load initial preset:", error);
     }
 };
 
@@ -3712,3 +4076,611 @@ window.loadActivePreset = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(window.loadActivePreset, 2000);
 });
+
+window.refreshLLMIntercepts = async () => {
+    const list = document.getElementById('llm-intercepts-list');
+    if (!list) return;
+    try {
+        const r = await fetch('/api/system/llm-intercepts', { headers: { 'X-API-KEY': VAULT_KEY }});
+        const data = await r.json();
+        list.innerHTML = '';
+        if (data.length === 0) {
+            list.innerHTML = `<div style="text-align:center; padding:3rem; opacity:0.3; font-size:0.65rem; color:#fff;">
+                <i class="fas fa-brain" style="font-size:1.5rem; display:block; margin-bottom:0.5rem; color:#a855f7;"></i>
+                INTEGRITÀ COGNITIVA<br>Nessuna intercettazione LLM registrata.
+            </div>`;
+            return;
+        }
+        data.forEach(item => {
+            const card = document.createElement('div');
+            card.style.cssText = "background: rgba(255,255,255,0.02); border: 1px solid rgba(168,85,247,0.25); padding: 12px; border-radius: 10px; font-size: 0.65rem; border-left: 3px solid #a855f7; display: flex; flex-direction: column; gap: 6px;";
+            
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#a855f7; font-weight:800; letter-spacing:0.5px;"><i class="fas fa-microchip" style="margin-right:4px;"></i> ${item.model}</span>
+                    <span style="color:#64748b; font-family:'JetBrains Mono'; font-size:0.55rem; background:rgba(0,0,0,0.2); padding:1px 6px; border-radius:4px;">${item.timestamp}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="color:#f87171; font-weight:800; font-size:0.6rem;">RICHIESTA / QUERY:</span>
+                    <pre style="white-space: pre-wrap; font-family:'JetBrains Mono'; font-size:0.6rem; color:#fca5a5; background:rgba(0,0,0,0.3); padding:6px; border-radius:4px; margin:0;">${item.prompt}</pre>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="color:#4ade80; font-weight:800; font-size:0.6rem;">RISPOSTA (FALLBACK SINTESI):</span>
+                    <pre style="white-space: pre-wrap; font-family:'JetBrains Mono'; font-size:0.6rem; color:#a7f3d0; background:rgba(0,0,0,0.3); padding:6px; border-radius:4px; margin:0;">${item.response}</pre>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    } catch(e) {
+        list.innerHTML = `<div style="color:#ef4444; font-size:0.65rem; padding: 1rem;">Errore durante il recupero dei log: ${e}</div>`;
+    }
+};
+
+window.clearLLMIntercepts = async () => {
+    if (!confirm("Sei sicuro di voler svuotare lo storico delle intercettazioni?")) return;
+    try {
+        await fetch('/api/system/llm-intercepts/clear', {
+            method: 'POST',
+            headers: { 'X-API-KEY': VAULT_KEY }
+        });
+        window.refreshLLMIntercepts();
+    } catch(e) {
+        console.error(e);
+    }
+};
+
+// 🧠 [v18.0] Unified Viewport-Safe Premium Tooltip Engine
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Create a single high-performance global tooltip element
+    const tooltipEl = document.createElement('div');
+    tooltipEl.id = 'global-sovereign-tooltip';
+    tooltipEl.style.cssText = `
+        position: fixed;
+        z-index: 2147483647;
+        background: rgba(15, 23, 42, 0.98);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(168, 85, 247, 0.5);
+        padding: 0.8rem 1rem;
+        border-radius: 12px;
+        color: #e2e8f0;
+        font-size: 0.65rem;
+        line-height: 1.4;
+        max-width: 280px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(168, 85, 247, 0.2);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s cubic-bezier(0.19, 1, 0.22, 1);
+        text-align: left;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: none;
+        white-space: normal;
+        word-wrap: break-word;
+    `;
+    document.body.appendChild(tooltipEl);
+
+    let activeTarget = null;
+    let fadeOutTimeout = null;
+
+    function showTooltip(target) {
+        const text = target.getAttribute('data-tooltip');
+        if (!text) return;
+
+        if (fadeOutTimeout) {
+            clearTimeout(fadeOutTimeout);
+            fadeOutTimeout = null;
+        }
+
+        activeTarget = target;
+        tooltipEl.innerHTML = text;
+        tooltipEl.style.display = 'block';
+        
+        requestAnimationFrame(() => {
+            if (activeTarget !== target) return;
+            tooltipEl.style.opacity = '1';
+            positionTooltip(target);
+        });
+    }
+
+    function hideTooltip() {
+        activeTarget = null;
+        tooltipEl.style.opacity = '0';
+        fadeOutTimeout = setTimeout(() => {
+            if (!activeTarget) {
+                tooltipEl.style.display = 'none';
+            }
+        }, 200);
+    }
+
+    function positionTooltip(target) {
+        if (!activeTarget) return;
+
+        const targetRect = target.getBoundingClientRect();
+        const tooltipRect = tooltipEl.getBoundingClientRect();
+
+        // Calculate centered position directly above the element
+        let left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
+        let top = targetRect.top - tooltipRect.height - 12;
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Viewport boundaries checks
+        if (left < 10) {
+            left = 10;
+        }
+        if (left + tooltipRect.width > viewportWidth - 10) {
+            left = viewportWidth - tooltipRect.width - 10;
+        }
+
+        // Top edge collision: position below the element instead
+        if (top < 10) {
+            top = targetRect.bottom + 12;
+        }
+        // Bottom edge collision: keep inside screen
+        if (top + tooltipRect.height > viewportHeight - 10) {
+            top = viewportHeight - tooltipRect.height - 10;
+        }
+
+        tooltipEl.style.left = `${left}px`;
+        tooltipEl.style.top = `${top}px`;
+    }
+
+    // Event delegation on mouseover and mouseout
+    document.addEventListener('mouseover', (e) => {
+        const target = e.target.closest('[data-tooltip]');
+        if (target) {
+            showTooltip(target);
+        }
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const target = e.target.closest('[data-tooltip]');
+        if (target && activeTarget === target) {
+            hideTooltip();
+        }
+    });
+
+    // Realtime scroll and resize alignment hooks
+    window.addEventListener('scroll', () => {
+        if (activeTarget) positionTooltip(activeTarget);
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+        if (activeTarget) positionTooltip(activeTarget);
+    }, { passive: true });
+});
+
+// --- 🤖 TELEGRAM SOVEREIGN LINK CONFIGURATION ---
+window.toggleTelegramLock = (fieldId) => {
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+    const btnId = fieldId === 'telegram-token' ? 'lock-btn-token' : 'lock-btn-id';
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const icon = btn.querySelector('i');
+    
+    if (input.hasAttribute('readonly')) {
+        input.removeAttribute('readonly');
+        input.focus();
+        if (icon) icon.className = 'fas fa-lock-open';
+        btn.style.borderColor = '#a855f7';
+        btn.style.color = '#a855f7';
+    } else {
+        input.setAttribute('readonly', true);
+        if (icon) icon.className = 'fas fa-lock';
+        btn.style.borderColor = 'rgba(0,136,204,0.3)';
+        btn.style.color = '#facc15';
+    }
+    
+    // Enable/disable the save button based on whether either field is unlocked/writable
+    const tokenInput = document.getElementById('telegram-token');
+    const userIdInput = document.getElementById('telegram-user-id');
+    const saveBtn = document.getElementById('save-telegram-btn');
+    if (saveBtn) {
+        const isEditing = (tokenInput && !tokenInput.hasAttribute('readonly')) || (userIdInput && !userIdInput.hasAttribute('readonly'));
+        if (isEditing) {
+            saveBtn.removeAttribute('disabled');
+            saveBtn.style.opacity = '1';
+            saveBtn.style.cursor = 'pointer';
+        } else {
+            saveBtn.setAttribute('disabled', true);
+            saveBtn.style.opacity = '0.5';
+            saveBtn.style.cursor = 'not-allowed';
+        }
+    }
+};
+
+window.saveTelegramSettings = async () => {
+    const tokenInput = document.getElementById('telegram-token');
+    const userIdInput = document.getElementById('telegram-user-id');
+    const saveBtn = document.getElementById('save-telegram-btn');
+    if (!tokenInput || !userIdInput) return;
+    
+    const token = tokenInput.value.trim();
+    const userId = userIdInput.value.trim();
+    
+    if (saveBtn) {
+        saveBtn.innerText = 'CONNECTING...';
+        saveBtn.disabled = true;
+    }
+    
+    try {
+        const response = await fetch('/api/system/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: VAULT_KEY,
+                telegram_token: token,
+                telegram_user_id: userId
+            })
+        });
+        const res = await response.json();
+        
+        if (res.status === 'success') {
+            log('🤖 TELEGRAM: Configurazione salvata e connessione stabilita.', '#0088cc');
+            
+            // Relock both inputs
+            tokenInput.setAttribute('readonly', true);
+            userIdInput.setAttribute('readonly', true);
+            
+            const btnToken = document.getElementById('lock-btn-token');
+            if (btnToken) {
+                const icon = btnToken.querySelector('i');
+                if (icon) icon.className = 'fas fa-lock';
+                btnToken.style.borderColor = 'rgba(0,136,204,0.3)';
+                btnToken.style.color = '#facc15';
+            }
+            const btnId = document.getElementById('lock-btn-id');
+            if (btnId) {
+                const icon = btnId.querySelector('i');
+                if (icon) icon.className = 'fas fa-lock';
+                btnId.style.borderColor = 'rgba(0,136,204,0.3)';
+                btnId.style.color = '#facc15';
+            }
+            
+            if (saveBtn) {
+                saveBtn.innerText = 'SAVE & CONNECT';
+                saveBtn.disabled = true;
+                saveBtn.style.opacity = '0.5';
+                saveBtn.style.cursor = 'not-allowed';
+            }
+            
+            // Update connection status in the UI
+            const statusIndicator = document.getElementById('telegram-status-indicator');
+            const statusText = document.getElementById('telegram-status-text');
+            if (statusIndicator) statusIndicator.style.background = '#10b981';
+            if (statusText) statusText.innerText = 'Link: Connesso';
+        } else {
+            alert('Salvataggio fallito: ' + (res.error || 'Errore sconosciuto'));
+            if (saveBtn) {
+                saveBtn.innerText = 'SAVE & CONNECT';
+                saveBtn.disabled = false;
+            }
+        }
+    } catch (e) {
+        console.error('Error saving telegram settings:', e);
+        alert('Errore di connessione al server.');
+        if (saveBtn) {
+            saveBtn.innerText = 'SAVE & CONNECT';
+            saveBtn.disabled = false;
+        }
+    }
+};
+
+// --- 🧬 EVOLUTION FEEDBACK HANDLER ---
+window.handleEvolutionFeedback = async (btn, status) => {
+    const card = btn.closest('.glass-card');
+    const suggestionId = card.getAttribute('data-id');
+    
+    // Tactile Feedback
+    card.style.transform = 'scale(0.95)';
+    card.style.opacity = '0.5';
+    card.style.pointerEvents = 'none';
+    
+    log(`🧬 EVOLUTION: Feedback [${status}] registered.`, "#a855f7");
+
+    try {
+        // 1. Notify Backend
+        await fetch('/api/lab/evolution/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-KEY': VAULT_KEY },
+            body: JSON.stringify({ id: suggestionId, feedback: status.toLowerCase() })
+        });
+
+        // 2. Animate out and remove
+        card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+        card.style.transform = 'translateX(100px)';
+        card.style.opacity = '0';
+        
+        setTimeout(() => {
+            card.remove();
+            // If no more cards, show waiting message
+            const history = document.getElementById('evolution-chat-history');
+            if (history && history.children.length === 0) {
+                history.innerHTML = '<div style="text-align: center; color: #64748b; font-size: 0.65rem; margin-top: 150px;" data-i18n="msg_awaiting_evolution">In attesa di segnali evolutivi...</div>';
+            }
+        }, 500);
+
+    } catch(e) {
+        console.error("Feedback Error:", e);
+        card.style.transform = 'scale(1)';
+        card.style.opacity = '1';
+        card.style.pointerEvents = 'auto';
+    }
+};
+
+window.toggleGalaxyRepulsionMenu = () => {
+    const menu = document.getElementById('galaxy-repulsion-menu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
+    if (!menu.classList.contains('hidden')) {
+        menu.style.display = 'flex';
+        const visMenu = document.getElementById('visibility-menu');
+        if (visMenu) {
+            visMenu.classList.add('hidden');
+            visMenu.style.display = 'none';
+        }
+        const expMenu = document.getElementById('expansion-menu');
+        if (expMenu) {
+            expMenu.classList.add('hidden');
+            expMenu.style.display = 'none';
+        }
+    } else {
+        menu.style.display = 'none';
+    }
+};
+
+window.updateGalaxyRepulsion = (val) => {
+    const parsed = parseFloat(val);
+    galaxyRepulsionFactor = isNaN(parsed) ? 25.0 : parsed;
+    const label = document.getElementById('repulsion-value-label');
+    if (label) {
+        label.innerText = `Moltiplicatore: ${galaxyRepulsionFactor.toFixed(1)}x`;
+    }
+    log(`🧠 PHYSICS_RECALIBRATION: Repulsione galassie impostata a ${galaxyRepulsionFactor}x`, "#a855f7");
+};
+
+window.openAuditLedger = async (full = false) => {
+    const modal = document.getElementById('audit-ledger-modal');
+    if (!modal) return;
+    const title = document.getElementById('audit-ledger-title-main');
+    if (title) title.innerText = full ? "CHRONO-LOG: PERMANENT ARCHIVE" : "CHRONO-LOG: SESSION ACTIONS";
+    modal.style.display = 'flex';
+    modal.style.zIndex = "90000"; 
+    const huds = ['mc-wrapper', 'nav-guide-tab', 'cycloscope-hud', 'scene-controls-bar', 'oracle-response-hud', 'floating-command-bar', 'super-metrics-hud'];
+    huds.forEach(id => document.getElementById(id)?.classList.add('force-hide-modal'));
+    const b = document.getElementById('audit-ledger-body');
+    if (!b) return;
+    b.innerHTML = '<tr><td colspan="6" style="padding:2rem; text-align:center;">Retrieving Sovereign Logs...</td></tr>';
+    try {
+        const url = full ? `/api/audit/ledger?full=true` : `/api/audit/ledger`;
+        const r = await fetch(url, { headers: { 'X-API-KEY': VAULT_KEY }});
+        const logs = await r.json();
+        if (!logs || logs.length === 0) {
+            b.innerHTML = '<tr><td colspan="6" style="padding:4rem; text-align:center; opacity:0.5; color:#a855f7;">[MISSION_STATUS: LOG_EMPTY] - No actions recorded yet.</td></tr>';
+            return;
+        }
+        b.innerHTML = logs.map(l => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.05)'" onmouseout="this.style.background='transparent'">
+                <td style="padding:1.2rem; color:#8b949e; font-size:0.6rem;">${l.timestamp}</td>
+                <td style="padding:1.2rem;"><span style="color:#a855f7; border:1px solid rgba(168,85,247,0.3); padding:3px 10px; border-radius:6px; font-weight:800; font-size:0.6rem;">${l.agent || "SYSTEM"}</span></td>
+                <td style="padding:1.2rem; color:#fff; font-weight:800; font-size:0.7rem;">${(l.action || "Update").toUpperCase()}</td>
+                <td style="padding:1.2rem; color:#3b82f6; font-size:0.6rem;">${l.target || "GLOBAL"}</td>
+                <td style="padding:1.2rem; color:#cbd5e1; font-size:0.65rem; line-height:1.4;">${l.reasoning || l.motivation || "Maintenance cycle."}</td>
+                <td style="padding:1.2rem; color:#4ade80; text-align:right; font-weight:800;">${l.savings || "—"}</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        console.error("Audit Ledger Error:", e);
+        b.innerHTML = '<tr><td colspan="6" style="padding:2rem; text-align:center; color:#ef4444;">FATAL_ERROR: Access Denied or API unreachable.</td></tr>';
+    }
+};
+
+window.closeAuditLedger = () => {
+    const m = document.getElementById('audit-ledger-modal');
+    if (m) m.style.display = 'none';
+    const huds = ['mc-wrapper', 'nav-guide-tab', 'cycloscope-hud', 'scene-controls-bar', 'oracle-response-hud', 'floating-command-bar', 'super-metrics-hud'];
+    huds.forEach(id => document.getElementById(id)?.classList.remove('force-hide-modal'));
+};
+
+window.exportAuditLedger = function(format) {
+    const table = document.getElementById('audit-ledger-body');
+    if (!table) return;
+    const rows = Array.from(table.rows);
+    if (!rows.length || rows[0].innerText.includes("Fetch")) return;
+    let content = "";
+    let filename = `NeuralVault_Audit_${new Date().toISOString().slice(0,19).replace(/[:T]/g, '_')}.txt`;
+    let type = "text/plain";
+    if (format === 'json') {
+        const data = rows.map(r => ({
+            time: r.cells[0].innerText, agent: r.cells[1].innerText, action: r.cells[2].innerText,
+            target: r.cells[3].innerText, reason: r.cells[4].innerText, savings: r.cells[5].innerText
+        }));
+        content = JSON.stringify(data, null, 2); filename = filename.replace('.txt', '.json'); type = "application/json";
+    } else if (format === 'csv') {
+        content = "TIMESTAMP,AGENTE,AZIONE,TARGET,MOTIVAZIONE,IMPATTO\n" + 
+            rows.map(r => Array.from(r.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`).join(",")).join("\n");
+        filename = filename.replace('.txt', '.csv'); type = "text/csv";
+    } else {
+        content = "--- NEURALVAULT AUDIT LEDGER ---\n\n" + 
+            rows.map(r => `[${r.cells[0].innerText}] ${r.cells[1].innerText} -> ${r.cells[2].innerText}\n   Reason: ${r.cells[4].innerText}\n`).join("\n");
+    }
+    const blob = new Blob([content], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    document.getElementById('export-dropdown')?.classList.add('hidden');
+};
+
+// -----------------------------------------------------------------------------
+// Missing Polyfills and Mocks
+// -----------------------------------------------------------------------------
+
+window.showFloatingNotification = (message, type = 'info') => {
+    let container = document.getElementById('floating-notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'floating-notification-container';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 999999;
+            pointer-events: none;
+        `;
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'rgba(16, 185, 129, 0.95)' : (type === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)');
+    
+    toast.style.cssText = `
+        background: ${bgColor};
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-family: 'Inter', 'JetBrains Mono', sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+        backdrop-filter: blur(10px);
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    `;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    });
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+    }, 3000);
+};
+
+window.sendQuickOracleQuery = (query) => {
+    const input = document.getElementById('graph-lab-oracle-input');
+    if (input) {
+        input.value = query;
+        window.sendOracleGraphQuery();
+    } else {
+        window.showFloatingNotification("Oracolo: " + query, 'info');
+    }
+};
+
+window.sendOracleGraphQuery = () => {
+    const input = document.getElementById('graph-lab-oracle-input');
+    const query = input ? input.value : '';
+    if (!query) return;
+    
+    window.showFloatingNotification("L'Oracolo sta analizzando: " + query, 'info');
+    if (input) input.value = ''; // clear input
+    
+    setTimeout(() => {
+        window.showFloatingNotification('Analisi completata. I risultati sono evidenziati nel grafo.', 'success');
+    }, 1500);
+};
+
+window.toggleTacticalSidebar = (side) => {
+    let sidebar, icon;
+    if (side === 'left') {
+        sidebar = document.getElementById('tactical-inspector');
+        icon = document.getElementById('gl-left-icon');
+    } else {
+        sidebar = document.getElementById('graph-lab-right');
+        icon = document.getElementById('gl-right-icon');
+    }
+    if (!sidebar || !icon) return;
+
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    if (isCollapsed) {
+        sidebar.classList.remove('collapsed');
+        if (side === 'left') {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-left');
+        } else {
+            icon.classList.remove('fa-chevron-left');
+            icon.classList.add('fa-chevron-right');
+        }
+    } else {
+        sidebar.classList.add('collapsed');
+        if (side === 'left') {
+            icon.classList.remove('fa-chevron-left');
+            icon.classList.add('fa-chevron-right');
+        } else {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-left');
+        }
+    }
+    
+    // Smoothly resize WebGL canvas during CSS animation
+    let start = Date.now();
+    let timer = setInterval(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (Date.now() - start > 350) clearInterval(timer);
+    }, 16);
+};
+
+window.toggleDocInspector = () => {
+    const wrapper = document.getElementById('graph-lab-inspector-wrapper');
+    const chevron = document.getElementById('doc-inspector-chevron');
+    if (!wrapper) return;
+
+    const OPEN_HEIGHT = 280;
+    const HEADER_HEIGHT = 37; // only the clickable header stays visible when collapsed
+
+    const isCollapsed = wrapper.style.height === HEADER_HEIGHT + 'px';
+    if (isCollapsed) {
+        // Expand
+        wrapper.style.height = OPEN_HEIGHT + 'px';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    } else {
+        // Collapse
+        wrapper.style.height = HEADER_HEIGHT + 'px';
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
+
+    // Continuously fire resize so WebGL canvas / Tactical Canvas fills gained space
+    let start = Date.now();
+    let timer = setInterval(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (Date.now() - start > 380) clearInterval(timer);
+    }, 16);
+};
+
+// [Sovereign] Auto-Cleanup Routine (Prevents RAM Leaks and Cache buildup)
+setInterval(() => {
+    try {
+        // 1. Clear HTTP Caches (Browser Network Cache)
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
+        
+        // 2. Clear Terminal Logs if they grow too large (DOM Leak prevention)
+        const terminals = [document.getElementById('terminal-logs'), document.getElementById('debug-terminal')];
+        terminals.forEach(term => {
+            if (term && term.children.length > 300) {
+                while (term.children.length > 300) {
+                    term.removeChild(term.firstChild);
+                }
+            }
+        });
+        
+        console.log("🧹 [Auto-Cleanup] Browser HTTP Caches and DOM cleared to prevent RAM overflow.");
+    } catch(e) {
+        console.error("Cleanup error:", e);
+    }
+}, 60000); // Runs every 60 seconds
+

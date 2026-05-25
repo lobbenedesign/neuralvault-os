@@ -30,6 +30,30 @@ class EmbedderFactory:
         return _embed
 
     @staticmethod
+    def text_nomic_mrl(matryoshka_dim: int = 256) -> Callable[[str], np.ndarray]:
+        """
+        Nomic Embed v1.5 con supporto Matryoshka Representation Learning (MRL).
+        Permette di troncare le dimensioni dell'embedding mantenendo l'accuratezza.
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            import torch.nn.functional as F
+        except ImportError:
+            raise ImportError("pip install sentence-transformers torch")
+
+        model = SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True)
+
+        def _embed(text: str) -> np.ndarray:
+            vec = model.encode(text, convert_to_tensor=True, show_progress_bar=False)
+            # Troncamento Matryoshka
+            vec = vec[:matryoshka_dim]
+            # Ri-normalizzazione critica per MRL
+            vec = F.normalize(vec, p=2, dim=0)
+            return vec.cpu().numpy().astype(np.float32)
+            
+        return _embed
+
+    @staticmethod
     def clip_openai() -> Callable[[Union[str, Any]], np.ndarray]:
         """
         OpenAI CLIP per ricerca multi-modale (testo -> immagine).

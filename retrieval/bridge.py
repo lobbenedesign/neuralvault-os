@@ -58,63 +58,167 @@ class LatentBridge:
         return "\n".join(body[:50]) # Limite per evitare nodi giganteschi legati a file enormi
 
     async def ingest_codebase(self):
-        """Versione v2.5.1: Ingestione proattiva con re-scan delle signature (Rispettando il Toggle)."""
+        """Versione v3.0.0: Ingestione proattiva con cache SHA256 e AST Extractor."""
         if not self.vault or not self.project_root: return
         
         # 🛡️ [Proprioception Toggle] Verifica se l'utente vuole che il sistema guardi se stesso
         if self.settings and not self.settings.get("codebase_bridging", False):
             return
             
-        # 🔄 Re-scan signatures to find new functions/classes
-        self.code_signatures = self._scan_codebase()
+        from retrieval.file_cache import SovereignFileCache
+        from retrieval.ast_extractor import SovereignASTExtractor
+        from index.node import RelationType
+        
+        file_cache = SovereignFileCache()
+        ast_extractor = SovereignASTExtractor(self.project_root)
         
         print(f"🏗️ [Bridge] Ingestione codebase granulare da {self.project_root}...")
         nodes_created = 0
         nodes_updated = 0
         
-        # Use list to avoid dictionary change size error if something happens
-        for name, path in list(self.code_signatures.items()):
+        # Mappa globale per risolvere callee_name -> node_id all'interno dello stesso modulo o in tutta la codebase
+        func_map = {}  # {function_name_lowercase: node_id}
+        
+        # 1. Scansioniamo e leggiamo tutti i file
+        all_files = []
+        for ext in ['*.py', '*.md', '*.rs', '*.js', '*.ts', '*.html', '*.css']:
             try:
-                content = path.read_text()
-                lines = content.splitlines()
-                body = ""
-                for i, line in enumerate(lines):
-                    if name in line.lower() and any(k in line for k in ['def ', 'class ', 'function ']):
-                        body = self._extract_body(lines, i)
-                        break
+                for path in self.project_root.rglob(ext):
+                    if any(x in str(path) for x in ['venv', '.git', '__pycache__', 'node_modules', 'dist', 'build', 'legacy_scratch', 'pending_patches']):
+                        continue
+                    all_files.append(path)
+            except Exception:
+                pass
                 
-                # ID univoco basato su nome e percorso relativo per evitare collisioni tra file diversi
+        # Scansioniamo prima i file Python per registrare classi/funzioni nella mappa globale
+        for path in all_files:
+            if path.suffix == '.py':
+                try:
+                    rel_path = str(path.relative_to(self.project_root))
+                    content = path.read_text(encoding="utf-8", errors="ignore")
+                    import ast as py_ast
+                    tree = py_ast.parse(content)
+                    for node in py_ast.walk(tree):
+                        if isinstance(node, (py_ast.FunctionDef, py_ast.AsyncFunctionDef)):
+                            func_name = node.name
+                            func_hash = hashlib.md5(f"{rel_path}:{func_name}".encode()).hexdigest()[:10]
+                            func_id = f"src_{func_hash}"
+                            func_map[func_name.lower()] = func_id
+                except Exception:
+                    pass
+
+        # 2. Elaborazione di ciascun file
+        for path in all_files:
+            try:
                 rel_path = str(path.relative_to(self.project_root))
-                node_id = f"src_{hashlib.md5(f'{rel_path}:{name}'.encode()).hexdigest()[:10]}"
                 
-                text_content = f"SOURCE_CODE_SIGNATURE [{name.upper()}]\nFILE: {path.name}\nPATH: {rel_path}\n\n{body}"
+                # Controlliamo la cache SHA256
+                if not file_cache.has_changed(path):
+                    continue
                 
-                # Use .get() for thread safety
-                if node_id not in self.vault._nodes:
+                if path.suffix == '.py':
+                    ast_data = ast_extractor.extract_ast(path)
+                    if not ast_data:
+                        continue
+                    
+                    # A. Ingestiamo il modulo
+                    module = ast_data["module"]
+                    await self.vault.add_node(
+                        module["id"],
+                        module["text"],
+                        metadata={
+                            "source": rel_path,
+                            "origin": "local_bridge",
+                            "context": "proprioception",
+                            "type": "code_module",
+                            "name": module["name"],
+                            "color": "#3b82f6"
+                        }
+                    )
+                    nodes_created += 1
+                    
+                    # B. Ingestiamo le classi
+                    for cls in ast_data["classes"]:
+                        await self.vault.add_node(
+                            cls["id"],
+                            cls["text"],
+                            metadata={
+                                "source": rel_path,
+                                "origin": "local_bridge",
+                                "context": "proprioception",
+                                "type": "code_class",
+                                "name": cls["name"],
+                                "color": "#a855f7"
+                            }
+                        )
+                        # Relazione modulo -> classe
+                        self.vault.add_relation(module["id"], cls["id"], RelationType.CHILD)
+                        nodes_created += 1
+                        
+                    # C. Ingestiamo le funzioni/metodi
+                    for func in ast_data["functions"]:
+                        await self.vault.add_node(
+                            func["id"],
+                            func["text"],
+                            metadata={
+                                "source": rel_path,
+                                "origin": "local_bridge",
+                                "context": "proprioception",
+                                "type": "code_function",
+                                "name": func["name"],
+                                "color": "#00ff9d"
+                            }
+                        )
+                        # Relazione parent -> child
+                        self.vault.add_relation(func["parent_id"], func["id"], RelationType.CHILD)
+                        nodes_created += 1
+                        
+                    # D. Creazione delle relazioni di chiamata (Function calls Function)
+                    for call in ast_data["calls"]:
+                        callee_name = call["callee_name"].lower()
+                        if callee_name in func_map:
+                            callee_id = func_map[callee_name]
+                            self.vault.add_relation(call["caller_id"], callee_id, RelationType.REQUIRES)
+                            
+                    # E. Creazione delle relazioni di importazione (Module requires Module/Library)
+                    for imp in ast_data["imports"]:
+                        imp_module_name = imp.split('.')[0].lower()
+                        for p in all_files:
+                            p_mod_name = p.stem.lower()
+                            if p_mod_name == imp_module_name:
+                                target_hash = hashlib.md5(f"{str(p.relative_to(self.project_root))}:module".encode()).hexdigest()[:10]
+                                target_id = f"src_{target_hash}"
+                                self.vault.add_relation(module["id"], target_id, RelationType.REQUIRES)
+                                break
+                                
+                else:
+                    # File non Python (legacy signature o markdown/css/html generici)
+                    content = path.read_text(encoding="utf-8", errors="ignore")
+                    node_id = f"src_{hashlib.md5(f'{rel_path}:{path.name}'.encode()).hexdigest()[:10]}"
+                    text_content = f"SOURCE_CODE_ASSET [{path.name}]\nFILE: {path.name}\nPATH: {rel_path}\n\n{content[:2000]}"
+                    
                     await self.vault.add_node(
                         node_id, 
                         text_content, 
                         metadata={
                             "source": rel_path,
                             "origin": "local_bridge",
-                            "context": "proprioception", # 🧠 Isolamento semantico
-                            "type": "code_signature",
-                            "name": name,
-                            "color": "#3b82f6" 
+                            "context": "proprioception",
+                            "type": "code_asset",
+                            "name": path.name,
+                            "color": "#64748b" 
                         }
                     )
                     nodes_created += 1
-                else:
-                    # 🧬 [v4.1.4] Aggiornamento del contenuto se cambiato (Propriocezione Dinamica)
-                    existing_node = self.vault._nodes.get(node_id)
-                    if existing_node and existing_node.text != text_content:
-                        existing_node.text = text_content
-                        # Innesca la rinfrescata del vettore se necessario (verrà fatto dallo swarm)
-                        existing_node.metadata["updated_at"] = time.time()
-                        nodes_updated += 1
-            except: pass
-            
-        report = f"✅ [Bridge] Codebase sincronizzata: {nodes_created} nuovi, {nodes_updated} aggiornati."
+                
+                # Aggiorniamo e salviamo la cache
+                file_cache.update(path)
+                file_cache.save()
+                
+            except Exception as e:
+                print(f"⚠️ [Bridge Ingestion Error] Failed to ingest {path}: {e}")
+                
+        report = f"✅ [Bridge] Codebase sincronizzata: {nodes_created} nuovi."
         print(report)
 
     def _bridge_nodes_legacy(self, target_vault) -> int:
@@ -122,27 +226,9 @@ class LatentBridge:
         bridges_created = 0
         web_nodes = [nid for nid, node in list(target_vault._nodes.items()) if node.metadata.get("origin") == "web_forager"]
         src_nodes = [nid for nid, node in list(target_vault._nodes.items()) if node.metadata.get("origin") == "local_bridge"]
-        for wnid in web_nodes:
-            wnode = target_vault._nodes.get(wnid)
-            if not wnode: continue
-            for snid in src_nodes:
-                snode = target_vault._nodes.get(snid)
-                if not snode: continue
-                name = snode.metadata.get("name", "").lower()
-                if not name: continue
-                import re
-                if re.search(rf"\b{re.escape(name)}\b", (wnode.text or "").lower()):
-                    if not any(e.target_id == snid for e in wnode.edges):
-                        from index.node import SemanticEdge, RelationType
-                        edge = SemanticEdge(target_id=snid, relation=RelationType.EQUIVALENT, source="bridge_legacy")
-                        setattr(edge, 'is_aura', True)
-                        wnode.edges.append(edge)
-                        
-                        # 📝 [v14.5 Fix] Set metadata for engine stats
-                        if "code_bridges" not in wnode.metadata: wnode.metadata["code_bridges"] = []
-                        wnode.metadata["code_bridges"].append(name)
-                        
-                        bridges_created += 1
+        
+        # [v4.1.6 Fix] O(N^2) regex search is too slow for 35M iterations. Use exact matching or skip.
+        # print(f"⚠️ [Bridge] Skipping legacy O(N^2) text matching to prevent event loop blocking. ({len(web_nodes)}x{len(src_nodes)})")
         return bridges_created
 
     def bridge_nodes(self, vault=None, threshold=0.75) -> int:
@@ -154,15 +240,15 @@ class LatentBridge:
         if self.settings and not self.settings.get("codebase_bridging", False):
             return 0
 
-        # 1. Triage dei Nodi (Web vs Local Code) - Use list() for thread safety
-        all_vault_nodes = list(target_vault._nodes.values())
-        web_nodes = [n for n in all_vault_nodes if n.metadata.get("origin") == "web_forager" and n.vector is not None]
-        src_nodes = [n for n in all_vault_nodes if n.metadata.get("origin") == "local_bridge" and n.vector is not None]
+        # 1. Triage dei Nodi (Web vs Local Code) with explicit NIC hydration
+        all_vault_nodes = [target_vault.get_node(nid) for nid in list(target_vault._nodes.keys())]
+        web_nodes = [n for n in all_vault_nodes if n and n.metadata.get("origin") == "web_forager" and getattr(n, "vector", None) is not None and len(n.vector) > 0]
+        src_nodes = [n for n in all_vault_nodes if n and n.metadata.get("origin") == "local_bridge" and getattr(n, "vector", None) is not None and len(n.vector) > 0]
         
         if not web_nodes or not src_nodes:
             return self._bridge_nodes_legacy(target_vault)
         
-        print(f"📡 [Bridge] Analisi Semantica: {len(web_nodes)} documenti web vs {len(src_nodes)} file sorgente...")
+        # print(f"📡 [Bridge] Analisi Semantica: {len(web_nodes)} documenti web vs {len(src_nodes)} file sorgente...")
         
         # 2. Calcolo Matrice di Similarità (Batch Vector Support)
         # Nodi normalizzati in post_init -> dot product = cosine similarity
@@ -171,7 +257,10 @@ class LatentBridge:
         
         sim_matrix = np.dot(web_vectors, src_vectors.T)
         max_sim = float(np.max(sim_matrix)) if sim_matrix.size > 0 else 0
-        print(f"📊 [Bridge] Similarità Massima rilevata: {max_sim:.4f} (Threshold: {threshold})")
+        
+        # Logghiamo solo se c'è un interesse reale o ogni tanto (frequenza ridotta)
+        if max_sim > threshold * 0.8:
+            print(f"📊 [Bridge] Similarità Rilevata: {max_sim:.4f} (Threshold: {threshold})")
         matches = np.where(sim_matrix > threshold)
         
         bridges_created = 0

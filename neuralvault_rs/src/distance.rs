@@ -3,7 +3,7 @@ use simsimd::SpatialSimilarity;
 /// Calcola la distanza coseno tra due vettori f32.
 /// Se disponibile, usa istruzioni SIMD (AVX, NEON) automaticamente.
 pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
-    1.0 - f32::cosine(a, b).unwrap_or(0.0) as f32
+    f32::cosine(a, b).unwrap_or(0.0) as f32
 }
 
 /// Calcola la distanza dot-product tra due vettori f32.

@@ -24,7 +24,7 @@ DATA_ROOT.mkdir(parents=True, exist_ok=True)
 app = FastAPI(
     title="NeuralVault",
     description="Agent-native vector database with context graph and memory tiers",
-    version="0.1.1",
+    version="11.3.0",
 )
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -47,7 +47,7 @@ class CreateCollectionRequest(BaseModel):
     hnsw_M:           int   = 16
     use_quantization: bool  = True
     use_rust:         bool  = True
-    embedder_type:    str   = "none" # "none", "bge-m3", "openai"
+    embedder_type:    str   = "none" # "none", "bge-m3", "openai", "nomic-mrl"
     openai_key:       Optional[str] = None
 
 class UpsertNodeRequest(BaseModel):
@@ -85,23 +85,33 @@ class AddEdgeRequest(BaseModel):
 @app.on_event("startup")
 def bootstrap_server():
     """Carica tutte le collection esistenti sul disco all'avvio."""
+    from core.obsidian_normalizer import SovereignObsidianNormalizer
     print(f"NeuralVault: Bootstrapping from {DATA_ROOT}...")
     for coll_dir in DATA_ROOT.iterdir():
         if coll_dir.is_dir() and (coll_dir / "semantic").exists():
             name = coll_dir.name
             print(f"Found collection: {name}")
-            _vaults[name] = NeuralVaultEngine(
+            engine = NeuralVaultEngine(
                 data_dir=coll_dir,
                 collection=name
             )
+            _vaults[name] = engine
+            
+            # Avvia Obsidian Normalizer per la collection
+            normalizer = SovereignObsidianNormalizer(engine, watch_dir=str(Path(coll_dir) / "wiki"))
+            normalizer.start()
+            engine.normalizer = normalizer
+            
     print("NeuralVault: Bootstrap complete.")
 
 @app.on_event("shutdown")
 def shutdown_server():
-    """Flush di tutte le collection prima di chiudere."""
+    """Flush di tutte le collection e arresto normalizzatori prima di chiudere."""
     for name, vault in _vaults.items():
         print(f"Flushing {name}...")
         vault.flush()
+        if hasattr(vault, 'normalizer'):
+            vault.normalizer.stop()
 
 # ─────────────────────────────────────────────
 # Routes: Collections
@@ -117,9 +127,12 @@ def create_collection(req: CreateCollectionRequest):
     # Configure embedder
     embedder = None
     if req.embedder_type == "bge-m3":
-        embedder = EmbedderFactory.sentence_transformers()
+        embedder = EmbedderFactory.text_bge_m3()
+    elif req.embedder_type == "nomic-mrl":
+        # Override dimension if using MRL
+        embedder = EmbedderFactory.text_nomic_mrl(matryoshka_dim=req.dim)
     elif req.embedder_type == "openai":
-        embedder = EmbedderFactory.openai(api_key=req.openai_key)
+        embedder = EmbedderFactory.clip_openai()
 
     _vaults[req.name] = NeuralVaultEngine(
         dim=req.dim,
@@ -258,7 +271,7 @@ def health():
 def root():
     return {
         "name":    "NeuralVault",
-        "version": "0.1.1",
+        "version": "11.3.0",
         "docs":    "/docs",
     }
 
@@ -307,5 +320,11 @@ def get_vault_history(name: str, timestamp: float | None = None):
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "mcp-init":
+        import subprocess
+        cmd = [sys.executable, "mcp_server.py"] + sys.argv[1:]
+        subprocess.run(cmd)
+    else:
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8000)

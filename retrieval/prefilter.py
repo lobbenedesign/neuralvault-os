@@ -11,6 +11,7 @@ import threading
 import os
 import shutil
 import json
+import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -163,7 +164,7 @@ class DuckDBPrefilter:
                 self.con.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON vault_metadata(content_hash)")
 
             if 'namespace' not in col_names:
-                print("🏰 [v3.6.0] Inizializzazione Logical Namespacing...")
+                print("城堡 [v3.6.0] Inizializzazione Logical Namespacing...")
                 self.con.execute("ALTER TABLE vault_metadata ADD COLUMN namespace VARCHAR DEFAULT 'default'")
                 self.con.execute("CREATE INDEX IF NOT EXISTS idx_namespace ON vault_metadata(namespace)")
 
@@ -171,10 +172,95 @@ class DuckDBPrefilter:
                 print("📄 [v3.6.0] Inizializzazione Advanced Scalar Filtering...")
                 self.con.execute("ALTER TABLE vault_metadata ADD COLUMN file_type VARCHAR DEFAULT 'text'")
                 self.con.execute("CREATE INDEX IF NOT EXISTS idx_file_type ON vault_metadata(file_type)")
+
+            # --- [v9.7] Multi-Vector & SPLADE ---
+            if 'title_embedding' not in col_names:
+                print("📐 [v9.7] Multi-Vector: Inizializzazione Title Embedding...")
+                self.con.execute("ALTER TABLE vault_metadata ADD COLUMN title_embedding FLOAT[]")
+
+            if 'code_embedding' not in col_names:
+                print("📐 [v9.7] Multi-Vector: Inizializzazione Code Embedding...")
+                self.con.execute("ALTER TABLE vault_metadata ADD COLUMN code_embedding FLOAT[]")
+
+            if 'sparse_vector' not in col_names:
+                print("📐 [v9.7] Multi-Vector: Inizializzazione Sparse Vector (SPLADE)...")
+                self.con.execute("ALTER TABLE vault_metadata ADD COLUMN sparse_vector JSON")
+
+            # --- [v9.7] Semantic LLM Cache Table ---
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS llm_cache (
+                    prompt_hash VARCHAR PRIMARY KEY,
+                    response TEXT,
+                    model VARCHAR,
+                    created_at TIMESTAMP DEFAULT now(),
+                    metadata JSON
+                )
+            """)
+            # --- [v10.0] Epistemic Custody & Wiki Claims ---
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_claims (
+                    claim_id VARCHAR PRIMARY KEY,
+                    page_id VARCHAR,
+                    claim_text TEXT,
+                    source_node_ids JSON,
+                    confidence FLOAT,
+                    freshness_score FLOAT,
+                    contradiction_score FLOAT DEFAULT 0.0,
+                    created_at TIMESTAMP DEFAULT now()
+                )
+            """)
+
+            # --- [v10.2] Decision OS: Decision Genome & Feedback Loop ---
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS decision_genome (
+                    decision_id VARCHAR PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT now(),
+                    question TEXT,
+                    oracle_prediction JSON,
+                    confidence DOUBLE DEFAULT 1.0,
+                    causal_snapshot_hash VARCHAR,
+                    real_outcome JSON
+                )
+            """)
+
         except Exception as e:
             print(f"⚠️ [DuckDB Migration] {e}")
 
         print("🦆 NeuralVault: DuckDB Analytical Engine online.")
+
+    def record_decision(self, decision_id: str, question: str, oracle_prediction: dict, confidence: float, causal_snapshot_hash: str):
+        """[v10.2] Registra immutabilmente uno scenario decisionale nel Decision Genome."""
+        prediction_json = json.dumps(oracle_prediction)
+        self.execute("""
+            INSERT OR REPLACE INTO decision_genome 
+            (decision_id, created_at, question, oracle_prediction, confidence, causal_snapshot_hash, real_outcome)
+            VALUES (?, now(), ?, ?, ?, ?, NULL)
+        """, (decision_id, question, prediction_json, confidence, causal_snapshot_hash))
+
+    def update_decision_outcome(self, decision_id: str, real_outcome: dict):
+        """[v10.2] Registra l'esito reale di una decisione passata per abilitare la calibrazione empirica."""
+        outcome_json = json.dumps(real_outcome)
+        self.execute("UPDATE decision_genome SET real_outcome = ? WHERE decision_id = ?", (outcome_json, decision_id))
+
+    def get_decisions(self) -> List[Dict]:
+        """[v10.2] Estrae tutti i genomi decisionali archiviati."""
+        try:
+            res = self.fetchall("SELECT decision_id, created_at, question, oracle_prediction, confidence, causal_snapshot_hash, real_outcome FROM decision_genome ORDER BY created_at DESC")
+            decisions = []
+            for r in res:
+                decisions.append({
+                    "decision_id": r[0],
+                    "created_at": str(r[1]),
+                    "question": r[2],
+                    "oracle_prediction": json.loads(r[3]) if r[3] else {},
+                    "confidence": r[4],
+                    "causal_snapshot_hash": r[5],
+                    "real_outcome": json.loads(r[6]) if r[6] else None
+                })
+            return decisions
+        except Exception as e:
+            print(f"⚠️ Errore get_decisions: {e}")
+            return []
 
     def add_node(self, node_id: str, collection: str, metadata: Dict):
         """Indicizza un singolo nodo (Fallback)."""
@@ -191,19 +277,24 @@ class DuckDBPrefilter:
             importance = metadata.get("importance", 1.0)
             c_hash = metadata.get("content_hash")
             l_state = metadata.get("lifecycle_state", "stable")
-            
-            # [v3.6.0] Namespacing & Scalar Data
             namespace = metadata.get("namespace", "default")
             file_type = metadata.get("file_type", "text")
             
-            data_to_insert.append((node_id, collection, namespace, file_type, importance, modality, c_hash, l_state, meta_json))
+            # [v9.7] Multi-Vector
+            t_vector = metadata.get("title_vector")
+            c_vector = metadata.get("code_vector")
+            s_vector = metadata.get("sparse_vector")
+            if s_vector and not isinstance(s_vector, str):
+                s_vector = json.dumps(s_vector)
+
+            data_to_insert.append((node_id, collection, namespace, file_type, importance, modality, c_hash, l_state, t_vector, c_vector, s_vector, meta_json))
 
         # Esecuzione in una singola transazione (Turbo Mode)
         try:
             self.executemany("""
                 INSERT OR REPLACE INTO vault_metadata 
-                (id, collection, namespace, file_type, created_at, last_access, access_count, importance, modality, content_hash, lifecycle_state, metadata)
-                VALUES (?, ?, ?, ?, now(), now(), 1, ?, ?, ?, ?, ?)
+                (id, collection, namespace, file_type, created_at, last_access, access_count, importance, modality, content_hash, lifecycle_state, title_embedding, code_embedding, sparse_vector, metadata)
+                VALUES (?, ?, ?, ?, now(), now(), 1, ?, ?, ?, ?, ?, ?, ?, ?)
             """, data_to_insert)
         except Exception as e:
             print(f"⚠️ Errore nel Batch Ingest Prefilter: {e}")
@@ -229,7 +320,7 @@ class DuckDBPrefilter:
                 (node_id,)
             ).fetchone()
 
-    def log_event(self, event_type: str, node_id: str, topic: str = None, description: str = "", topic_cluster: str = None):
+    def log_event(self, event_type: str, node_id: str = "system", topic: str = None, description: str = "", topic_cluster: str = None, **kwargs):
         """[v4.3.0] Registra un evento nel ledger temporale per la Knowledge Timeline."""
         # [v4.3.1 Fix] Support both positional 'topic' and keyword 'topic_cluster'
         final_topic = topic_cluster or topic or "general"
@@ -348,9 +439,9 @@ class DuckDBPrefilter:
             return []
 
     def execute(self, query: str, params: tuple = ()):
-        """Esegue una query SQL in modo thread-safe."""
+        """Esegue una query SQL in modo thread-safe (Senza ritorno risultati)."""
         with self._lock:
-            return self.con.execute(query, params)
+            self.con.execute(query, params)
 
     def executemany(self, query: str, params: List[tuple]):
         """Esegue un batch di query SQL in modo thread-safe."""
@@ -372,11 +463,47 @@ class DuckDBPrefilter:
         with self._lock:
             return self.con.execute(query, params).fetchdf()
 
+    def vector_search(self, vector: List[float], column: str = "title_embedding", limit: int = 10) -> List[tuple]:
+        """
+        [v9.7] Ricerca vettoriale analitica su colonne Named Vectors.
+        Utilizza la similarità coseno nativa di DuckDB.
+        """
+        with self._lock:
+            # DuckDB richiede che il vettore sia passato come lista Python
+            query = f"""
+                SELECT id, 1 - list_cosine_distance({column}, ?::FLOAT[]) as score
+                FROM vault_metadata
+                WHERE {column} IS NOT NULL
+                ORDER BY score DESC
+                LIMIT ?
+            """
+            return self.con.execute(query, (vector, limit)).fetchall()
+
     def close(self):
         """Chiude la connessione DuckDB in modo sicuro."""
         if self.con:
             self.con.close()
             self.con = None
+
+    # --- [v9.7] Semantic LLM Cache ---
+    def get_llm_cache(self, prompt: str, model: str) -> Optional[str]:
+        """Recupera una risposta LLM dalla cache se presente (v9.7)."""
+        p_hash = hashlib.sha256(prompt.encode()).hexdigest()
+        res = self.fetchone("SELECT response FROM llm_cache WHERE prompt_hash = ? AND model = ?", (p_hash, model))
+        if res:
+            print(f"🎯 [LLM-Cache] HIT per {model} (hash: {p_hash[:8]})")
+            return res[0]
+        return None
+
+    def set_llm_cache(self, prompt: str, model: str, response: str, metadata: Dict = None):
+        """Salva una risposta LLM nella cache persistente (v9.7)."""
+        p_hash = hashlib.sha256(prompt.encode()).hexdigest()
+        meta_json = json.dumps(metadata or {})
+        self.execute(
+            "INSERT OR REPLACE INTO llm_cache (prompt_hash, response, model, metadata) VALUES (?, ?, ?, ?)",
+            (p_hash, response, model, meta_json)
+        )
+
     def get_audit_stats(self) -> Dict:
         """Estrae statistiche di integrità e performance dal database analitico."""
         try:

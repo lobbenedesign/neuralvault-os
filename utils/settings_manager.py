@@ -29,7 +29,12 @@ class SwarmSettingsManager:
     def _load(self) -> Dict:
         if not self.config_path.exists():
             self._save(self.default_settings)
-            return self.default_settings
+            try:
+                from utils.config_validator import ColdBootConfigValidator
+                validator = ColdBootConfigValidator(self.config_path.parent)
+                return validator.validate_and_adjust(self.default_settings)
+            except:
+                return self.default_settings
         try:
             with open(self.config_path, 'r') as f:
                 loaded = json.load(f)
@@ -40,6 +45,15 @@ class SwarmSettingsManager:
                         full_settings[k].update(v)
                     else:
                         full_settings[k] = v
+                
+                # Cold-Boot Validation Hook
+                try:
+                    from utils.config_validator import ColdBootConfigValidator
+                    validator = ColdBootConfigValidator(self.config_path.parent)
+                    full_settings = validator.validate_and_adjust(full_settings)
+                except Exception as e:
+                    print(f"⚠️ [Validator Error] Validation failed to run: {e}")
+                
                 return full_settings
         except:
             return self.default_settings

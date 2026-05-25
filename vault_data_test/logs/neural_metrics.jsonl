@@ -11,3 +11,16 @@
 {"timestamp": "2026-05-08T15:58:14.367726", "event": "system_info", "metrics": {"ram_usage_mb": 617.61, "message": "Cognitive Decay Daemon: ONLINE"}}
 {"timestamp": "2026-05-08T15:59:08.041783", "event": "system_info", "metrics": {"ram_usage_mb": 617.64, "message": "Cognitive Decay Daemon: ONLINE"}}
 {"timestamp": "2026-05-08T16:16:13.221007", "event": "system_info", "metrics": {"ram_usage_mb": 617.86, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:55:44.473578", "event": "system_info", "metrics": {"ram_usage_mb": 569.73, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:56:11.249956", "event": "system_info", "metrics": {"ram_usage_mb": 567.67, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:56:36.564831", "event": "system_info", "metrics": {"ram_usage_mb": 575.06, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:57:33.002603", "event": "system_info", "metrics": {"ram_usage_mb": 572.3, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:57:59.255168", "event": "system_info", "metrics": {"ram_usage_mb": 566.42, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:58:23.690644", "event": "system_info", "metrics": {"ram_usage_mb": 558.05, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:59:07.202490", "event": "system_info", "metrics": {"ram_usage_mb": 574.41, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T10:59:33.529410", "event": "system_info", "metrics": {"ram_usage_mb": 560.03, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T11:13:50.798522", "event": "system_info", "metrics": {"ram_usage_mb": 569.22, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T11:14:08.619279", "event": "system_info", "metrics": {"ram_usage_mb": 572.88, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-17T11:14:28.780017", "event": "system_info", "metrics": {"ram_usage_mb": 532.19, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-18T19:20:48.631027", "event": "system_info", "metrics": {"ram_usage_mb": 603.05, "message": "Cognitive Decay Daemon: ONLINE"}}
+{"timestamp": "2026-05-18T19:21:10.176229", "event": "system_info", "metrics": {"ram_usage_mb": 607.95, "message": "Cognitive Decay Daemon: ONLINE"}}

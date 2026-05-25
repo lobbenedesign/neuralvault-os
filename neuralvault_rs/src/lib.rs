@@ -2,12 +2,14 @@ use pyo3::prelude::*;
 
 mod distance;
 mod hnsw_core;
+pub mod index;
 pub mod turboquant;
 pub mod causal_engine;
+pub mod gpu_qmc;
 
 #[pyclass]
 pub struct PyHNSW {
-    inner: hnsw_core::HNSWCore,
+    inner: Box<dyn index::GpuVectorIndex>,
 }
 
 #[pymethods]
@@ -15,7 +17,12 @@ impl PyHNSW {
     #[new]
     pub fn new(dim: usize, m: usize, ef_construction: usize) -> Self {
         PyHNSW {
-            inner: hnsw_core::HNSWCore::new(dim, m, ef_construction),
+            inner: index::VectorIndexFactory::create(
+                index::VectorIndexType::Gpu,
+                dim,
+                m,
+                ef_construction,
+            ),
         }
     }
 
@@ -26,7 +33,7 @@ impl PyHNSW {
 
     /// Ritorna il numero di nodi indicizzati.
     pub fn __len__(&self) -> usize {
-        self.inner.node_ids.len()
+        self.inner.len()
     }
 
     /// Inserisce un vettore nel grafo.
@@ -41,25 +48,7 @@ impl PyHNSW {
         k: usize,
         ef: usize,
     ) -> Vec<(String, f32)> {
-        // Fase 1: Scendi dai layer alti all'entry_point del layer 0
-        let mut ep = if let Some(e) = self.inner.entry_point { e } else { return Vec::new() };
-        
-        for l in (1..=(self.inner.max_level as usize)).rev() {
-            let results = self.inner.search_layer(&query, ep, 1, l);
-            if let Some(best) = results.first() {
-                ep = best.0;
-            }
-        }
-
-        // Fase 2: Ricerca precisa al layer 0
-        let results = self.inner.search_layer(&query, ep, ef, 0);
-        
-        results.into_iter()
-            .take(k)
-            .map(|(idx, dist)| {
-                (self.inner.node_ids[idx].clone(), dist)
-            })
-            .collect()
+        self.inner.search(query, k, ef)
     }
 
     /// Estrae un campione di archi per visualizzazione.
@@ -69,32 +58,23 @@ impl PyHNSW {
 
     /// Ritorna il numero totale di archi nel grafo.
     pub fn total_edges(&self) -> usize {
-        self.inner.layers_counts.iter().map(|c| c.iter().sum::<u32>() as usize).sum()
+        self.inner.total_edges()
     }
 
     /// Ritorna il livello massimo attuale.
     pub fn max_level(&self) -> i32 {
-        self.inner.max_level
+        self.inner.max_level()
     }
 
     /// Blocca l'indice nella memoria fisica (Hardware Pinning).
     /// Ottimizzato per NVIDIA Grace (Unified Memory) e Apple Silicon.
     pub fn pin_to_hardware(&self) -> bool {
-        #[cfg(unix)]
-        unsafe {
-            let ptr = self.inner.vectors.as_ptr() as *const libc::c_void;
-            let size = self.inner.vectors.len() * std::mem::size_of::<Vec<f32>>();
-            if libc::mlock(ptr, size) == 0 {
-                println!("🏎️ [Hardware] HNSW Index pinned to Fast RAM/HBM.");
-                return true;
-            }
-        }
-        false
+        self.inner.pin_to_hardware()
     }
 
     /// Ritorna la dimensione dei vettori.
     pub fn dim(&self) -> usize {
-        self.inner.dim
+        self.inner.dim()
     }
 }
 
@@ -126,6 +106,7 @@ impl RustTurboQuant {
 fn neuralvault_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHNSW>()?;
     m.add_class::<RustTurboQuant>()?;
+    m.add_class::<gpu_qmc::PyGpuQmcDriver>()?;
     m.add_function(wrap_pyfunction!(causal_engine::run_stochastic_simulation_rs, m)?)?;
     Ok(())
 }

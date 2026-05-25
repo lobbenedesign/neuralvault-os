@@ -39,8 +39,30 @@ impl SobolGenerator {
     }
 }
 
+pub fn generate_sobol_owen_sample(thread_seed: u32, leap_position: u32) -> f32 {
+    let mut result = 0u32;
+    let gray = leap_position ^ (leap_position >> 1);
+    
+    for bit in 0..32 {
+        if (gray & (1 << bit)) != 0 {
+            result ^= 1 << (31 - bit);
+        }
+    }
+    
+    // MurmurHash3 finalizer: fully reversible bijection ensuring uniform distribution conservation
+    let mut scrambled = result ^ thread_seed;
+    scrambled ^= scrambled >> 15;
+    scrambled = scrambled.wrapping_mul(0x85ebca6b);
+    scrambled ^= scrambled >> 13;
+    scrambled = scrambled.wrapping_mul(0xc2b2ae35);
+    scrambled ^= scrambled >> 16;
+    
+    scrambled as f32 / 4294967296.0
+}
+
+
 /// Simple inverse normal CDF approximation (Beasley-Springer-Moro)
-fn inverse_normal_cdf(p: f32) -> f32 {
+pub fn inverse_normal_cdf(p: f32) -> f32 {
     let p = p.clamp(0.0001, 0.9999);
     let x = p - 0.5;
     if x.abs() < 0.42 {
@@ -85,20 +107,12 @@ pub fn run_stochastic_simulation_rs(
         })
         .collect();
 
-    // 2. Esecuzione Parallela Quasi-Monte Carlo (Rayon + Sobol)
+    // 2. Esecuzione Parallela Quasi-Monte Carlo (Rayon + Deterministic Owen-Leapfrog Sobol)
+    let global_seed = 42u32;
     let results: Vec<HashMap<String, f32>> = (0..iterations)
         .into_par_iter()
         .map(|i| {
-            // Each thread uses a Sobol generator initialized with an offset for 'Owen-like' scrambling
-            let mut sobol = SobolGenerator { 
-                index: i as u32 * 1000, // Jump ahead for each iteration to avoid correlation
-                direction_numbers: vec![0u32; 32] 
-            };
-            // Initialize direction numbers (simple XOR-shift scrambling)
-            for j in 0..32 {
-                sobol.direction_numbers[j] = (1 << (31 - j)) ^ (i as u32).wrapping_mul(0x9E3779B9);
-            }
-
+            let mut dim_idx = 0u32;
             let mut current_impacts = HashMap::new();
             current_impacts.insert(start_node_id.clone(), initial_impact);
 
@@ -109,8 +123,12 @@ pub fn run_stochastic_simulation_rs(
                 for (nid, impact) in active_nodes {
                     if let Some(edges) = graph.get(&nid) {
                         for edge in edges {
-                            // Using Sobol sequence for noise generation
-                            let p = sobol.next_f32();
+                            // Seed unico per thread/dimensione (MurmurHash-like)
+                            let thread_seed = global_seed ^ (i as u32 * 0x9e3779b9) ^ (dim_idx * 0x85ebca6b);
+                            // Algoritmo Leapfrog: calcola lo skip deterministico
+                            let leap_position = (i as u32) * 1000 + dim_idx;
+                            
+                            let p = generate_sobol_owen_sample(thread_seed, leap_position);
                             let noise = inverse_normal_cdf(p) * noise_level;
                             
                             let weight_with_noise = (edge.weight + noise).clamp(-2.0, 2.0);
@@ -119,6 +137,8 @@ pub fn run_stochastic_simulation_rs(
                             let entry = current_impacts.entry(edge.target_id.clone()).or_insert(0.0);
                             *entry += transmission;
                             next_nodes.push((edge.target_id.clone(), transmission));
+                            
+                            dim_idx += 1;
                         }
                     }
                 }

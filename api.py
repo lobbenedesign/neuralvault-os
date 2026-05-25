@@ -1,6 +1,15 @@
 import os
-os.environ["MallocStackLogging"] = "0"
-os.environ["MallocStackLoggingNoCompact"] = "0"
+os.environ.pop("MallocStackLogging", None)
+os.environ.pop("MallocStackLoggingNoCompact", None)
+os.environ.pop("MallocScribble", None)
+os.environ.pop("MallocGuardEdges", None)
+
+def get_clean_env():
+    env = os.environ.copy()
+    for key in ["MallocStackLogging", "MallocStackLoggingNoCompact", "MallocScribble", "MallocGuardEdges"]:
+        env.pop(key, None)
+    return env
+
 import sys
 import logging
 
@@ -20,6 +29,9 @@ os.environ["PYAV_SKIP_DLOPEN_CHECK"] = "1"
 os.environ["HF_TOKEN"] = "sovereign_local_boot_shield_v8"
 os.environ["HUGGING_FACE_HUB_TOKEN"] = "sovereign_local_boot_shield_v8"
 os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
+os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+os.environ["LOG_LEVEL"] = "ERROR"
+os.environ["PYTHONWARNINGS"] = "ignore"
 
 # Centralized Logging Silence
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -64,6 +76,7 @@ from retrieval.playbook_generator import PlaybookGenerator
 from retrieval.shadow_twin import ShadowModeTwin
 from retrieval.simplifier import SimplificationDaemon
 from retrieval.compounding_wiki import CompoundingWikiManager, SovereignWikiLinter
+from retrieval.forensic import ClaimVerificationGraph
 
 import uvicorn
 os.environ["PYSPARK_PYTHON"] = sys.executable # Just in case
@@ -82,26 +95,96 @@ import httpx
 from neural_lab import SynapticSignal, AgentRole, SignalType, NeuralLabOrchestrator, AgentSmith
 
 # --- 🧠 [v8.4] Verbose LLM Interceptor ---
+import threading
+
+LLM_INTERCEPTS = []
+_intercepts_lock = threading.Lock()
+
+def _log_intercept(model, prompt, response):
+    with _intercepts_lock:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        LLM_INTERCEPTS.append({
+            "model": model,
+            "prompt": prompt,
+            "response": response,
+            "timestamp": timestamp
+        })
+        if len(LLM_INTERCEPTS) > 100:
+            LLM_INTERCEPTS.pop(0)
+
+def _extract_prompt_text(json_data):
+    if not json_data:
+        return ""
+    if "prompt" in json_data:
+        return str(json_data["prompt"])
+    if "messages" in json_data:
+        msgs = json_data["messages"]
+        if isinstance(msgs, list):
+            return "\n".join([f"{m.get('role', 'user').upper()}: {m.get('content', '')}" for m in msgs])
+        return str(msgs)
+    return ""
+
+def _extract_response_text(json_data):
+    if not json_data:
+        return ""
+    if "response" in json_data:
+        return str(json_data["response"])
+    if "message" in json_data and isinstance(json_data["message"], dict):
+        return str(json_data["message"].get("content", ""))
+    return ""
+
 _original_async_post = httpx.AsyncClient.post
 async def _patched_async_post(self, url, *args, **kwargs):
-    if "/api/generate" in str(url) or "/api/chat" in str(url):
-        if "json" in kwargs:
-            model = kwargs["json"].get("model", "unknown")
-            prompt_preview = str(kwargs["json"].get("prompt", kwargs["json"].get("messages", "")))[:100].replace("\n", " ")
-            print(f"🧠 [LLM Intercept] Modello: {model} | Azione: {prompt_preview}...")
-    return await _original_async_post(self, url, *args, **kwargs)
+    is_llm = "/api/generate" in str(url) or "/api/chat" in str(url)
+    resp = await _original_async_post(self, url, *args, **kwargs)
+    if is_llm and resp.status_code == 200:
+        try:
+            json_req = kwargs.get("json", {})
+            model = json_req.get("model", "unknown")
+            prompt = _extract_prompt_text(json_req)
+            
+            # Check if streaming
+            if not json_req.get("stream", False):
+                json_resp = resp.json()
+                response = _extract_response_text(json_resp)
+                _log_intercept(model, prompt, response)
+            else:
+                _log_intercept(model, prompt, "[Streaming Response - Logs visualizzabili in tempo reale su terminale/chat]")
+        except Exception as e:
+            print(f"⚠️ [LLM Intercept Error] Fail to capture response: {e}")
+    return resp
 httpx.AsyncClient.post = _patched_async_post
 
 _original_post = httpx.Client.post
 def _patched_post(self, url, *args, **kwargs):
-    if "/api/generate" in str(url) or "/api/chat" in str(url):
-        if "json" in kwargs:
-            model = kwargs["json"].get("model", "unknown")
-            prompt_preview = str(kwargs["json"].get("prompt", kwargs["json"].get("messages", "")))[:100].replace("\n", " ")
-            print(f"🧠 [LLM Intercept] Modello: {model} | Azione: {prompt_preview}...")
-    return _original_post(self, url, *args, **kwargs)
+    is_llm = "/api/generate" in str(url) or "/api/chat" in str(url)
+    resp = _original_post(self, url, *args, **kwargs)
+    if is_llm and resp.status_code == 200:
+        try:
+            json_req = kwargs.get("json", {})
+            model = json_req.get("model", "unknown")
+            prompt = _extract_prompt_text(json_req)
+            
+            # Check if streaming
+            if not json_req.get("stream", False):
+                json_resp = resp.json()
+                response = _extract_response_text(json_resp)
+                _log_intercept(model, prompt, response)
+            else:
+                _log_intercept(model, prompt, "[Streaming Response - Logs visualizzabili in tempo reale su terminale/chat]")
+        except Exception as e:
+            print(f"⚠️ [LLM Intercept Error] Fail to capture response: {e}")
+    return resp
 httpx.Client.post = _patched_post
 # ----------------------------------------
+
+class NodePosition(BaseModel):
+    id: str
+    x: float
+    y: float
+
+class UpdatePositionsRequest(BaseModel):
+    positions: List[NodePosition]
 
 class QueryRequest(BaseModel):
     query: str
@@ -115,6 +198,9 @@ class QueryRequest(BaseModel):
     month: Optional[int] = None
     wiki_mode: bool = False
     recursive: bool = False
+    # [v9.7] Multi-Vector & Sparse Search
+    named_vector: Optional[str] = None
+    use_sparse: bool = True
 
 # CORE ENGINE IMPORT
 from __init__ import NeuralVaultEngine
@@ -134,8 +220,22 @@ RETALIATION_LOCKS = {} # {ip: timestamp_expiry}
 THREAT_LEVELS = {}     # {ip: score}
 MAX_THREAT_SCORE = 10  # Soglia per il lock di 45s
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 app = FastAPI(title="Aura Nexus: NeuralVault API v6.0.1")
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.state.boot_time = datetime.now()
+app.state.sse_queues = []
+
+async def broadcast_event(event_type: str, data: Dict[str, Any]):
+    """[v9.0] Notifica asincrona a tutti i client SSE connessi via coda dedicata."""
+    payload = json.dumps({"event": event_type, "data": data}, default=str)
+    # Rimuoviamo code orfane (già gestito nel loop, ma per sicurezza)
+    for q in list(app.state.sse_queues):
+        try:
+            q.put_nowait(payload)
+        except:
+            pass
 
 # --- AGENT SMITH FIREWALL LOGIC (v6.0.1) ---
 def report_threat(request: Request, severity: int = 1):
@@ -256,6 +356,22 @@ async def startup_event():
     
     # 🚀 Start Swarm
     app.state.lab.start_orchestra()
+    
+    # 🤖 Initialize Telegram Bridge on Boot
+    try:
+        settings_file = os.path.join(storage_dir, "swarm_settings.json")
+        if os.path.exists(settings_file):
+            with open(settings_file, "r") as f:
+                boot_settings = json.load(f)
+            if boot_settings.get("telegram_token"):
+                from interface.telegram_bot import start_telegram_bridge
+                app.state.telegram_link = start_telegram_bridge(app.state.lab, boot_settings)
+                print("🤖 [Telegram] Sovereign Link Initialized on Boot.")
+    except Exception as e:
+        print(f"⚠️ [Telegram Boot Error] {e}")
+
+    # 🧠 [v9.2] Load Initial Mindset
+    app.state.current_mindset = getattr(app.state.lab, 'current_mindset', 'DEFAULT')
 
     # 🦆 [v9.0] Formal Logic & Graph Projections
     global logic_engine, kuzu_projection, epistemic_engine, playbook_gen, shadow_twin, simplifier
@@ -266,20 +382,52 @@ async def startup_event():
     shadow_twin = ShadowModeTwin()
     simplifier = SimplificationDaemon(app.state.lab)
     
-    global compounding_wiki_mgr, wiki_linter
+    global compounding_wiki_mgr, wiki_linter, forensic_engine
     compounding_wiki_mgr = CompoundingWikiManager(engine)
     wiki_linter = SovereignWikiLinter(compounding_wiki_mgr)
+    forensic_engine = ClaimVerificationGraph(engine)
     await compounding_wiki_mgr.sync_llms_txt()
     
     # Register Kuzu & Shadow Mode with Aegis Bus for real-time CQRS updates
     aegis_bus.register_listener(kuzu_projection.handle_event)
     aegis_bus.register_listener(shadow_twin.handle_event)
-    print("🏺 [v9.0] Operational Strategy Engines (Playbook, Shadow, Simplifier) ACTIVE.")
+    
+    # [v10.2] Aegis Commit Coordinator (Reconciliation-on-Boot)
+    try:
+        from core.aegis_coordinator import AegisCommitCoordinator
+        coordinator = AegisCommitCoordinator(
+            engine=engine,
+            kuzu_projection=kuzu_projection,
+            log_path=os.path.join(storage_dir, "aegis_event_log.jsonl")
+        )
+        import threading
+        threading.Thread(target=coordinator.check_and_reconcile, daemon=True, name="Aegis-Reconciliation-Boot").start()
+    except Exception as ec:
+        print(f"⚠️ [Aegis Coordinator Error] Reconciliation init failed: {ec}")
+    
+    # 📡 [v9.0] Bridge Aegis Events to SSE for Dashboard UI
+    main_loop = asyncio.get_event_loop()
+    def sse_bridge(event_type, payload):
+        try:
+            # Normalize event_type if it's an Enum member
+            if hasattr(event_type, "name"):
+                event_type = event_type.name
+            
+            asyncio.run_coroutine_threadsafe(broadcast_event(event_type, payload), main_loop)
+            # print(f"📡 [SSE Bridge] Enqueued event: {event_type}")
+        except Exception as e:
+            # print(f"💥 [SSE Bridge Error] {e}")
+            pass
+    
+    aegis_bus.register_listener(sse_bridge)
+    print("🏺 [v9.0] Operational Strategy Engines (Playbook, Shadow, Simplifier) & SSE Bridge v9.7 ACTIVE.")
 
     # 8. Mesh Discovery & Crypto Handshake (v4.0.0)
     def on_peer_found(node_id, address, public_key):
         if engine and engine.gossip:
             engine.gossip.add_peer(node_id, address, public_key)
+        if engine and hasattr(engine, 'wormholes') and engine.wormholes:
+            engine.wormholes.create_tunnel(node_id, address, public_key)
 
     if engine and engine.crypto:
         from network.discovery import SovereignDiscovery
@@ -452,7 +600,10 @@ async def spawn_agent(req: AgentSpawnRequest):
             "analyst": AgentRole.ANALYST,
             "creative": AgentRole.CREATIVE,
             "guardian": AgentRole.GUARDIAN,
-            "architect": AgentRole.ARCHITECT
+            "architect": AgentRole.ARCHITECT,
+            "optimizer": AgentRole.OPTIMIZER,
+            "expert": AgentRole.EXPERT,
+            "researcher": AgentRole.RESEARCHER
         }
         role_enum = role_map.get(req.role, AgentRole.ANALYST)
         
@@ -488,6 +639,19 @@ async def get_system_settings(api_key: str = Depends(get_api_key)):
         except: pass
     return {"theme": "dark", "wiki_model": "qwen2.5:7b"}
 
+@app.get("/api/system/llm-intercepts")
+async def get_llm_intercepts(api_key: str = Depends(get_api_key)):
+    """[v11.1] Restituisce lo storico delle intercettazioni cognitive locali (Ollama)."""
+    with _intercepts_lock:
+        return list(reversed(LLM_INTERCEPTS))
+
+@app.post("/api/system/llm-intercepts/clear")
+async def clear_llm_intercepts(api_key: str = Depends(get_api_key)):
+    """[v11.1] Svuota lo storico delle intercettazioni cognitive locali."""
+    with _intercepts_lock:
+        LLM_INTERCEPTS.clear()
+    return {"status": "ok"}
+
 @app.get("/api/system/weather")
 async def get_system_weather(api_key: str = Depends(get_api_key)):
     """[v8.4] Restituisce lo stato meteorologico della conoscenza (Epistemic Weather)."""
@@ -503,6 +667,8 @@ async def set_system_priority(request: Request, api_key: str = Depends(get_api_k
         data = await request.json()
         priority = data.get("active", False)
         app.state.lab.pause_agents = priority
+        if hasattr(engine, 'priority_mode'):
+            engine.priority_mode = priority
         status = "PRIORITY_FOCUS_ACTIVE" if priority else "SWARM_RESUMED"
         print(f"⚡ [System] Shifted Priority: {status}")
         return {"status": status, "paused": app.state.lab.pause_agents}
@@ -698,6 +864,7 @@ async def apple_touch_icon():
     return Response(status_code=204)
 
 app.mount("/static", StaticFiles(directory="dashboard/static"), name="static")
+app.mount("/api/media", StaticFiles(directory="vault_data/media"), name="media")
 
 
 def find_node_robust(node_id: str) -> Optional[Any]:
@@ -751,6 +918,13 @@ async def get_debug_stats(api_key: str = Depends(get_api_key)):
         import traceback
         print(f"❌ [DEBUG/stats] {e}\n{traceback.format_exc()}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/forensic")
+async def get_wiki_forensic(api_key: str = Depends(get_api_key)):
+    """[v10.1] Restituisce il report delle contraddizioni cross-wiki."""
+    if not forensic_engine:
+        raise HTTPException(status_code=503, detail="Forensic Engine Offline")
+    return await forensic_engine.get_forensic_report()
 
 @app.get("/api/node/{node_id}")
 async def get_node_data(node_id: str, api_key: str = Depends(get_api_key)):
@@ -892,6 +1066,53 @@ Rispondi in modo tecnico e conciso (max 3 frasi). Inizia con [COERENTE] o [INCOE
             return {"audit": res.get("response", "Audit fallito senza risposta.")}
     except Exception as e:
         return {"audit": f"Errore durante l'audit: {str(e)}"}
+
+@app.get("/api/node/{node_id}/mermaid")
+async def get_node_mermaid(node_id: str, api_key: str = Depends(get_api_key)):
+    """[Sprint 2] Genera un diagramma Mermaid per Callflow (AST) o vicini semantici."""
+    node = engine.get_node(node_id)
+    if not node: return JSONResponse(status_code=404, content={"error": "Node not found"})
+    
+    n_meta = getattr(node, 'metadata', {})
+    n_type = n_meta.get("type", "text") if isinstance(n_meta, dict) else "text"
+    
+    mermaid_lines = ["graph TD", "classDef module fill:#1e293b,stroke:#3b82f6,color:#fff", "classDef class fill:#0f172a,stroke:#8b5cf6,color:#fff", "classDef func fill:#020617,stroke:#10b981,color:#fff"]
+    
+    # Se è un nodo codice, usiamo la logica AST
+    if n_type in ["code_module", "code_class", "code_function"]:
+        # Cerca i figli diretti (classi o funzioni) e costruisce il callflow
+        root_name = getattr(node, 'text', "").split('\\n')[0].replace('CODE_MODULE [', '').replace('CODE_CLASS [', '').replace('CODE_FUNCTION [', '').replace(']', '').strip()
+        mermaid_lines.append(f"  {node_id}[{root_name}]:::{n_type.split('_')[1]}")
+        
+        # Recupera tutte le connessioni CHILD_OF verso questo nodo
+        for edge in getattr(node, 'edges', []):
+            if edge.relation == "CHILD_OF":
+                child = engine.get_node(edge.target_id)
+                if child:
+                    c_meta = getattr(child, 'metadata', {})
+                    c_type = c_meta.get("type", "code_function").replace("code_", "")
+                    c_name = getattr(child, 'text', "").split('\\n')[0].split('[')[-1].replace(']', '').strip()
+                    mermaid_lines.append(f"  {edge.target_id}[{c_name}]:::{c_type}")
+                    mermaid_lines.append(f"  {node_id} --> {edge.target_id}")
+                    
+                    # Aggiunge anche le call
+                    calls = c_meta.get("calls", [])
+                    for call in calls:
+                        mermaid_lines.append(f"  {edge.target_id} -.-> {call}({call})")
+                        
+        # Anche le chiamate dal nodo root stesso
+        calls = n_meta.get("calls", [])
+        for call in calls:
+            mermaid_lines.append(f"  {node_id} -.-> {call}({call})")
+            
+    else:
+        # Fallback per nodi testo normale: mostra la neighborhood
+        mermaid_lines.append(f"  root[{node_id[:8]}]")
+        for edge in getattr(node, 'edges', [])[:10]: # max 10 vicini
+            mermaid_lines.append(f"  root -- {edge.relation} --> {edge.target_id[:8]}[{edge.target_id[:8]}]")
+
+    return {"mermaid": "\\n".join(mermaid_lines)}
+
 
 @app.post("/api/purge")
 async def nuclear_purge(api_key: str = Depends(get_api_key)):
@@ -1107,13 +1328,39 @@ async def manual_shard_backup(api_key: str = Depends(get_api_key)):
 
 @app.post("/api/files/upload")
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...), namespace: Optional[str] = Form("default"), api_key: str = Depends(get_api_key)):
+async def upload_file(
+    file: UploadFile = File(...), 
+    namespace: Optional[str] = Form("default"), 
+    force: bool = Form(False),
+    api_key: str = Depends(get_api_key)
+):
     print(f"📥 [Ingestion] Richiesta ricevuta: {file.filename} ({file.content_type})")
     content = await file.read()
     text = content.decode('utf-8', errors='ignore')
     node_id = str(uuid.uuid4())
     if engine is None: return {"error": "Engine not initialized"}
     
+    # [NEW] Pre-Ingestion Impact Analysis (v11.3.1)
+    if not force:
+        try:
+            from security.impact_analyzer import PreIngestionImpactAnalyzer
+            analyzer = PreIngestionImpactAnalyzer(engine)
+            report = await analyzer.analyze_before_ingest(text, file.filename)
+            
+            if report.recommendation == "REVIEW":
+                print(f"⚠️ [Ingestion Blocked] Rilevate {len(report.contradictions)} contraddizioni.")
+                return {
+                    "status": "blocked",
+                    "reason": "Z3_CONTRADICTION",
+                    "report": {
+                        "nodes_affected": report.nodes_affected,
+                        "contradictions": [c.z3_proof for c in report.contradictions],
+                        "blast_radius": report.blast_radius_nodes
+                    }
+                }
+        except Exception as e:
+            print(f"⚠️ Errore nell'Impact Analyzer (continuo ingestion): {e}")
+
     # [v3.6.0] Scalar Metadata Extraction
     ext = Path(file.filename).suffix.lower().replace('.', '') or 'text'
     node = await engine.upsert_text(text, metadata={"source": file.filename, "namespace": namespace, "file_type": ext}, node_id=node_id)
@@ -1180,16 +1427,16 @@ async def install_model(request: Request, background_tasks: BackgroundTasks, api
                     if os_name == "Darwin": # Mac
                         # Prova prima con il comando da terminale, poi con 'open'
                         if shutil.which("ollama"):
-                            subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=get_clean_env())
                         else:
-                            subprocess.Popen(["open", "-a", "Ollama"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            subprocess.Popen(["open", "-a", "Ollama"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=get_clean_env())
                     elif os_name == "Windows":
                         if shutil.which("ollama"):
-                            subprocess.Popen(["ollama", "serve"], shell=True)
+                            subprocess.Popen(["ollama", "serve"], shell=True, env=get_clean_env())
                         else:
-                            subprocess.Popen(["start", "ollama", "serve"], shell=True)
+                            subprocess.Popen(["start", "ollama", "serve"], shell=True, env=get_clean_env())
                     else: # Linux
-                        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=get_clean_env())
                     await asyncio.sleep(8) # Aumentato tempo di attesa per avvio a 8 secondi
 
             if not ollama_ready:
@@ -1199,16 +1446,16 @@ async def install_model(request: Request, background_tasks: BackgroundTasks, api
                     if os_name == "Darwin" or os_name == "Linux":
                         # Installer ufficiale Ollama per Unix-like
                         # Usiamo '|| true' per ignorare l'errore di avvio finale dello script se il download è riuscito
-                        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh || true", shell=True)
+                        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh || true", shell=True, env=get_clean_env())
                     elif os_name == "Windows":
                         install_cmd = "powershell -Command \"& { iwr https://ollama.com/download/OllamaSetup.exe -OutFile OllamaSetup.exe; Start-Process -Wait -FilePath ./OllamaSetup.exe -ArgumentList '/silent'; Remove-Item ./OllamaSetup.exe }\""
-                        subprocess.run(install_cmd, shell=True)
+                        subprocess.run(install_cmd, shell=True, env=get_clean_env())
                     
                     print("✅ [Auto-Provisioning] Download completato. Tentativo di avvio manuale...")
                     
                     # Tentativo di avvio post-installazione forzato
                     if os_name == "Darwin":
-                        subprocess.Popen(["/usr/local/bin/ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(["/usr/local/bin/ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=get_clean_env())
                     
                     await asyncio.sleep(15) # Attesa generosa
                 except Exception as install_err:
@@ -1315,6 +1562,71 @@ async def record_evolution_feedback(request: Request, api_key: str = Depends(get
         success = app.state.lab.evolution_advise.record_feedback(sid, feedback)
         return {"status": "recorded" if success else "not_found"}
     return {"status": "error"}
+
+@app.post("/api/lab/evolution/apply")
+async def apply_evolution_suggestion(request: Request, api_key: str = Depends(get_api_key)):
+    """[v10.2] Applica manualmente una patch verificata (CONFERMA E APPLICA)."""
+    data = await request.json()
+    sid = data.get("id")
+    if not sid:
+        raise HTTPException(status_code=400, detail="Missing suggestion ID")
+        
+    if hasattr(app.state, 'lab') and hasattr(app.state.lab, 'evolution_advise'):
+        advise_mgr = app.state.lab.evolution_advise
+        suggestion = None
+        for s in advise_mgr.history:
+            if s["id"] == sid:
+                suggestion = s
+                break
+                
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+            
+        file_path = suggestion.get("file")
+        line_number = suggestion.get("line", 0)
+        new_content = suggestion.get("content")
+        
+        # Determina il percorso assoluto del file sorgente da modificare
+        project_root = getattr(app.state.lab.bridger_agent.bridger, 'project_root', None)
+        if not project_root:
+            project_root = os.getcwd()
+            
+        full_path = os.path.join(str(project_root), file_path)
+        
+        if not os.path.exists(full_path):
+            raise HTTPException(status_code=404, detail=f"Source file {file_path} not found at {full_path}")
+            
+        try:
+            # Leggiamo il codice, applichiamo la modifica ed eseguiamo la scrittura sicura
+            with open(full_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                
+            if 0 < line_number <= len(lines):
+                lines[line_number - 1] = new_content + "\n"
+            else:
+                lines.append("\n" + new_content + "\n")
+                
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+                
+            # Aggiorna lo stato della suggestion a "applied"
+            suggestion["status"] = "applied"
+            advise_mgr._save()
+            
+            # Notifica l'evento di hot-fix manuale sulla blackboard dello Swarm
+            sig = SynapticSignal("EVOLUTION", AgentRole.ARCHITECT, 
+                f"✅ MANUALLY APPLIED: Suggestion {sid} applied successfully to {file_path}.", 
+                SignalType.SYSTEM_HEALING)
+            app.state.lab.blackboard.post(sig)
+            
+            # Registra feedback positivo per reinforcement learning
+            advise_mgr.record_feedback(sid, "implemented")
+            
+            return {"status": "success", "message": f"Patch {sid} applied successfully to {file_path}."}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to apply patch: {e}")
+            
+    return {"status": "error", "message": "Neural Lab not ready"}
 
 @app.get("/api/lab/wisdom/all")
 async def get_wisdom_all(api_key: str = Depends(get_api_key)):
@@ -1954,6 +2266,10 @@ async def ingest_text(request: Request, background_tasks: BackgroundTasks, api_k
 
 async def auto_extract_causal(node_id: str):
     """Worker interno per l'estrazione causale automatica."""
+    import asyncio
+    # [v11.0 Performance Engine] Suspend when Priority Shift is active to dedicate 100% resources
+    while getattr(engine, 'priority_mode', False):
+        await asyncio.sleep(1.0)
     try:
         # [v9.2.1] Performance Optimization: Concurrent Reads
         node = find_node_robust(node_id)
@@ -1966,6 +2282,18 @@ async def auto_extract_causal(node_id: str):
                     node.edges.extend(new_edges)
                     engine._tiers.episodic.put(node)
                     print(f"✨ [Auto-Causal] Estratti {len(new_edges)} archi per {node_id[:8]}")
+                    
+                    # Project edges to Aegis/KuzuDB
+                    for edge in new_edges:
+                        try:
+                            aegis_bus.emit("CAUSAL_EDGE_ADDED", {
+                                "source": node_id,
+                                "target": edge.target_id,
+                                "type": str(edge.relation),
+                                "weight": float(edge.weight)
+                            })
+                        except Exception as ee:
+                            print(f"⚠️ [Aegis Bus Error] Auto-Causal emit failed: {ee}")
     except Exception as e:
         print(f"⚠️ [Auto-Causal Error] {e}")
 
@@ -1993,6 +2321,18 @@ async def extract_causal_node(request: Request, api_key: str = Depends(get_api_k
             node.edges.extend(new_edges)
             # Salvataggio persistente
             engine._tiers.episodic.put(node)
+            
+            # Project edges to Aegis/KuzuDB
+            for edge in new_edges:
+                try:
+                    aegis_bus.emit("CAUSAL_EDGE_ADDED", {
+                        "source": node_id,
+                        "target": edge.target_id,
+                        "type": str(edge.relation),
+                        "weight": float(edge.weight)
+                    })
+                except Exception as ee:
+                    print(f"⚠️ [Aegis Bus Error] Causal extract emit failed: {ee}")
             
     return {
         "node_id": node_id,
@@ -2057,6 +2397,82 @@ async def get_analytics(api_key: str = Depends(get_api_key)):
     
     # 3. Merging dei dati per l'Aura Dashboard
     return {**report, **hw_data}
+
+@app.get("/api/analytics/semantic")
+async def get_semantic_composition(api_key: str = Depends(get_api_key)):
+    """[v9.8] Calcola in tempo reale la composizione semantica del database neurale."""
+    if not engine:
+        raise HTTPException(503, "Engine Offline")
+    
+    try:
+        nodes = list(engine._nodes.values())
+        total = len(nodes)
+        
+        categories = {
+            "python_core": {"title": "Python Core & StdLib", "count": 0, "color": "#3b82f6", "icon": "fa-code"},
+            "rust_systems": {"title": "Rust & Systems Programming", "count": 0, "color": "#f97316", "icon": "fa-microchip"},
+            "web_foraging": {"title": "Web Foraging & Crawling", "count": 0, "color": "#06b6d4", "icon": "fa-globe"},
+            "agentic_cognitive": {"title": "Cognitive Agents & Swarms", "count": 0, "color": "#a855f7", "icon": "fa-brain"},
+            "macro_finance": {"title": "Macroeconomics & Finance", "count": 0, "color": "#eab308", "icon": "fa-coins"},
+            "general_others": {"title": "General Knowledge & Others", "count": 0, "color": "#64748b", "icon": "fa-cubes"}
+        }
+        
+        if total == 0:
+            return {
+                "status": "success",
+                "total_nodes": 0,
+                "composition": [],
+                "insight": "Il Vault è vuoto. Carica file o avvia l'intercettatore per popolarlo."
+            }
+            
+        for node in nodes:
+            text = (node.text or "").lower()
+            source = str(node.metadata.get("source", "")).lower()
+            
+            # Highly accurate heuristic classification
+            if "rust" in text or "cargo" in text or ".rs" in source or "systems programming" in text:
+                categories["rust_systems"]["count"] += 1
+            elif any(w in text for w in ["python", "def ", "class ", "import ", "pip ", "conda", "setup.py", "standard library"]):
+                categories["python_core"]["count"] += 1
+            elif any(w in text or w in source for w in ["skywalker", "yoda", "swarm", "agent", "orchestrator", "supreme court", "mediator"]):
+                categories["agentic_cognitive"]["count"] += 1
+            elif any(w in text or w in source for w in ["http", "crawl", "forage", "url", "scrape", "search", "duckduckgo"]):
+                categories["web_foraging"]["count"] += 1
+            elif any(w in text for w in ["macroeconomics", "finance", "rate", "usd", "market", "capital", "gdp", "sovereign", "inflation"]):
+                categories["macro_finance"]["count"] += 1
+            else:
+                categories["general_others"]["count"] += 1
+                
+        composition = []
+        for key, cat in categories.items():
+            pct = (cat["count"] / total) * 100 if total > 0 else 0
+            composition.append({
+                "key": key,
+                "title": cat["title"],
+                "count": cat["count"],
+                "percentage": round(pct, 2),
+                "color": cat["color"],
+                "icon": cat["icon"]
+            })
+            
+        # Dynamic advice based on composition
+        major = max(composition, key=lambda x: x["percentage"]) if composition else {"key": "general_others", "title": "General"}
+        if major["key"] == "python_core":
+            insight = "Il tuo Vault è sbilanciato verso lo sviluppo software (Core Python). Questo ottimizza lo sciame per compiti di programmazione, ma per What-If storici complessi si raccomanda l'importazione di fonti geopolitiche o finanziarie esterne."
+        elif major["key"] == "agentic_cognitive":
+            insight = "Altissima densità cognitiva dello Swarm rilevata. Gli agenti stanno riflettendo profondamente sulle loro stesse istruzioni. Perfetto per la stabilità ed evoluzione autonoma."
+        else:
+            insight = f"Composizione bilanciata con dominanza del settore '{major['title']}'. Lo sciame ha accesso a un set cognitivo diversificato."
+            
+        return {
+            "status": "success",
+            "total_nodes": total,
+            "composition": composition,
+            "insight": insight
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 
 # SECTION: LAB MISSIONS & AGENTS (Integrated v3.5)
@@ -2161,8 +2577,12 @@ async def mesh_pull(request: Request, api_key: str = Depends(get_api_key)):
 async def list_mesh_peers(api_key: str = Depends(get_api_key)):
     """Ritorna la lista dei peer connessi nella rete Mesh."""
     peers = []
+    local_id = getattr(engine, 'node_id', None)
+    
     # 1. Peer dal MeshSyncManager
     for pid, p in engine.mesh.peers.items():
+        if local_id and pid == local_id:
+            continue
         peers.append({
             "id": pid,
             "url": p.base_url,
@@ -2172,6 +2592,8 @@ async def list_mesh_peers(api_key: str = Depends(get_api_key)):
         })
     # 2. Peer dal GossipManager (scoperti via Discovery)
     for pid, p in engine.gossip.peers.items():
+        if local_id and pid == local_id:
+            continue
         if pid not in engine.mesh.peers:
             peers.append({
                 "id": pid,
@@ -2180,6 +2602,29 @@ async def list_mesh_peers(api_key: str = Depends(get_api_key)):
                 "source": "discovery",
                 "paused": getattr(p, 'paused', False)
             })
+    # 3. Aggancia ed evidenzia i P2P Wormholes della v11.0
+    if engine and hasattr(engine, 'wormholes') and engine.wormholes:
+        for pid, t in engine.wormholes.tunnels.items():
+            if local_id and pid == local_id:
+                continue
+            # Se è già presente, aggiorna le info crittografiche del Wormhole
+            existing = next((x for x in peers if x["id"] == pid), None)
+            if existing:
+                existing["source"] = "wormhole"
+                existing["wormhole"] = True
+                existing["namespace"] = t.namespace
+                existing["connected"] = t.is_connected
+            else:
+                peers.append({
+                    "id": pid,
+                    "url": t.base_url,
+                    "last_seen": t.last_seen,
+                    "source": "wormhole",
+                    "paused": t.paused,
+                    "wormhole": True,
+                    "namespace": t.namespace,
+                    "connected": t.is_connected
+                })
     return {"peers": peers}
 
 @app.post("/api/mesh/peers/toggle-pause")
@@ -2190,9 +2635,12 @@ async def toggle_pause_mesh_peer(request: Request, api_key: str = Depends(get_ap
     paused = data.get("paused", False)
     if not peer_id: raise HTTPException(status_code=400, detail="ID del peer obbligatorio")
     
-    # Aggiorna entrambi i manager
+    # Aggiorna tutti i manager, incluso il Wormhole P2P
     engine.mesh.toggle_pause(peer_id, paused)
     engine.gossip.toggle_pause(peer_id, paused)
+    if engine and hasattr(engine, 'wormholes') and engine.wormholes:
+        if peer_id in engine.wormholes.tunnels:
+            engine.wormholes.tunnels[peer_id].paused = paused
     
     return {"status": "paused" if paused else "resumed", "id": peer_id}
 
@@ -2214,6 +2662,14 @@ async def add_mesh_peer(request: Request, api_key: str = Depends(get_api_key)):
             raise HTTPException(status_code=403, detail=f"AGENT SMITH: Accesso Negato. Motivo: {smith.status}")
 
     engine.mesh.add_peer(node_id, url, peer_api_key)
+    
+    # Inizializza automaticamente un tunnel Wormhole P2P per connessione sicura Noise
+    if engine and hasattr(engine, 'wormholes') and engine.wormholes:
+        # Usa peer_api_key come public_key se non fornito esplicitamente
+        pub_key = data.get("public_key") or peer_api_key or engine.crypto.get_public_key_base64()
+        ns = data.get("namespace")
+        engine.wormholes.create_tunnel(node_id, url, pub_key, ns)
+        
     return {"status": "peer_connected", "id": node_id}
 
 @app.post("/api/mesh/peers/rename")
@@ -2226,6 +2682,22 @@ async def rename_mesh_peer(request: Request, api_key: str = Depends(get_api_key)
         raise HTTPException(status_code=400, detail="ID attuali e nuovi obbligatori")
     engine.mesh.rename_peer(old_id, new_id)
     return {"status": "renamed", "old_id": old_id, "new_id": new_id}
+
+@app.post("/api/wormhole/receive")
+async def receive_wormhole_payload_endpoint(request: Request):
+    """[v11.0] Riceve ed elabora payload crittografati in tempo reale (Gossipsub)."""
+    if not engine or not hasattr(engine, 'wormholes') or not engine.wormholes:
+        raise HTTPException(status_code=503, detail="Wormholes Engine Offline")
+    
+    try:
+        data = await request.json()
+        success = await engine.wormholes.receive_wormhole_payload(data)
+        if success:
+            return {"status": "success", "message": "Payload ingested correctly through P2P wormhole."}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to ingest wormhole payload. Smith blocks or decryption failure.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/mesh/identity/export")
 async def export_vault_identity(api_key: str = Depends(get_api_key)):
@@ -2274,6 +2746,8 @@ async def delete_mesh_peer(peer_id: str, api_key: str = Depends(get_api_key)):
     """Rimuove permanentemente un peer dalla Mesh locale."""
     engine.mesh.remove_peer(peer_id)
     engine.gossip.remove_peer(peer_id)
+    if hasattr(engine, 'wormholes') and engine.wormholes:
+        engine.wormholes.remove_tunnel(peer_id)
     return {"status": "removed", "id": peer_id}
 
 # 🌐 ALIAS per Aura Bridge Extension (compatibilità)
@@ -2669,6 +3143,40 @@ async def get_inventory(api_key: str = Depends(get_api_key)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/nodes/update_positions")
+async def update_positions(req: UpdatePositionsRequest, api_key: str = Depends(get_api_key)):
+    try:
+        updated = 0
+        with engine._lock:
+            for p in req.positions:
+                node = engine._nodes.get(p.id)
+                if node:
+                    if node.metadata is None:
+                        node.metadata = {}
+                    node.metadata["x"] = p.x
+                    node.metadata["z"] = p.y  # 2D y mappa alla profondita 3D z
+                    try:
+                        import json
+                        meta_str = json.dumps(node.metadata)
+                        engine._prefilter.execute("UPDATE vault_metadata SET metadata = ? WHERE id = ?", (meta_str, p.id))
+                        updated += 1
+                        
+                        # 🚀 [CQRS FASE 1] Shadow Hook
+                        from core.event_bus import AegisEventBus
+                        event_bus = AegisEventBus()
+                        event_bus.publish("NODE_MOVED", {
+                            "id": p.id,
+                            "x": p.x,
+                            "y": p.y,
+                            "cluster": getattr(node, 'cluster', 'default')
+                        }, source={"agent": "tactical_canvas", "action": "update_positions"})
+
+                    except Exception as db_e:
+                        print(f"DuckDB update error for {p.id}: {db_e}")
+        return {"status": "success", "updated_count": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/namespaces")
 async def get_namespaces(api_key: str = Depends(get_api_key)):
     """[v3.6.0] Esploratore di Compartimenti: Restituisce l'elenco dei namespace attivi."""
@@ -2747,7 +3255,9 @@ async def neural_chat(request: QueryRequest, api_key: str = Depends(get_api_key)
         namespace=request.namespace,
         file_type=request.file_type,
         year=request.year,
-        month=request.month
+        month=request.month,
+        named_vector=request.named_vector,
+        use_sparse=request.use_sparse
     )
     timings['retrieval'] = (time.time() - ret_start) * 1000
     
@@ -2786,8 +3296,8 @@ async def neural_chat(request: QueryRequest, api_key: str = Depends(get_api_key)
         corrupted_nodes = [r.node.id for r in results if len(r.node.text) < 20]
         print(f"📡 [Fallback] Knowledge Gap or Corrupted Nodes identified for '{request.query}'. Mobilizing FS-77 Skywalker...")
         try:
-            # Attendiamo una "Incursione Rapida" (max 12s)
-            await asyncio.wait_for(app.state.lab.forage_web_topic(request.query), timeout=12.0)
+            # Attendiamo una "Incursione Rapida" (Aumentato a 30s per stabilità v10.0)
+            await asyncio.wait_for(app.state.lab.forage_web_topic(request.query), timeout=30.0)
             # Rieseguiamo la query per pescare i nuovi dati
             results = await engine.query(search_query, k=request.top_k, namespace=request.namespace)
             
@@ -2812,6 +3322,20 @@ async def neural_chat(request: QueryRequest, api_key: str = Depends(get_api_key)
 
     full_context = context_text if context_text else "Nessun contesto trovato nel Vault."
     
+    # 🌿 [v14.0 - Evolving Thesis Context Injection]
+    purpose_content = ""
+    try:
+        purpose_file = Path("vault_data/wiki/purpose.md")
+        if purpose_file.exists():
+            purpose_content = purpose_file.read_text(encoding="utf-8")
+    except Exception as e:
+        print(f"⚠️ [Purpose Context Error] {e}")
+
+    if purpose_content:
+        import re
+        clean_purpose = re.sub(r"^---.*?---", "", purpose_content, flags=re.DOTALL).strip()
+        full_context = f"=== STATO COGNITIVO E TESI DI RICERCA CORRENTE (evolving_thesis) ===\n{clean_purpose}\n\n=== CONTESTO SEMANTICO ESTRATTO ===\n{full_context}"
+        
     # [SOVEREIGN FOCUS] Sospendiamo gli agenti background per dare massimo respiro a Ollama
     app.state.lab.pause_agents = True
     
@@ -2954,6 +3478,33 @@ async def stream_wiki_page(topic: str, mode: str = "TECHNICAL", api_key: str = D
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@app.get("/api/wiki/health")
+async def get_wiki_health(api_key: str = Depends(get_api_key)):
+    """⚖️ [v10.0] Recupera il report sulla salute della Wiki (Auto-Linting)."""
+    try:
+        report = await engine.wiki_linter.run_health_check()
+        return JSONResponse(report)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/wiki/claims/{page_id}")
+async def get_wiki_claims(page_id: str, api_key: str = Depends(get_api_key)):
+    """🏺 [v10.0] Recupera i claim certificati per una pagina specifica."""
+    try:
+        query = "SELECT claim_id, claim_text, source_node_ids, confidence FROM wiki_claims WHERE page_id = ?"
+        results = engine._prefilter.fetchall(query, (page_id,))
+        claims = []
+        for r in results:
+            claims.append({
+                "id": r[0],
+                "text": r[1],
+                "sources": json.loads(r[2]),
+                "confidence": r[3]
+            })
+        return JSONResponse({"page": page_id, "claims": claims})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/wiki/status/{topic}")
 async def get_wiki_status(topic: str, api_key: str = Depends(get_api_key)):
     """[v6.1] Controlla se una pagina Wiki ha bisogno di aggiornamenti (Freshness)."""
@@ -3031,6 +3582,286 @@ async def list_wiki_pages(api_key: str = Depends(get_api_key)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.get("/api/wiki/activity")
+async def get_wiki_activity(limit: int = 50, api_key: str = Depends(get_api_key)):
+    """[v9.6] Recupera i log di attività reali dall'Audit Ledger + Git Ledger commits."""
+    events = []
+    try:
+        ledger_path = Path("vault_data/audit_ledger.json")
+        if ledger_path.exists():
+            with open(ledger_path, "r") as f:
+                events = json.load(f)
+    except Exception as e:
+        print(f"⚠️ [Activity API Error] {e}")
+
+    try:
+        import subprocess
+        wiki_dir = engine.wiki.wiki_dir
+        if (wiki_dir / ".git").exists():
+            res = subprocess.run(
+                ["git", "log", f"-n", str(limit), "--pretty=format:%h|%an|%ad|%s"],
+                cwd=str(wiki_dir),
+                capture_output=True,
+                text=True
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                for line in res.stdout.strip().split("\n"):
+                    parts = line.split("|", 3)
+                    if len(parts) == 4:
+                        h, author, date_str, subject = parts
+                        events.append({
+                            "timestamp": date_str.split(" +")[0].split(" -")[0],
+                            "event": "GIT_COMMIT",
+                            "topic": "L4 Git Ledger",
+                            "description": f"[{h}] {subject} (by {author})",
+                            "node_id": h
+                        })
+    except Exception as e:
+        print(f"⚠️ [Activity Git Error] {e}")
+
+    return events[-limit:][::-1]
+
+@app.get("/api/system/mindset")
+async def get_mindset(api_key: str = Depends(get_api_key)):
+    """🏛️ [v9.2] Mindset Retrieval: Recupera lo stato cognitivo persistente."""
+    try:
+        mindset = getattr(app.state, 'current_mindset', 'DEFAULT')
+        # Ensure mindset is a serializable string
+        if not isinstance(mindset, str):
+            mindset = str(mindset)
+        return {"status": "ok", "mindset": mindset}
+    except Exception as e:
+        print(f"⚠️ [API] Mindset Retrieval Error: {e}")
+        return {"status": "ok", "mindset": "DEFAULT"}
+
+@app.post("/api/system/mindset")
+async def update_mindset(req: dict, api_key: str = Depends(get_api_key)):
+    """🏛️ [v9.2] Mindset Sync: Sincronizza lo stato cognitivo globale del Vault."""
+    mindset = req.get("mindset", "DEFAULT")
+    app.state.current_mindset = mindset
+    
+    # [v9.2] Notifica al blackboard e persiste nell'orchestratore
+    if hasattr(app.state, 'lab'):
+        if hasattr(app.state.lab, 'set_mindset'):
+            app.state.lab.set_mindset(mindset)
+        else:
+            print(f"⚠️ [Warning] app.state.lab has no set_mindset method. Mindset: {mindset}")
+            
+        if hasattr(app.state.lab, 'blackboard') and app.state.lab.blackboard:
+            app.state.lab.blackboard.post(SynapticSignal("SYSTEM", AgentRole.OPTIMIZER, 
+                f"🧠 MINDSET_SHIFT: Global cognitive state set to {mindset}.", 
+                SignalType.SYSTEM_NOTIFICATION))
+            
+    return {"status": "ok", "mindset": mindset}
+
+@app.get("/api/wiki/review/queue")
+async def get_wiki_review_queue(api_key: str = Depends(get_api_key)):
+    """📚 [v9.2] Spaced Repetition: Recupera la coda di ripasso giornaliera."""
+    return await engine.wiki.freshness_monitor.get_review_queue()
+
+@app.post("/api/wiki/review/record")
+async def record_wiki_review(req: dict, api_key: str = Depends(get_api_key)):
+    """📚 [v9.2] Registra l'esito di un ripasso Wiki."""
+    topic = req.get("topic")
+    score = req.get("score", 1.0)
+    await engine.wiki.freshness_monitor.record_review(topic, score)
+    return {"status": "ok"}
+
+@app.post("/api/wiki/simulate/compare")
+async def compare_scenarios(req: dict, api_key: str = Depends(get_api_key)):
+    """⚖️ [v9.2] Scenario Comparison: Compara due simulazioni con lenti diverse."""
+    query = req.get("query")
+    lens_a = req.get("lens_a", "musk")
+    lens_b = req.get("lens_b", "bezos")
+    
+    sim_a = await engine.wiki.whatif.run_nl_simulation(query, lenses=[lens_a])
+    sim_b = await engine.wiki.whatif.run_nl_simulation(query, lenses=[lens_b])
+    
+    return {
+        "lens_a": sim_a,
+        "lens_b": sim_b,
+        "query": query
+    }
+
+@app.get("/api/wiki/dashboard")
+async def get_wiki_dashboard(api_key: str = Depends(get_api_key)):
+    """🏛️ [v9.2] Aura Dashboard: Aggregatore proattivo per lo stato della Wiki."""
+    try:
+        from retrieval.wiki_monitor import WikiFreshnessMonitor
+        monitor = WikiFreshnessMonitor(engine)
+        
+        # 1. Statistiche Base
+        wiki_dir = engine.wiki.wiki_dir
+        files = list(wiki_dir.rglob("*.md"))
+        total_pages = len(files)
+        
+        # 2. Epistemic Health & Stale Pages
+        stale_pages = await monitor.check_stale_pages()
+        stale_count = len(stale_pages)
+        
+        # Audit rapido (o simulato per performance)
+        health_score = 100 - (stale_count * 2) - (len(files) % 5) # Esempio di calcolo dinamico
+        health_score = max(0, min(100, health_score))
+        
+        weather = "SUNNY"
+        if stale_count > 5: weather = "CLOUDY"
+        if health_score < 60: weather = "STORM"
+        
+        # 3. Recent Pages
+        recent = []
+        sorted_files = sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)[:8]
+        for f in sorted_files:
+            recent.append({
+                "title": f.stem.replace("_", " "),
+                "file_name": str(f.relative_to(wiki_dir)),
+                "date": datetime.fromtimestamp(f.stat().st_mtime).strftime('%Y-%m-%d'),
+                "health": 100 if f.stem not in [p['topic'] for p in stale_pages] else 70
+            })
+            
+        # 4. Galaxies (Namespaces)
+        namespaces = {}
+        for f in files:
+            ns = f.parent.name if f.parent != wiki_dir else "General"
+            namespaces[ns] = namespaces.get(ns, 0) + 1
+            
+        galaxies = [{"id": ns, "title": ns, "page_count": count, "health": 95} for ns, count in namespaces.items()]
+        
+        # 5. Suggested Topics (Knowledge Gaps)
+        # Semplificato: prendiamo topic con molti archi ma senza pagina wiki
+        suggested = ["Causal Inference", "Neural Scaling Laws", "Aegis Protocol"]
+        
+        return {
+            "stats": {
+                "total_pages": total_pages,
+                "health_score": health_score,
+                "stale_count": stale_count,
+                "epistemic_weather": weather
+            },
+            "recent_pages": recent,
+            "galaxies": galaxies,
+            "review_queue": recent[:3] if recent else [],
+            "suggested_topics": suggested
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Graceful degradation for dashboard
+        return {
+            "stats": {"total_pages": 0, "health_score": 100, "stale_count": 0, "epistemic_weather": "SUNNY"},
+            "recent_pages": [],
+            "galaxies": [],
+            "review_queue": [],
+            "suggested_topics": ["Quantum Alignment", "Sovereign Mesh", "Aegis Core"],
+            "error": str(e)
+        }
+
+# --- 🧬 [v10.0] Pillar #6: Epistemic Dashboard Endpoints ---
+
+@app.get("/api/user/persona")
+async def get_user_persona(api_key: str = Depends(get_api_key)):
+    """Recupera i tratti della Persona dell'utente rilevati dal Persona Engine."""
+    try:
+        # 🛡️ [Self-Healing] Verifica esistenza tabella
+        engine.agent007.con.execute("""
+            CREATE TABLE IF NOT EXISTS user_persona (
+                category TEXT,
+                description TEXT,
+                strength DOUBLE
+            )
+        """)
+        
+        # Recupero i tratti ordinati per forza (strength)
+        traits = engine.agent007.con.execute(
+            "SELECT category, description, strength FROM user_persona ORDER BY strength DESC"
+        ).fetchall()
+        
+        return {
+            "status": "success",
+            "persona": [
+                {"category": r[0], "description": r[1], "strength": r[2]}
+                for r in traits
+            ]
+        }
+    except Exception as e:
+        print(f"⚠️ [API] Persona Retrieval Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/query/causal")
+async def causal_query(req: dict, api_key: str = Depends(get_api_key)):
+    """Esegue una query focalizzata sulle relazioni causali (What-if / Epistemic Links)."""
+    query = req.get("query")
+    if not query: raise HTTPException(400, "Query missing")
+    
+    try:
+        # [v10.0] Protocollo Causal-RAG: Ricerca nella Hard Memory (DuckDB)
+        search_pattern = f"%{query}%"
+        results = engine.agent007.con.execute("""
+            SELECT fact, source_id, target_id, type 
+            FROM agent007_relations 
+            WHERE fact ILIKE ? OR source_id ILIKE ? OR target_id ILIKE ? 
+            LIMIT 15
+        """, (search_pattern, search_pattern, search_pattern)).fetchall()
+        
+        causal_links = [
+            {"fact": r[0], "source": r[1], "target": r[2], "type": r[3]}
+            for r in results
+        ]
+        
+        return {
+            "status": "success",
+            "query": query,
+            "causal_links": causal_links,
+            "count": len(causal_links)
+        }
+    except Exception as e:
+        print(f"⚠️ [API] Causal Query Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/project/action")
+async def trigger_project_action(req: dict, api_key: str = Depends(get_api_key)):
+    """Esegue un'azione operativa (Actionable Intelligence) su un cluster o progetto."""
+    project_id = req.get("project_id")
+    action = req.get("action") # e.g. "DEEP_RESEARCH", "SINTESI", "MONITOR"
+    
+    if not project_id or not action:
+        raise HTTPException(400, "project_id or action missing")
+    
+    print(f"🚀 [Project Action] Executing {action} on {project_id}")
+    
+    try:
+        # Invia segnale alla Neural Lab (Blackboard)
+        if hasattr(app.state, 'lab'):
+            from neural_lab import SynapticSignal, AgentRole, SignalType
+            
+            sig = SynapticSignal(
+                sender="TACTICAL_CANVAS", 
+                role=AgentRole.OPTIMIZER, 
+                content=f"PROJECT_ACTION: {action} requested for target: {project_id}", 
+                type=SignalType.REASONING_STEP
+            )
+            app.state.lab.blackboard.post(sig)
+            
+            # 1. Azione: DEEP_RESEARCH (Innesca Skywalker)
+            if action == "DEEP_RESEARCH":
+                asyncio.create_task(app.state.lab.forage_web_topic(project_id))
+                
+            # 2. Azione: SINTESI (Innesca Synth)
+            elif action == "SINTESI":
+                asyncio.create_task(engine.wiki.generate_page(project_id, mode="EXECUTIVE"))
+                
+            return {
+                "status": "success", 
+                "action_triggered": action, 
+                "project_id": project_id,
+                "timestamp": time.time()
+            }
+        else:
+            return {"status": "error", "message": "Neural Lab Orchestrator not available"}
+            
+    except Exception as e:
+        print(f"⚠️ [API] Project Action Error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/llms.txt")
 @app.get("/api/wiki/llms.txt")
 async def get_llms_txt_standard():
@@ -3041,11 +3872,10 @@ async def get_llms_txt_standard():
     return Response(content=content, media_type="text/plain")
 
 @app.get("/api/wiki/read")
-async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
-    """Legge il contenuto di una pagina Wiki specifica (supporta path relativi)."""
+async def read_wiki_page(file: str, mode: str = "TECHNICAL", api_key: str = Depends(get_api_key)):
+    """Legge il contenuto di una pagina Wiki specifica con prospettiva opzionale."""
     try:
         wiki_dir = engine.wiki.wiki_dir
-        # [v9.1] Prevenzione directory traversal
         file_path = (wiki_dir / file).resolve()
         if not str(file_path).startswith(str(wiki_dir.resolve())):
             raise HTTPException(403, "Access denied")
@@ -3053,6 +3883,24 @@ async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
         if not file_path.exists(): raise HTTPException(404, "Page not found")
         with open(file_path, "r") as f:
             content = f.read()
+            
+        # [v10.0] Perspective Transformation
+        if mode != "TECHNICAL":
+            prompt = f"""
+            ### TASK: PERSPECTIVE RENDERING (Hydra Lens)
+            Converti la seguente pagina wiki per una lente: {mode}.
+            
+            CONTENUTO ORIGINALE:
+            {content}
+            
+            ### REQUISITI:
+            1. CEO: Focus su impatto business, ROI, rischi strategici. Sintetico.
+            2. LEGAL: Focus su compliance, responsabilità, termini contrattuali. Rigoroso.
+            3. TECHNICAL: (Default) Dettagli ingegneristici, architettura, codice.
+            4. Mantieni tutti i tag [CITE:node_id].
+            5. Mantieni il Frontmatter YAML.
+            """
+            content = await engine.orchestrator.get_consensus_response(prompt, f"Perspective Lens: {mode}")
             
         # [v9.5] Recupero citazioni associate dal Cross-Reference Index
         citations = []
@@ -3085,6 +3933,43 @@ async def read_wiki_page(file: str, api_key: str = Depends(get_api_key)):
             "markdown": content,
             "citations": citations
         }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/graph/ghost-map")
+async def get_ghost_map(api_key: str = Depends(get_api_key)):
+    """🌌 [v9.2] Ghost Map: Restituisce una struttura semplificata del Vault per sfondo What-If."""
+    try:
+        # Recuperiamo un campione rappresentativo di nodi e archi
+        nodes = []
+        edges = []
+        
+        # Limite per performance UI
+        MAX_GHOST_NODES = 150
+        
+        # [v4.3.1] Thread-Safe Fetch
+        with engine._lock:
+            all_node_ids = list(engine._nodes.keys())
+            sample_ids = all_node_ids[:MAX_GHOST_NODES]
+            
+            for nid in sample_ids:
+                node = engine._nodes[nid]
+                nodes.append({
+                    "id": node.id,
+                    "label": node.metadata.get("title", node.id[:8]),
+                    "namespace": node.metadata.get("namespace", "General")
+                })
+                
+                # Archi (limitati)
+                for edge in node.edges[:3]: # Solo i primi 3 per non affollare
+                    if edge.target_id in sample_ids:
+                        edges.append({
+                            "source": node.id,
+                            "target": edge.target_id,
+                            "type": str(edge.relation)
+                        })
+                        
+        return {"nodes": nodes, "edges": edges}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -3198,6 +4083,9 @@ async def simulate_nl_api(data: Dict[str, Any], api_key: str = Depends(get_api_k
         mode = data.get("mode", "FAST")
         horizon = data.get("horizon", "immediate") # [v8.4] Temporal Horizon
         twin_id = data.get("twin_id")
+        parent_id = data.get("parent_id")
+        folder_path = data.get("folder_path")
+        tags = data.get("tags")
         
         if not query:
             return JSONResponse({"error": "query required"}, status_code=400)
@@ -3207,28 +4095,219 @@ async def simulate_nl_api(data: Dict[str, Any], api_key: str = Depends(get_api_k
         if twin_id and hasattr(app.state, 'twins') and twin_id in app.state.twins:
             twin = app.state.twins[twin_id]
             
-        result = await engine.wiki.nl_whatif.run_nl_simulation(query, lenses, mode=mode, horizon=horizon, twin=twin)
+        result = await engine.wiki.nl_whatif.run_nl_simulation(
+            query, 
+            lenses, 
+            mode=mode, 
+            horizon=horizon, 
+            twin=twin,
+            parent_id=parent_id,
+            folder_path=folder_path,
+            tags=tags
+        )
         return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/whatif/history")
+async def get_whatif_history(
+    folder_path: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    api_key: str = Depends(get_api_key)
+):
+    """🧠 [v11.0] Recupera lo storico strutturato delle simulazioni con filtri avanzati."""
+    try:
+        query_parts = ["SELECT id, timestamp, query, target_node_id, settings_used, status, folder_path, tags, parent_id FROM decision_journal WHERE 1=1"]
+        params = []
+        
+        if folder_path is not None:
+            query_parts.append("AND folder_path = ?")
+            params.append(folder_path)
+            
+        if status is not None:
+            query_parts.append("AND status = ?")
+            params.append(status)
+            
+        if search is not None:
+            query_parts.append("AND (query LIKE ? OR tags LIKE ?)")
+            params.append(f"%{search}%")
+            params.append(f"%{search}%")
+            
+        if parent_id is not None:
+            query_parts.append("AND parent_id = ?")
+            params.append(parent_id)
+            
+        query_parts.append("ORDER BY timestamp DESC")
+        
+        sql = " ".join(query_parts)
+        res = engine._prefilter.fetchall(sql, params)
+        
+        history = []
+        for r in res:
+            # Conta simulazioni figlie
+            child_count = engine._prefilter.fetchone("SELECT COUNT(*) FROM decision_journal WHERE parent_id = ?", (r[0],))[0]
+            
+            history.append({
+                "id": r[0],
+                "timestamp": r[1].isoformat() if hasattr(r[1], 'isoformat') else str(r[1]),
+                "query": r[2],
+                "target_node_id": r[3],
+                "settings": json.loads(r[4]) if r[4] else {},
+                "status": r[5],
+                "folder_path": r[6],
+                "tags": r[7].split(",") if r[7] else [],
+                "parent_id": r[8],
+                "children_count": child_count
+            })
+            
+        return JSONResponse(history)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/whatif/simulation/{sim_id}")
+async def get_whatif_simulation(sim_id: str, api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Ottiene tutti i dettagli di una simulazione passata (inclusi i risultati grafici completi)."""
+    try:
+        r = engine._prefilter.fetchone("""
+            SELECT id, timestamp, query, target_node_id, settings_used, status, folder_path, tags, parent_id, simulation_full_results 
+            FROM decision_journal WHERE id = ?
+        """, (sim_id,))
+        
+        if not r:
+            return JSONResponse({"error": "Simulation not found"}, status_code=404)
+            
+        # Get children list
+        children = engine._prefilter.fetchall("SELECT id, query FROM decision_journal WHERE parent_id = ?", (sim_id,))
+        
+        # Get target node title
+        target_title = "Unknown Target"
+        try:
+            node = engine.get_node(r[3])
+            if node:
+                target_title = node.title
+        except:
+            pass
+            
+        return JSONResponse({
+            "id": r[0],
+            "timestamp": r[1].isoformat() if hasattr(r[1], 'isoformat') else str(r[1]),
+            "query": r[2],
+            "target_node_id": r[3],
+            "target_node_title": target_title,
+            "settings": json.loads(r[4]) if r[4] else {},
+            "status": r[5],
+            "folder_path": r[6],
+            "tags": r[7].split(",") if r[7] else [],
+            "parent_id": r[8],
+            "full_results": json.loads(r[9]) if r[9] else {},
+            "children": [{"id": c[0], "query": c[1]} for c in children]
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/whatif/simulation/{sim_id}/archive")
+async def archive_whatif_simulation(sim_id: str, data: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Archivia o riattiva una simulazione."""
+    try:
+        archive = data.get("archive", True)
+        status = "archived" if archive else "active"
+        
+        engine._prefilter.execute("UPDATE decision_journal SET status = ? WHERE id = ?", (status, sim_id))
+        return JSONResponse({"status": "success", "id": sim_id, "new_status": status})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.delete("/api/whatif/simulation/{sim_id}")
+async def delete_whatif_simulation(sim_id: str, api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Elimina definitivamente una simulazione dallo storico."""
+    try:
+        engine._prefilter.execute("DELETE FROM decision_journal WHERE id = ?", (sim_id,))
+        return JSONResponse({"status": "success", "message": "Simulation deleted successfully"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/whatif/simulation/{sim_id}/folder")
+async def move_whatif_simulation(sim_id: str, data: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Assegna o sposta una simulazione in una cartella."""
+    try:
+        folder_path = data.get("folder_path", "root")
+        engine._prefilter.execute("UPDATE decision_journal SET folder_path = ? WHERE id = ?", (folder_path, sim_id))
+        return JSONResponse({"status": "success", "id": sim_id, "new_folder": folder_path})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/whatif/simulation/{sim_id}/tags")
+async def tag_whatif_simulation(sim_id: str, data: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Aggiorna i tag / indici di una simulazione."""
+    try:
+        tags = data.get("tags", "")
+        engine._prefilter.execute("UPDATE decision_journal SET tags = ? WHERE id = ?", (tags, sim_id))
+        return JSONResponse({"status": "success", "id": sim_id, "new_tags": tags.split(",") if tags else []})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/whatif/folders")
+async def get_whatif_folders(api_key: str = Depends(get_api_key)):
+    """🧠 [v11.0] Ritorna la lista di tutte le cartelle definite dallo storico."""
+    try:
+        res = engine._prefilter.fetchall("SELECT DISTINCT folder_path FROM decision_journal WHERE folder_path IS NOT NULL")
+        folders = [r[0] for r in res if r[0]]
+        if "root" not in folders:
+            folders.append("root")
+        return JSONResponse(folders)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/wiki/simulate/gradient")
+async def calculate_gradient(data: Dict[str, Any], api_key: str = Depends(get_api_key)):
+    """
+    📐 [v9.1] CAUSAL GRADIENT DESCENT ENDPOINT.
+    Identifica i driver ottimali per raggiungere un obiettivo sul target.
+    """
+    try:
+        target_id = data.get("target_id")
+        desired_impact = data.get("desired_impact", 1.0)
+        
+        if not target_id:
+            return JSONResponse({"error": "target_id obbligatorio"}, status_code=400)
+            
+        res = await engine.wiki.simulator.calculate_causal_gradient(target_id, desired_impact)
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+class SovereignVaultTwinProxy:
+    """🌓 [v9.1 Proxy] Lightweight query proxy wrapping a SovereignVaultTwin instance."""
+    def __init__(self, engine, twin_id: str):
+        self.engine = engine
+        self.twin_id = twin_id
+
+    async def query(self, query_text: str, **kwargs):
+        return await self.engine.query(query_text, **kwargs)
 
 @app.post("/api/vault/twin/create")
 async def create_vault_twin(request: Request):
     """🚀 [v9.0] Crea un Digital Twin differenziale (CoW)."""
     if not check_api_key(request.headers.get("x-api-key", "")): return JSONResponse({"status": "error", "message": "Invalid API Key"}, status_code=403)
     
-    twin = engine.create_twin()
-    # Salviamo il twin nello stato dell'app (temporaneo)
-    if not hasattr(app.state, 'twins'): app.state.twins = {}
-    twin_id = str(uuid.uuid4())
-    app.state.twins[twin_id] = twin
-    
-    return JSONResponse({
-        "twin_id": twin_id,
-        "status": "Differential Twin Created (CoW)",
-        "parent_nodes": len(engine._nodes),
-        "delta_nodes": 0
-    })
+    try:
+        twin_id = await engine.twin.create_twin()
+        twin = SovereignVaultTwinProxy(engine, twin_id)
+        
+        # Salviamo il twin nello stato dell'app (temporaneo)
+        if not hasattr(app.state, 'twins'): app.state.twins = {}
+        app.state.twins[twin_id] = twin
+        
+        return JSONResponse({
+            "twin_id": twin_id,
+            "status": "Differential Twin Created (CoW)",
+            "parent_nodes": len(engine._nodes),
+            "delta_nodes": 0
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/api/vault/twin/query")
 async def query_vault_twin(request: Request):
@@ -3357,6 +4436,14 @@ async def run_wiki_audit():
         return {"status": "error", "message": "Linter not initialized"}
     report = await wiki_linter.run_full_audit()
     return report
+
+@app.post("/api/wiki/patch")
+async def apply_wiki_patch(issue: Dict, api_key: str = Depends(get_api_key)):
+    """🛠️ [v10.0] Applica una patch correttiva suggerita dal Linter."""
+    if 'wiki_linter' not in globals():
+        return {"status": "error", "message": "Linter not initialized"}
+    result = await wiki_linter.apply_self_healing(issue)
+    return result
 
 @app.get("/api/wiki/learning-path")
 async def get_learning_path(topic: str):
@@ -3565,6 +4652,48 @@ async def restore_limbo_node(node_id: str, api_key: str = Depends(get_api_key)):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.post("/api/limbo/merge/{node_id}")
+async def merge_limbo_node(node_id: str, request: Request, api_key: str = Depends(get_api_key)):
+    """[v5.1] Fonde un nodo del Limbo con un concetto target (Consolidamento Memoria)."""
+    try:
+        data = await request.json()
+        target_concept = data.get("target_concept")
+        if not target_concept:
+            raise HTTPException(400, "Missing target_concept")
+            
+        source_node = engine._tiers.get(node_id)
+        if not source_node:
+            raise HTTPException(404, "Source node not found")
+            
+        from memory_consolidation import WisdomDistiller
+        distiller = WisdomDistiller(engine)
+        
+        # 1. Cerchiamo se esiste già un nodo per il target_concept
+        search_results = await engine.query(target_concept, k=1)
+        target_node = None
+        if search_results:
+            target_node = search_results[0].node
+            
+        # 2. Se esiste, fondiamo il testo. Altrimenti creiamo un nuovo nodo di saggezza.
+        if target_node and target_node.id != node_id:
+            new_text = f"{target_node.text}\n\n[CONSOLIDATED_FROM_{node_id}]:\n{source_node.text}"
+            engine.upsert_text(text=new_text, node_id=target_node.id, metadata=target_node.metadata)
+            message = f"Merged into existing node '{target_node.id}'"
+        else:
+            # Creiamo un nuovo "Supernodo" via Distiller
+            wisdom_id = distiller.distill([node_id])
+            message = f"Created new consolidated wisdom node: {wisdom_id}"
+            
+        # 3. Eliminiamo il nodo originale dal Limbo e registriamo il feedback
+        _record_limbo_feedback(source_node.text, f"MERGED_INTO_{target_concept}")
+        engine.delete_node(node_id)
+        
+        return {"status": "success", "message": message}
+    except Exception as e:
+        import traceback
+        logging.error(f"Merge Error: {traceback.format_exc()}")
+        raise HTTPException(500, str(e))
+
 @app.delete("/api/limbo/purge/{node_id}")
 async def purge_limbo_node(node_id: str, api_key: str = Depends(get_api_key)):
     """[v5.1] Elimina fisicamente il nodo e registra il feedback negativo."""
@@ -3680,6 +4809,8 @@ async def sse_stream(request: Request, api_key: str = Depends(get_api_key)):
     last_size = get_dir_size(v_initial)
 
     async def event_generator():
+        q = asyncio.Queue(maxsize=100)
+        app.state.sse_queues.append(q)
         last_size = 0
         try:
             # 1. IMMEDIATE INITIAL SYNC (Fast counts)
@@ -3713,6 +4844,13 @@ async def sse_stream(request: Request, api_key: str = Depends(get_api_key)):
             while not _is_shutting_down:
                 if await request.is_disconnected():
                     break
+
+                # 🚀 [v9.0] Process Asynchronous Events from Broadcast Queue
+                while not q.empty():
+                    try:
+                        event_payload = q.get_nowait()
+                        yield f"data: {event_payload}\n\n"
+                    except: break
 
                 try:
                     # 2. Storage Metrics
@@ -3837,9 +4975,11 @@ async def sse_stream(request: Request, api_key: str = Depends(get_api_key)):
                     yield f"data: {json.dumps({'status': 'RECOVERING'})}\n\n"
                     await asyncio.sleep(2)
                 
-                await asyncio.sleep(1.2) # Relaxed interval
+                await asyncio.sleep(1.2)
         finally:
-            print("🔌 [SSE] Stream telemetria terminato pulitamente.")
+            if q in app.state.sse_queues:
+                app.state.sse_queues.remove(q)
+            print("🔌 [SSE] Client Disconnected.")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -3883,7 +5023,9 @@ async def spawn_custom_agent(req: SpawnAgentRequest, request: Request):
             "analyst": AgentRole.ANALYST,
             "creative": AgentRole.CREATIVE,
             "guardian": AgentRole.GUARDIAN,
-            "architect": AgentRole.ARCHITECT
+            "architect": AgentRole.ARCHITECT,
+            "optimizer": AgentRole.OPTIMIZER,
+            "expert": AgentRole.EXPERT
         }
         aid = app.state.lab.spawn_custom_agent(req.name, role_map.get(req.role, AgentRole.EXPERT), req.prompt, req.model)
         return {"status": "ok", "agent_id": aid}
@@ -4333,8 +5475,15 @@ async def audit_epistemic(nodes: List[Dict]):
 async def get_swarm_merit():
     """Get the merit-based ranking of swarm agents."""
     if 'app' in globals() and hasattr(app.state, 'lab'):
-        return app.state.lab.trust_network.reward_manager.get_priority_ranking()
-    return []
+        ranking = app.state.lab.trust_network.reward_manager.get_priority_ranking()
+        agents = []
+        for aid, score in ranking:
+            agent_obj = app.state.lab.agents.get(aid)
+            name = getattr(agent_obj, 'identity', {}).get('name', aid) if agent_obj else aid
+            role = getattr(agent_obj, 'identity', {}).get('role', 'Agent') if agent_obj else 'Agent'
+            agents.append({"name": name, "merit_tokens": score, "role": role})
+        return {"agents": agents}
+    return {"agents": []}
 
 @app.post("/api/strategy/playbook")
 async def generate_action_playbook(req: Dict):
@@ -4368,6 +5517,6 @@ async def get_shadow_stats():
     return shadow_twin.get_calibration_report()
 
 if __name__ == "__main__":
-    print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")
+    print("🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v11.3.0 Sovereign Hegemony...")
     # Torniamo alla versione semplice di run, i segnali li gestiamo nello startup_event
     uvicorn.run(app, host="127.0.0.1", port=8001, log_level="info")

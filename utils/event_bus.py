@@ -15,6 +15,7 @@ class NeuralEventType(str, Enum):
     SHADOW_SIMULATION_COMPLETED = "SHADOW_SIMULATION_COMPLETED"
     WIKI_GENERATED = "WIKI_GENERATED"
     TEMPORAL_SHIFT = "TEMPORAL_SHIFT"
+    ENTITIES_EXTRACTED = "ENTITIES_EXTRACTED"
 
 class NeuralEvent:
     def __init__(self, event_type: NeuralEventType, data: Dict[str, Any], priority: int = 1):

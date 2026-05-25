@@ -86,18 +86,24 @@ function init3D() {
     clusterNodesGroup.frustumCulled = false;
     scene.add(clusterNodesGroup);
 
-    const MAX_POINTS = 80000; // 🛡️ [v11.1] Optimized Safety Cap
+    const MAX_POINTS = 80000; // 🛡️ [v11.3.0] Optimized Safety Cap
     const MAX_LINKS = 1000000;  // 🕸️ [v11.0] Full Synaptic Fabric Rendering
+
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
     
     pointsMesh = new THREE.Points(geometry, new THREE.PointsMaterial({
-        size: 10000, vertexColors: true, transparent: true, opacity: 0.9,
-        sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false
+        size: 25000, 
+        vertexColors: true, 
+        transparent: true, 
+        opacity: 0.9,
+        sizeAttenuation: true, 
+        blending: THREE.AdditiveBlending, 
+        depthWrite: false
     }));
     pointsMesh.position.y = 1000000;
-    pointsMesh.frustumCulled = false; // 🌌 [v10.6] Keep nebula visible during deep space jumps
+    pointsMesh.frustumCulled = false; // Prevent points from vanishing when moved
     scene.add(pointsMesh);
 
     multimodalGroup = new THREE.Group();
@@ -129,8 +135,13 @@ function init3D() {
     const linkGeo = new THREE.BufferGeometry();
     linkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_LINKS * 2 * 3), 3));
     linkGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAX_LINKS * 2 * 3), 3));
+    linkGeo.setDrawRange(0, 0); // 🛡️ [Startup Guard] Initialize with 0 lines to prevent millions of ghost lines at startup
     linksMesh = new THREE.LineSegments(linkGeo, new THREE.LineBasicMaterial({ 
-        vertexColors: true, transparent: true, opacity: 0.25, blending: THREE.NormalBlending 
+        vertexColors: true, 
+        transparent: true, 
+        opacity: isLight ? 0.2 : 0.35, 
+        blending: isLight ? THREE.NormalBlending : THREE.AdditiveBlending,
+        depthWrite: false
     }));
     linksMesh.position.y = 1000000;
     linksMesh.frustumCulled = false; // 🕸️ [v10.6] Prevent links from vanishing when approaching clusters
@@ -169,8 +180,19 @@ function handleResize() {
     onWindowResize();
 }
 
+let lastRenderTime = 0;
+const frameDelay = 1000 / 30; // [M1 Thermal Guard] Cap background 3D rendering to 30 FPS to save CPU/GPU resources
+
 function animate() {
     requestAnimationFrame(animate);
+    
+    // [Battery Saver] Immediately halt rendering and physics updates when app is minimized or tab is hidden
+    if (document.hidden) return;
+    
+    const now = Date.now();
+    const elapsed = now - lastRenderTime;
+    if (elapsed < frameDelay) return;
+    lastRenderTime = now - (elapsed % frameDelay);
     
     const overview = document.getElementById('overview-view');
     if (overview && overview.style.display === 'none') return;
@@ -180,7 +202,6 @@ function animate() {
         window.isRenderLoopActive = true;
     }
     
-    const now = Date.now();
     const time = now * 0.001;
 
     // 🎯 [v17.6] Priority Camera Hook: Update follow logic BEFORE controls.update()
@@ -210,6 +231,131 @@ function animate() {
         window.playerController.update(0.016);
     }
     
+    // 🌌 [v11.0] High-Performance Client-Side WASM Physics Layout Engine Step
+    if (window.vaultPoints && window.vaultPoints.length > 0 && !isRotationPaused && !window.isFlightModeActive) {
+        try {
+            if (typeof window.SovereignWASM !== 'undefined' && window.SovereignWASM.physics) {
+                window.SovereignWASM.physics.step(window.vaultPoints, window.lastNeuralLinks);
+                
+                // Update InstancedMesh positions directly on every frame from the WASM physics memory
+                if (window.pointsMesh) {
+                    const isInst = window.pointsMesh.isInstancedMesh;
+                    const exp = window.nebulaExpansionFactor || 1.0;
+                    const pMap = window.SovereignWASM.physics.nodeIndexMap;
+                    const posArray = window.SovereignWASM.physics.positions;
+                    
+                    if (isInst && pMap && posArray) {
+                        const dummy = new THREE.Object3D();
+                        for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                            const p = window.vaultPoints[i];
+                            const idx = pMap[p.id];
+                            if (idx !== undefined) {
+                                const px = posArray[idx * 3] * exp;
+                                const py = posArray[idx * 3 + 1] * exp;
+                                const pz = posArray[idx * 3 + 2] * exp;
+                                dummy.position.set(px, py, pz);
+                                
+                                // Preserve scale of galaxies
+                                const isGalaxy = (p.is_galaxy === true || (p.metadata && p.metadata.is_galaxy === true));
+                                if (isGalaxy) {
+                                    dummy.scale.setScalar(4.0);
+                                } else {
+                                    dummy.scale.setScalar(1.0);
+                                }
+                                
+                                dummy.updateMatrix();
+                                window.pointsMesh.setMatrixAt(i, dummy.matrix);
+                                
+                                // Write back positions so other JS components (like clusters) find them
+                                p.x = posArray[idx * 3];
+                                p.y = posArray[idx * 3 + 1];
+                                p.z = posArray[idx * 3 + 2];
+                            }
+                        }
+                        window.pointsMesh.instanceMatrix.needsUpdate = true;
+                    } else if (pMap && posArray) {
+                        const posAttr = window.pointsMesh.geometry.attributes.position;
+                        const array = posAttr.array;
+                        for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                            const p = window.vaultPoints[i];
+                            const idx = pMap[p.id];
+                            if (idx !== undefined) {
+                                const px = posArray[idx * 3] * exp;
+                                const py = posArray[idx * 3 + 1] * exp;
+                                const pz = posArray[idx * 3 + 2] * exp;
+                                array[i * 3] = px;
+                                array[i * 3 + 1] = py;
+                                array[i * 3 + 2] = pz;
+                                
+                                // Write back positions
+                                p.x = posArray[idx * 3];
+                                p.y = posArray[idx * 3 + 1];
+                                p.z = posArray[idx * 3 + 2];
+                            }
+                        }
+                        posAttr.needsUpdate = true;
+                    }
+
+                    // Update majestic rings and labels for galaxies to stay perfectly aligned
+                    if (window.galaxyGroup && window.galaxyGroup.children.length > 0 && pMap && posArray) {
+                        window.galaxyGroup.children.forEach(child => {
+                            if (child.userData && child.userData.galaxyId) {
+                                const gid = child.userData.galaxyId;
+                                const idx = pMap[gid];
+                                if (idx !== undefined) {
+                                    const px = posArray[idx * 3] * exp;
+                                    const py = posArray[idx * 3 + 1] * exp;
+                                    const pz = posArray[idx * 3 + 2] * exp;
+                                    if (child.userData.isRing) {
+                                        child.position.set(px, py, pz);
+                                    } else if (child.userData.isLabel) {
+                                        child.position.set(px, py + 45000, pz);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // Sync edge positions and colors dynamically to stay perfectly aligned and beautifully lit
+                if (typeof linksMesh !== 'undefined' && window.lastNeuralLinks && layersVisibility.edges) {
+                    const linkPos = linksMesh.geometry.attributes.position.array;
+                    const linkCol = linksMesh.geometry.attributes.color.array;
+                    let linkIdx = 0;
+                    const currentLinks = window.lastNeuralLinks;
+                    
+                    const pMap = window.SovereignWASM.physics.nodeIndexMap;
+                    const posArray = window.SovereignWASM.physics.positions;
+                    const exp = window.nebulaExpansionFactor || 1.0;
+                    const isLightTheme = document.body.classList.contains('light-theme');
+                    
+                    const activeLinks = window.activeRenderedLinks;
+                    if (pMap && posArray && activeLinks && activeLinks.length > 0) {
+                        for (let j = 0; j < activeLinks.length; j++) {
+                            const link = activeLinks[j];
+                            const srcIdx = pMap[link.srcId];
+                            const dstIdx = pMap[link.dstId];
+                            
+                            if (srcIdx !== undefined && dstIdx !== undefined) {
+                                // Direct lookup mapping! Zero string allocation, zero color calculation
+                                const jIdx = link.linkIdx;
+                                linkPos[jIdx*6] = posArray[srcIdx * 3] * exp;
+                                linkPos[jIdx*6+1] = posArray[srcIdx * 3 + 1] * exp;
+                                linkPos[jIdx*6+2] = posArray[srcIdx * 3 + 2] * exp;
+                                linkPos[jIdx*6+3] = posArray[dstIdx * 3] * exp;
+                                linkPos[jIdx*6+4] = posArray[dstIdx * 3 + 1] * exp;
+                                linkPos[jIdx*6+5] = posArray[dstIdx * 3 + 2] * exp;
+                            }
+                        }
+                        linksMesh.geometry.attributes.position.needsUpdate = true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("⚠️ [WASM Physics Engine Error]", e);
+        }
+    }
+
     updateVisualEffects(now, time);
     updateCameraFollow();
 
@@ -225,8 +371,8 @@ function updateCameraFollow() {
         // 🎯 [v10.5] Improved Camera Hook
         controls.target.lerp(targetWorldPos, 0.1);
         
-        // Mantieni una distanza ideale dall'agente
-        const idealDist = 250000 * (nebulaExpansionFactor || 1.0);
+        // Mantieni una distanza ideale dall'agente (Calibrata per la nuova scala macro)
+        const idealDist = Math.min(1000000, 400000 + (nebulaExpansionFactor * 0.2)); 
         const currentDist = camera.position.distanceTo(targetWorldPos);
         
         if (Math.abs(idealDist - currentDist) > 1000) {
@@ -245,11 +391,23 @@ function updateVisualEffects(now, time) {
         if (isVeryOld || (c.userData && c.userData.completed && age > MIN_VISIBILITY)) {
             c.scale.setScalar(c.scale.x * 0.95);
             if (c.scale.x < 0.1 || isVeryOld) {
-                scene.remove(c);
+                if (typeof safeDispose === 'function') safeDispose(c);
+                else scene.remove(c);
                 return false;
             }
         } else {
             c.scale.setScalar(0.8 + Math.sin(time * 3) * 0.05); 
+        }
+        return true;
+    });
+
+    // 🧹 [v11.2] Reaper Cubes Cleanup (Previously Leaking)
+    reaperCubes = reaperCubes.filter(item => {
+        const isExpired = now > item.expiry;
+        if (isExpired) {
+            if (typeof safeDispose === 'function') safeDispose(item.mesh);
+            else scene.remove(item.mesh);
+            return false;
         }
         return true;
     });
@@ -264,6 +422,17 @@ function updateVisualEffects(now, time) {
         if (neuralLinks) {
             neuralLinks.rotation.y += deltaRot;
             updateNeuralLinksAnimation(time);
+        }
+        
+        if (linksMesh && linksMesh.material) {
+            const isLight = document.body.classList.contains('light-theme');
+            const pulse = Math.sin(time * 2.0) * 0.05;
+            linksMesh.material.opacity = (isLight ? 0.2 : 0.35) + pulse;
+        }
+    
+        // 🛡️ [v11.2] Memory Guardian Telemetry Sync (Every ~1s)
+        if (Math.floor(time) % 2 === 0 && typeof updateMemoryTelemetry === 'function') {
+            updateMemoryTelemetry();
         }
     }
 }

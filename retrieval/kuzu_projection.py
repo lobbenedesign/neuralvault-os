@@ -78,7 +78,8 @@ class KuzuProjection:
         try:
             if event_type == "NODE_CREATED":
                 self.conn.execute(
-                    "CREATE (:KnowledgeNode {id: $id, title: $title, type: $type, created_at: $ts})",
+                    "MERGE (n:KnowledgeNode {id: $id}) "
+                    "ON CREATE SET n.title = $title, n.type = $type, n.created_at = $ts",
                     {"id": payload['id'], "title": payload.get('title', 'Untitled'), "type": payload.get('type', 'generic'), "ts": payload.get('timestamp', 0.0)}
                 )
                 

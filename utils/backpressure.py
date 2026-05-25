@@ -64,8 +64,8 @@ class BackpressureManager:
         """Blocca l'esecuzione se il sistema è sotto stress estremo (Versione Sincrona)."""
         s = self.get_sensors()
         if s.ram_percent > 96 or s.cpu_percent > 98:
-            print(f"⚠️ [Backpressure] System Clogged (RAM: {s.ram_percent}%). Waiting for breath (2s)...")
-            time.sleep(2)
+            print(f"⚠️ [Backpressure] System Yielding (RAM: {s.ram_percent}% | CPU: {s.cpu_percent}%)...")
+            time.sleep(0.1) # Micro-yield for CPU instead of a hard 2s block
 
     async def async_wait_if_clogged(self):
         """Blocca l'esecuzione se il sistema è sotto stress estremo (Versione Asincrona)."""
@@ -74,8 +74,8 @@ class BackpressureManager:
             s = self.get_sensors()
             if s.ram_percent < 96 and s.cpu_percent < 98:
                 break
-            print(f"⚠️ [Backpressure] System Clogged (RAM: {s.ram_percent}%). Waiting for breath...")
-            await asyncio.sleep(2)
+            print(f"⚠️ [Backpressure] System Yielding (RAM: {s.ram_percent}% | CPU: {s.cpu_percent}%)...")
+            await asyncio.sleep(0.1)
 
 # Singleton Instance
 backpressure = BackpressureManager()

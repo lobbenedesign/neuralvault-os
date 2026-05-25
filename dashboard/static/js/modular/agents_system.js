@@ -492,6 +492,91 @@ function provisionAgents() {
     bridgerLabel.position.y = 100000;
     bridgerGroup.add(bridgerLabel);
     agentsContainer.add(bridgerGroup);
+
+    // 🖨️ PB-404 PRESSMAN: The Sovereign Paperboy (v10.0 - Retro Pixel Edition)
+    pressmanGroup = new THREE.Group();
+    const pbTexture = new THREE.TextureLoader().load('/static/img/paperboy_sprite.gif', 
+        (tex) => { console.log("✅ [PB-404] Paperboy Animated Sprite Loaded Successfully"); },
+        undefined,
+        (err) => { console.error("❌ [PB-404] Paperboy Sprite LOAD ERROR:", err); }
+    );
+    pbTexture.magFilter = THREE.NearestFilter;
+    pbTexture.minFilter = THREE.NearestFilter;
+    
+    const pbMat = new THREE.SpriteMaterial({ 
+        map: pbTexture, 
+        transparent: true, 
+        opacity: 1.0,
+        color: 0xffffff,
+        depthTest: false, // Ensure it's visible through the nebula cloud
+        sizeAttenuation: true
+    });
+    const pbSprite = new THREE.Sprite(pbMat);
+    pbSprite.scale.set(160000, 160000, 1); // Extra large for impact
+    pressmanGroup.add(pbSprite);
+    pressmanGroup.pbSprite = pbSprite;
+    pressmanGroup.pbTexture = pbTexture;
+
+    // [v9.8] Visibility Helper: Add a powerful glow point
+    const glow = new THREE.PointLight(0xffffff, 5, 400000);
+    pressmanGroup.add(glow);
+    
+    // Add a circular glow halo behind the sprite
+    const haloGeo = new THREE.CircleGeometry(90000, 32);
+    const haloMat = new THREE.MeshBasicMaterial({ 
+        color: 0xffffff, 
+        transparent: true, 
+        opacity: 0.15,
+        depthWrite: false
+    });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    pressmanGroup.add(halo);
+
+    // Newspaper Throwing Pool
+    pressmanNewspapers = new THREE.Group();
+    agentsContainer.add(pressmanNewspapers);
+
+    pressmanLabel = createTextSprite("PB-404 PAPERBOY", "#ffffff");
+    pressmanLabel.position.y = 110000;
+    pressmanGroup.add(pressmanLabel);
+
+    // [v9.8] Initial Positioning for visibility
+    pressmanGroup.position.set(1200000, 400000, 1200000);
+    agentsContainer.add(pressmanGroup);
+    
+    // Orbiting papers (The "Rotary Press" effect)
+    pressmanPapers = [];
+    for(let i=0; i<3; i++) {
+        const pGeo = new THREE.PlaneGeometry(15000, 20000);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true });
+        const p = new THREE.Mesh(pGeo, pMat);
+        pressmanGroup.add(p);
+        pressmanPapers.push(p);
+    }
+    
+    agentsContainer.add(pressmanGroup);
+
+    // [v9.8] Internal Helper: Throw Newspaper
+    window.spawnPaperboyNews = function(pos) {
+        const pGeo = new THREE.PlaneGeometry(8000, 11000);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true });
+        const news = new THREE.Mesh(pGeo, pMat);
+        news.position.copy(pos);
+        
+        // Random trajectory
+        const angle = Math.random() * Math.PI * 2;
+        news.userData.velocity = new THREE.Vector3(Math.cos(angle) * 15000, (Math.random() - 0.5) * 10000, Math.sin(angle) * 15000);
+        news.userData.rotSpeed = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.2);
+        news.userData.birth = Date.now();
+        
+        pressmanNewspapers.add(news);
+
+        const arts = document.getElementById('val-pressman-artifacts');
+        if (arts) {
+            let count = parseInt(arts.innerText) || 0;
+            arts.innerText = count + 1;
+        }
+    };
 }
 function updateAgentPhysics() {
     // [v12.0] NERD MODE Check: Hide/Show all agents in Cycloscope
@@ -502,7 +587,7 @@ function updateAgentPhysics() {
 
     const now = Date.now();
     const time = now * 0.001;
-    const exp = nebulaExpansionFactor || 1.0;
+    const exp = 1.0; 
 
     // 🧹 [JANITRON] Logic (Always Patrolling)
     if (janitronGroup) {
@@ -764,28 +849,49 @@ function updateAgentPhysics() {
                 r2d2Group.eyeLED.scale.setScalar(1.0 + pulse * 0.3);
                 
                 // --- COLOR NEARBY NODES (Thematic Grouping Effect) ---
-                if (window.pointsMesh && window.pointsMesh.geometry.attributes.color) {
-                    const posAttr = window.pointsMesh.geometry.attributes.position;
-                    const colAttr = window.pointsMesh.geometry.attributes.color;
+                if (window.pointsMesh) {
                     const r2Pos = r2d2Group.position;
                     const effectRadius = 500000 * exp;
                     const targetColor = new THREE.Color(activeColor);
                     
-                    let needsColorUpdate = false;
-                    const pCount = Math.min(posAttr.count, 30000); // Limit to visual nodes
-                    
-                    for (let i = 0; i < pCount; i++) {
-                        const px = posAttr.getX(i);
-                        const py = posAttr.getY(i);
-                        const pz = posAttr.getZ(i);
-                        const distSq = (px - r2Pos.x)**2 + (py - r2Pos.y)**2 + (pz - r2Pos.z)**2;
+                    if (window.pointsMesh.isInstancedMesh) {
+                        const matrix = new THREE.Matrix4();
+                        const pos = new THREE.Vector3();
+                        let needsColorUpdate = false;
+                        const pCount = Math.min(window.pointsMesh.count, 30000);
                         
-                        if (distSq < effectRadius * effectRadius) {
-                            colAttr.setXYZ(i, targetColor.r, targetColor.g, targetColor.b);
-                            needsColorUpdate = true;
+                        for (let i = 0; i < pCount; i++) {
+                            window.pointsMesh.getMatrixAt(i, matrix);
+                            pos.setFromMatrixPosition(matrix);
+                            const distSq = (pos.x - r2Pos.x)**2 + (pos.y - r2Pos.y)**2 + (pos.z - r2Pos.z)**2;
+                            
+                            if (distSq < effectRadius * effectRadius) {
+                                window.pointsMesh.setColorAt(i, targetColor);
+                                needsColorUpdate = true;
+                            }
                         }
+                        if (needsColorUpdate && window.pointsMesh.instanceColor) {
+                            window.pointsMesh.instanceColor.needsUpdate = true;
+                        }
+                    } else if (window.pointsMesh.geometry && window.pointsMesh.geometry.attributes.color) {
+                        const posAttr = window.pointsMesh.geometry.attributes.position;
+                        const colAttr = window.pointsMesh.geometry.attributes.color;
+                        let needsColorUpdate = false;
+                        const pCount = Math.min(posAttr.count, 30000);
+                        
+                        for (let i = 0; i < pCount; i++) {
+                            const px = posAttr.getX(i);
+                            const py = posAttr.getY(i);
+                            const pz = posAttr.getZ(i);
+                            const distSq = (px - r2Pos.x)**2 + (py - r2Pos.y)**2 + (pz - r2Pos.z)**2;
+                            
+                            if (distSq < effectRadius * effectRadius) {
+                                colAttr.setXYZ(i, targetColor.r, targetColor.g, targetColor.b);
+                                needsColorUpdate = true;
+                            }
+                        }
+                        if (needsColorUpdate) colAttr.needsUpdate = true;
                     }
-                    if (needsColorUpdate) colAttr.needsUpdate = true;
                 }
             } else {
                 r2d2Group.statusLED.material.color.setHex(0x808080);
@@ -797,6 +903,9 @@ function updateAgentPhysics() {
         }
     }
 
+    // 🖨️ [PRESSMAN / PAPERBOY] - Logic consolidated below
+
+
     // 🕶️ [SMITH] - Frenetic Upgrade + Wormhole Proximity
     Object.keys(smithFleetGroups).forEach(pid => {
         const group = smithFleetGroups[pid];
@@ -806,8 +915,11 @@ function updateAgentPhysics() {
         if (window.meshWormholes && window.meshWormholes[pid]) {
             const wh = window.meshWormholes[pid];
             if (wh.group) {
-                const bulletOriginLocal = new THREE.Vector3(0, 0, 3000000); // [v10.7] Advance 3M units towards center
-                const smithPosLocal = bulletOriginLocal.clone().add(new THREE.Vector3(0, 0, -9000)); 
+                // [v10.7] Ricalibrazione dinamica: Smith avanza all'80% dell'espansione
+                const exp = (window.nebulaExpansionFactor || 1.0);
+                const advanceDist = exp * 1500000 * 0.8;
+                const bulletOriginLocal = new THREE.Vector3(0, 0, advanceDist); 
+                const smithPosLocal = bulletOriginLocal.clone().add(new THREE.Vector3((Math.random()-0.5)*40000, (Math.random()-0.5)*40000, -5000)); 
                 target = smithPosLocal.clone().applyMatrix4(wh.group.matrixWorld);
             }
         } else if (window.meshWormholes) {
@@ -897,7 +1009,10 @@ function updateAgentPhysics() {
             skywalkerLasers.forEach(l => {
                 l.scale.x += 1.0;
                 l.material.opacity -= 0.02;
-                if(l.material.opacity <= 0) scene.remove(l);
+                if(l.material.opacity <= 0) {
+                    if (typeof safeDispose === 'function') safeDispose(l);
+                    else scene.remove(l);
+                }
             });
             skywalkerLasers = skywalkerLasers.filter(l => l.material.opacity > 0);
         }
@@ -1019,7 +1134,8 @@ function updateAgentPhysics() {
         yodaBullets.forEach((b, idx) => {
             b.progress += 0.02;
             if (b.progress >= 1.0) {
-                scene.remove(b.mesh);
+                if (typeof safeDispose === 'function') safeDispose(b.mesh);
+                else scene.remove(b.mesh);
                 yodaBullets.splice(idx, 1);
             } else {
                 b.mesh.position.lerpVectors(b.start, b.end, b.progress);
@@ -1036,6 +1152,94 @@ function updateAgentPhysics() {
         if(bridgerGroup.rings) {
             bridgerGroup.rings[0].rotation.y += 0.08;
             bridgerGroup.rings[1].rotation.x += 0.05;
+        }
+    }
+
+    // 🖨️ [PAPERBOY ANIMATIONS & PATROL]
+    if (pressmanGroup) {
+        let finalTarget;
+        const telemetryTarget = window.pressmanTargetPos;
+        const pbSpeed = time * 0.12;
+        
+        // Se abbiamo dati telemetrici validi e non la posizione di default (2M), seguili
+        if (telemetryTarget && Math.abs(telemetryTarget.x) < 1900000) {
+            finalTarget = telemetryTarget.clone();
+            finalTarget.y += Math.sin(time * 3.0) * 20000; // Bobbing effect
+        } else {
+            // 🚴 Orbital Patrol (Fallback)
+            const pbRadius = (window.nebulaExpansionFactor || 1.0) * 1500000 * 0.9;
+            const targetX = Math.cos(pbSpeed) * pbRadius;
+            const targetZ = Math.sin(pbSpeed) * pbRadius;
+            const targetY = 400000 + Math.sin(time * 0.5) * 200000;
+            finalTarget = new THREE.Vector3(targetX, targetY, targetZ);
+        }
+        
+        pressmanGroup.position.lerp(finalTarget, 0.02);
+        // Face movement direction
+        pressmanGroup.rotation.y = pbSpeed + Math.PI/2;
+
+        // [v10.0] Ensure Animated GIF updates (only if loaded)
+        if (pressmanGroup.pbTexture && pressmanGroup.pbTexture.image) {
+            pressmanGroup.pbTexture.needsUpdate = true;
+        }
+
+        // Papers orbiting
+        if (window.pressmanPapers) {
+            window.pressmanPapers.forEach((p, i) => {
+                const orbitT = time * 2.0 + (i * Math.PI * 2 / 3);
+                p.position.set(Math.cos(orbitT) * 60000, Math.sin(orbitT) * 40000, Math.sin(orbitT * 0.5) * 30000);
+                p.rotation.y = orbitT;
+                
+                // "Pressing" effect: papers fly into the cylinder and back out
+                const scale = 0.8 + Math.abs(Math.sin(orbitT * 2)) * 0.4;
+                p.scale.set(scale, scale, scale);
+            });
+        }
+
+        if (pressmanGroup.userData.isPressing) {
+            pressmanGroup.scale.setScalar(1.2 + Math.sin(time * 20) * 0.1);
+        } else {
+            pressmanGroup.scale.setScalar(1.0);
+        }
+
+        // 🚴 Pedaling Animation (Sine wave tilt & bob)
+        if (pressmanGroup.pbSprite) {
+            const pedalTime = time * 8; 
+            pressmanGroup.pbSprite.position.y = Math.sin(pedalTime) * 8000;
+            pressmanGroup.pbSprite.material.rotation = Math.sin(pedalTime * 0.5) * 0.1;
+        }
+
+        // 📰 Newspaper Throwing Logic
+        if (pressmanGroup.userData.isPressing || Math.random() < 0.005) { // Random throws even if not pressing
+            if (!window._lastPaperThrow || (now - window._lastPaperThrow > 2000)) {
+                if (window.spawnPaperboyNews) window.spawnPaperboyNews(pressmanGroup.position);
+                window._lastPaperThrow = now;
+            }
+        }
+    }
+
+    // Update flying newspapers
+    if (window.pressmanNewspapers && window.pressmanNewspapers.children.length > 0) {
+        const papers = window.pressmanNewspapers.children;
+        for (let i = papers.length - 1; i >= 0; i--) {
+            const p = papers[i];
+            if (p.userData.velocity) {
+                p.position.add(p.userData.velocity.clone().multiplyScalar(0.016));
+                p.rotation.x += p.userData.rotSpeed.x;
+                p.rotation.y += p.userData.rotSpeed.y;
+                p.rotation.z += p.userData.rotSpeed.z;
+            }
+            
+            // Fade out and remove
+            const age = now - p.userData.birth;
+            if (age > 4000) {
+                p.material.opacity -= 0.05;
+                if (p.material.opacity <= 0) {
+                    window.pressmanNewspapers.remove(p);
+                }
+            } else if (age > 3000) {
+                p.material.opacity = 1 - (age - 3000) / 1000;
+            }
         }
     }
 }
@@ -1083,7 +1287,8 @@ function syncSnakeTail(count) {
     }
     while(snakeSegments.length > targetLength) {
         const seg = snakeSegments.pop();
-        scene.remove(seg);
+        if (typeof safeDispose === 'function') safeDispose(seg);
+        else scene.remove(seg);
     }
 }
 
@@ -1173,7 +1378,7 @@ function triggerSkywalkerLaser(agent, controller) {
 // Spara proiettili laser neon dai cannoni delle ali verso il target
 window.triggerSkywalkerLaserStorm = function(targetPos) {
     if (!window.skywalkerSprite || !window.scene) {
-        console.warn("⚠️ [LaserStorm] Sprite o Scena non pronti.");
+        // Return silently when in 2D pages or views where the 3D scene is not initialized, preventing console flood.
         return;
     }
     

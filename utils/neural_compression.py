@@ -3,6 +3,7 @@ import logging
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 class NeuralImplicitCompressor:
     """
@@ -51,19 +52,28 @@ class NeuralImplicitCompressor:
         import threading
         threading.Thread(target=_train, daemon=True).start()
 
-    def train_on_vault(self, vectors: np.ndarray):
-        """Addestra il codebook neurale in sincrono."""
+    def train_on_vault(self, vectors: np.ndarray) -> np.ndarray:
+        """Addestra il codebook neurale in sincrono e restituisce i centri."""
         if len(vectors) < self.codebook_size:
             self.logger.warning("Vault troppo piccolo per NIC. Richiesto almeno 1024 nodi.")
-            return
+            return None
 
         self.logger.info(f"🧠 [NIC] Inizio addestramento su {len(vectors)} vettori...")
         from sklearn.cluster import MiniBatchKMeans
-        kmeans = MiniBatchKMeans(n_clusters=self.codebook_size, random_state=42, batch_size=256)
+        kmeans = MiniBatchKMeans(n_clusters=self.codebook_size, random_state=42, batch_size=256, n_init=3)
         kmeans.fit(vectors)
         self.codebook = kmeans.cluster_centers_.astype(np.float32)
         self.is_trained = True
         self.logger.info("✅ [NIC] Addestramento completato. Compressione attiva.")
+        return self.codebook
+
+    @staticmethod
+    def _isolated_train(vectors: np.ndarray, codebook_size: int):
+        """Metodo statico per l'addestramento in un processo separato."""
+        from sklearn.cluster import MiniBatchKMeans
+        kmeans = MiniBatchKMeans(n_clusters=codebook_size, random_state=42, batch_size=256, n_init=3)
+        kmeans.fit(vectors)
+        return kmeans.cluster_centers_.astype(np.float32)
 
     def compress(self, vector: np.ndarray) -> int:
         """Trasforma un vettore ad alta dimensione in un singolo indice neurale (uint16)."""

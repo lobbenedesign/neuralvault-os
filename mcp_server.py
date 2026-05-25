@@ -3,9 +3,23 @@ import os
 import sys
 import json
 import httpx
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+try:
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import Tool, TextContent
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+    class Server:
+        def __init__(self, *args, **kwargs): pass
+        def list_tools(self):
+            return lambda f: f
+        def call_tool(self):
+            return lambda f: f
+    class Tool: pass
+    class TextContent: pass
+    def stdio_server(): pass
+
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
@@ -83,6 +97,30 @@ class NeuralVaultMCPBridge:
                     name="get_vault_status",
                     description="Ritorna statistiche sullo stato di salute e dimensione del NeuralVault.",
                     inputSchema={"type": "object", "properties": {}}
+                ),
+                Tool(
+                    name="what_if_forecast",
+                    description="Esegue un'analisi causale predittiva su uno scenario ipotetico. Ritorna impatti probabilistici e una narrazione strategica.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Lo scenario da simulare (es. 'Cosa succede se smetto di usare Python?')"},
+                            "mode": {"type": "string", "enum": ["FAST", "DEEP"], "default": "FAST"}
+                        },
+                        "required": ["query"]
+                    }
+                ),
+                Tool(
+                    name="track_active_document",
+                    description="Registra il file attualmente aperto/attivo sull'editor Cursor/VS Code e ritorna dinamicamente la Wiki o i nodi correlati.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "Il percorso assoluto del file attivo"},
+                            "content_preview": {"type": "string", "description": "Un'anteprima o estratto del contenuto del file"}
+                        },
+                        "required": ["file_path"]
+                    }
                 )
             ]
 
@@ -144,6 +182,37 @@ class NeuralVaultMCPBridge:
                         stats = resp.json()
                         return [TextContent(type="text", text=f"📊 Status Vault:\n{json.dumps(stats, indent=2)}")]
 
+                    elif name == "what_if_forecast":
+                        query = arguments.get("query")
+                        mode = arguments.get("mode", "FAST")
+                        payload = {"query": query, "mode": mode, "lenses": ["standard"]}
+                        resp = await client.post(f"{API_BASE_URL}/api/wiki/simulate/nl", json=payload, headers=headers)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        
+                        narrative = data.get("narrative", "Simulazione completata.")
+                        grade = data.get("oracle_grade", "B")
+                        conf = data.get("overall_confidence", 0.0)
+                        
+                        return [TextContent(type="text", text=f"🔮 FORECAST (Grade: {grade}, Conf: {conf*100}%)\n\n{narrative}")]
+
+                    elif name == "track_active_document":
+                        file_path = arguments.get("file_path")
+                        preview = arguments.get("content_preview", "")
+                        query_term = os.path.basename(file_path)
+                        if preview:
+                            query_term += " " + preview[:200]
+                        
+                        payload = {"query": query_term, "top_k": 3, "modality": "text"}
+                        resp = await client.post(f"{API_BASE_URL}/api/chat", json=payload, headers=headers)
+                        resp.raise_for_status()
+                        
+                        data = resp.json()
+                        response_text = data.get("response", "Nessun contesto correlato.")
+                        
+                        hydration_msg = f"💡 [NeuralVault Context Hydration]\nIl file attivo '{os.path.basename(file_path)}' è semanticamente correlato a:\n\n{response_text}"
+                        return [TextContent(type="text", text=hydration_msg)]
+
                 except httpx.ConnectError:
                     return [TextContent(type="text", text="❌ Errore: Impossibile connettersi a NeuralVault. Assicurati che api.py sia in esecuzione sulla porta 8001.")]
                 except Exception as e:
@@ -152,6 +221,11 @@ class NeuralVaultMCPBridge:
             return [TextContent(type="text", text=f"Tool {name} non riconosciuto.")]
 
     async def run(self):
+        if not MCP_AVAILABLE:
+            print("\n❌ [MCP Error] Il pacchetto SDK 'mcp' non è installato in questo ambiente Python.")
+            print("Per abilitare il Bridge MCP con Claude Desktop/Cursor, installalo con:")
+            print("👉  .venv/bin/pip install mcp")
+            sys.exit(1)
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
@@ -160,5 +234,69 @@ class NeuralVaultMCPBridge:
             )
 
 if __name__ == "__main__":
-    bridge = NeuralVaultMCPBridge()
-    asyncio.run(bridge.run())
+    import argparse
+    parser = argparse.ArgumentParser(description="NeuralVault MCP Bridge / Workspace Utility")
+    subparsers = parser.add_subparsers(dest="command")
+    
+    # Subcommand: mcp-init
+    init_parser = subparsers.add_parser("mcp-init", help="Inizializza un nuovo workspace locale di NeuralVault.")
+    init_parser.add_argument("directory", type=str, help="La directory da configurare come workspace")
+    
+    args = parser.parse_args()
+    
+    if args.command == "mcp-init":
+        from pathlib import Path
+        target_path = Path(args.directory).resolve()
+        target_path.mkdir(parents=True, exist_ok=True)
+        
+        nv_dir = target_path / ".neuralvault"
+        nv_dir.mkdir(exist_ok=True)
+        
+        config_data = {
+            "mcp_port": 8001,
+            "api_port": 8000,
+            "vault_key": VAULT_KEY,
+            "workspace_path": str(target_path)
+        }
+        
+        with open(nv_dir / "config.json", "w") as f:
+            json.dump(config_data, f, indent=4)
+            
+        claudeproj_content = {
+            "mcpServers": {
+                "neuralvault": {
+                    "command": "python3",
+                    "args": [os.path.abspath(__file__)],
+                    "env": {
+                        "NEURALVAULT_API_URL": API_BASE_URL,
+                        "NEURAL_VAULT_KEY": VAULT_KEY,
+                        "NEURALVAULT_WORKSPACE": str(target_path)
+                    }
+                }
+            }
+        }
+        with open(target_path / ".claudeproj", "w") as f:
+            json.dump(claudeproj_content, f, indent=4)
+            
+        claude_desktop_cfg = {
+            "mcpServers": {
+                "neuralvault": {
+                    "command": "python3",
+                    "args": [os.path.abspath(__file__)],
+                    "env": {
+                        "NEURALVAULT_API_URL": "http://127.0.0.1:8001",
+                        "NEURAL_VAULT_KEY": VAULT_KEY,
+                        "NEURALVAULT_WORKSPACE": str(target_path)
+                    }
+                }
+            }
+        }
+        
+        print(f"\n✅ [MCP INIT] Workspace inizializzato in: {target_path}")
+        print(f"📂 Creata directory nascosta: {nv_dir}")
+        print(f"📄 Creato file di progetto: {target_path / '.claudeproj'}")
+        print("\n🖥️ Aggiungi questa configurazione a 'claude_desktop_config.json' per integrare Claude Desktop:")
+        print(json.dumps(claude_desktop_cfg, indent=4))
+    else:
+        bridge = NeuralVaultMCPBridge()
+        asyncio.run(bridge.run())

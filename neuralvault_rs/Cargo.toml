@@ -3,6 +3,12 @@ name = "neuralvault_rs"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+metal = []
+cuda = []
+wgpu = []
+
 [lib]
 name = "neuralvault_rs"
 crate-type = ["cdylib"]

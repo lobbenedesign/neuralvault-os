@@ -12,39 +12,304 @@ window.updateNeuralDensity = function(val) {
     if (lastVaultPoints) updateThreeScene(lastVaultPoints, null);
 };
 
-function updateThreeScene(points, links = null) {
-    if (!pointsMesh || !neuralLinks) return;
-    vaultPoints = points || [];
-    lastVaultPoints = points;
+function updateThreeScene(points, links = null, fromTactical = false) {
+    const rawPoints = points || [];
+    
+    // 🛡️ [v11.5 Optimized] Single Hub Election per Galaxy Theme
+    const galaxies = [];
+    const galaxyNodes = [];
+    const clusters = [];
+    const regulars = [];
+    
+    // First pass: Group nodes by theme
+    const galaxyThemes = new Set();
+    const galaxyGroups = {}; // theme -> array of nodes
+    rawPoints.forEach(p => {
+        const isGal = (p.is_galaxy === true || (p.metadata && p.metadata.is_galaxy === true));
+        if (isGal && p.theme && p.theme !== 'default') {
+            if (!galaxyGroups[p.theme]) galaxyGroups[p.theme] = [];
+            galaxyGroups[p.theme].push(p);
+            galaxyThemes.add(p.theme);
+        }
+    });
+    
+    // Second pass: Elect EXACTLY ONE Hub per Galaxy Theme
+    const themeHubs = {}; // theme -> node.id
+    for (const theme in galaxyGroups) {
+        const nodes = galaxyGroups[theme];
+        let electedHub = null;
+        
+        // 1. Prioritize explicit 'core' role
+        const coreNode = nodes.find(n => n.metadata && n.metadata.galaxy_role === 'core');
+        if (coreNode) {
+            electedHub = coreNode;
+        } 
+        // 2. Fallback: only treat as a galaxy if it has more than 3 nodes
+        else if (nodes.length > 3) {
+            electedHub = nodes[0]; // Elect the first one
+        }
+        
+        if (electedHub) {
+            themeHubs[theme] = electedHub.id;
+        } else {
+            // Demote this theme: it's not a real galaxy, just isolated Yoda nodes
+            galaxyThemes.delete(theme);
+            delete galaxyGroups[theme];
+        }
+    }
+    
+    // 🧲 [v11.4] Magnetic Gravity: Pull distant galaxies closer to the core without breaking their shape!
+    const corePos = new THREE.Vector3(0, 1000000, 0);
+    for (const theme in galaxyGroups) {
+        const nodes = galaxyGroups[theme];
+        if (nodes.length === 0) continue;
+        
+        // 1. Find the centroid of this galaxy
+        let cx = 0, cy = 0, cz = 0;
+        nodes.forEach(n => { cx += n.x; cy += n.y; cz += n.z; });
+        cx /= nodes.length; cy /= nodes.length; cz /= nodes.length;
+        
+        const centroid = new THREE.Vector3(cx, cy, cz);
+        const distToCore = centroid.distanceTo(corePos);
+        
+        // Controlla se la galassia è già stata warpata (per non collassarla ripetutamente ad ogni refresh della UI)
+        const isAlreadyWarped = nodes.some(n => n._warpApplied);
+        
+        // 2. Se è una galassia periferica (es. oltre 3.000.000 unità) e non è già stata processata
+        if (distToCore > 3000000 && !isAlreadyWarped) {
+            // Calcolo Quadrante (Top-down view su asse X-Z)
+            let quadrant = "";
+            if (centroid.x >= corePos.x && centroid.z >= corePos.z) quadrant = "Quadrante 1 (Nord-Est)";
+            else if (centroid.x < corePos.x && centroid.z >= corePos.z) quadrant = "Quadrante 2 (Nord-Ovest)";
+            else if (centroid.x < corePos.x && centroid.z < corePos.z) quadrant = "Quadrante 3 (Sud-Ovest)";
+            else quadrant = "Quadrante 4 (Sud-Est)";
+
+            // Log per mostrare la distanza reale all'utente tramite il Mandalorian
+            if (typeof window.log === 'function') {
+                window.log(`🤖 [DN-099] Il Mandalorian ha trovato una galassia di ${nodes.length} nodi nel ${quadrant} alla distanza di ${Math.round(distToCore).toLocaleString()} unità dalla nebula.`, "#facc15");
+            }
+            if (typeof window.showHologram === 'function') {
+                window.showHologram('MANDALORIAN', 'msg_mando_galaxy', { x: nodes.length, y: quadrant, z: Math.round(distToCore).toLocaleString() });
+            }
+            
+            // L'utente vuole che si avvicinino del 70%, quindi la nuova distanza è il 30% di quella originale
+            const reductionFactor = 0.30; 
+            const dir = centroid.clone().sub(corePos).normalize();
+            const newCentroid = corePos.clone().add(dir.multiplyScalar(distToCore * reductionFactor));
+            
+            const deltaX = newCentroid.x - cx;
+            const deltaY = newCentroid.y - cy;
+            const deltaZ = newCentroid.z - cz;
+            
+            // 3. Applica lo spostamento a tutti i nodi e marcali per evitare ricorsione nei render successivi
+            nodes.forEach(n => {
+                n.x += deltaX;
+                n.y += deltaY;
+                n.z += deltaZ;
+                n._warpApplied = true;
+                if (n.metadata) {
+                    n.metadata.x = n.x;
+                    n.metadata.y = n.y;
+                    n.metadata.z = n.z;
+                }
+            });
+        }
+    }
+    
+    rawPoints.forEach(p => {
+        const isGalaxyHub = (p.theme && themeHubs[p.theme] === p.id);
+        const isPartOfGalaxy = (p.theme && galaxyThemes.has(p.theme) && !isGalaxyHub);
+        const isCluster = (p.theme && p.theme !== 'default');
+        
+        if (isGalaxyHub) {
+            galaxies.push(p);
+        } else if (isPartOfGalaxy) {
+            galaxyNodes.push(p);
+        } else if (isCluster) {
+            clusters.push(p);
+        } else {
+            regulars.push(p);
+        }
+    });
+    
+    // Assemble the prioritized subset
+    const prioritizedSubset = [];
+    
+    // 1. All galaxy hubs and their constituent nodes are included up to safe limit
+    galaxies.forEach(p => { if (prioritizedSubset.length < 5000) prioritizedSubset.push(p); });
+    galaxyNodes.forEach(p => { if (prioritizedSubset.length < 5000) prioritizedSubset.push(p); });
+    
+    if (typeof window.log === 'function' && galaxies.length > 0) {
+        if (!window._lastGalaxyLogTime || Date.now() - window._lastGalaxyLogTime > 30000) {
+            window.log(`Diagnostica Galassie: Trovati ${galaxies.length} Hubs e ${galaxyNodes.length} Nodi Costituenti. (Rendering Sicuro)`, "#f59e0b");
+            window._lastGalaxyLogTime = Date.now();
+        }
+    }
+    
+    // 2. Add clusters
+    for (let i = 0; i < clusters.length; i++) {
+        if (prioritizedSubset.length >= 5000) break;
+        prioritizedSubset.push(clusters[i]);
+    }
+    
+    // 3. Add regular nodes
+    for (let i = 0; i < regulars.length; i++) {
+        if (prioritizedSubset.length >= 5000) break;
+        prioritizedSubset.push(regulars[i]);
+    }
+    
+    // Update window.vaultPoints with this optimized subset
+    window.vaultPoints = prioritizedSubset;
+    lastVaultPoints = rawPoints; // Keep raw points for density changes/unfiltering
+    
     if (links !== null) lastNeuralLinks = links;
+    
+    // Sync Tactical Canvas with the prioritized subset
+    if (!fromTactical && window.tacticalCanvas && window.vaultPoints) {
+        window.tacticalCanvas.updateData(window.vaultPoints, true);
+    }
+
+    if (!pointsMesh || !neuralLinks) return;
+    
+    // Initialize or clear the Galaxy Visualization Layer
+    if (!window.galaxyGroup && window.scene) {
+        window.galaxyGroup = new THREE.Group();
+        window.galaxyGroup.position.y = 1000000;
+        window.scene.add(window.galaxyGroup);
+    } else if (window.galaxyGroup) {
+        if (typeof safeDispose === 'function') safeDispose(window.galaxyGroup);
+        else window.galaxyGroup.clear();
+    }
+    
     const currentLinks = links !== null ? links : lastNeuralLinks;
     let renderedNodeCount = 0;
-    const MAX_RENDER_NODES = 80000; // 🛡️ [v11.1] Safety Cap
-    const renderedNodesMap = new Set(); // Registra nodi attivi per archi
-    const pos = pointsMesh.geometry.attributes.position.array;
-    const col = pointsMesh.geometry.attributes.color.array;
+    const MAX_RENDER_NODES = 5000; // 🛡️ Hard limit to prevent WASM physics explosion
+    const renderedNodesMap = new Set();
     const pastelPalette = ["#FFB7B2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#FF9AA2", "#B2E2F2", "#D5AAFF"];
     const isLight = document.body.classList.contains('light-theme');
 
-    for (let i = 0; i < vaultPoints.length; i++) {
+    const isInstanced = pointsMesh.isInstancedMesh;
+    const dummy = isInstanced ? new THREE.Object3D() : null;
+    const pos = isInstanced ? null : pointsMesh.geometry.attributes.position.array;
+    const col = isInstanced ? null : pointsMesh.geometry.attributes.color.array;
+
+    // 1. Creiamo una mappa rapida dei punti correnti sullo schermo
+    const ptsMap = {};
+    window.vaultPoints.forEach(p => ptsMap[p.id] = p);
+
+    // 🧬 [v18.0] Pre-select critical nodes to prevent link disruption
+    // This mathematically guarantees that if a link is selected to be rendered, both its endpoints
+    // are forced to bypass the density filter, ensuring 100% of selected links render successfully!
+    const criticalNodes = new Set();
+    const preGalaxyLinkCounts = {};
+
+    if (currentLinks && currentLinks.length > 0) {
+        for (let i = 0; i < currentLinks.length; i++) {
+            const l = currentLinks[i];
+            const src = ptsMap[l.source];
+            const dst = ptsMap[l.target];
+            if (src && dst) {
+                const srcIsGalaxy = (src.theme && themeHubs[src.theme] === src.id);
+                const dstIsGalaxy = (dst.theme && themeHubs[dst.theme] === dst.id);
+                const isInterGalactic = (srcIsGalaxy !== dstIsGalaxy);
+                
+                let shouldRenderLink = false;
+                if (isInterGalactic) {
+                    const galNode = srcIsGalaxy ? src : dst;
+                    const galName = (galNode.metadata && galNode.metadata.galaxy_name) ? galNode.metadata.galaxy_name : (galNode.cluster_id || 'unknown_galaxy');
+                    
+                    if (!preGalaxyLinkCounts[galName]) preGalaxyLinkCounts[galName] = 0;
+                    
+                    // Allow up to 50% of intergalactic links, with a minimum of 2 visible tethers per galaxy for solid visual structure
+                    if (i % 2 === 0 || preGalaxyLinkCounts[galName] < 2) {
+                        shouldRenderLink = true;
+                        preGalaxyLinkCounts[galName]++;
+                    }
+                } else {
+                    // Standard edge: render exactly 10% of standard synapses
+                    if (i % 10 === 0) {
+                        shouldRenderLink = true;
+                    }
+                }
+
+                if (shouldRenderLink) {
+                    criticalNodes.add(l.source);
+                    criticalNodes.add(l.target);
+                }
+            }
+        }
+    }
+
+    for (let i = 0; i < window.vaultPoints.length; i++) {
         if (renderedNodeCount >= MAX_RENDER_NODES) break;
         
-        const p = vaultPoints[i];
+        const p = window.vaultPoints[i];
         
+        const isGalaxyHub = (p.theme && themeHubs[p.theme] === p.id);
+        const isPartOfGalaxy = (p.theme && galaxyThemes.has(p.theme) && !isGalaxyHub);
+        const isCritical = isGalaxyHub || isPartOfGalaxy || criticalNodes.has(p.id);
+
         // 🚀 [v11.0] Dynamic Neural Density Filtering
         const density = currentDensity;
         const nodeHash = (p.id.charCodeAt(0) + i) % 100;
-        if (nodeHash > (density * 100)) continue; 
+        
+        // Skip only if it is NOT a critical node and fails the density filter
+        if (!isCritical && nodeHash > (density * 100)) continue; 
 
         renderedNodesMap.add(p.id);
 
         const exp = nebulaExpansionFactor || 1.0;
-        pos[renderedNodeCount*3] = (p.x || 0) * exp; 
-        pos[renderedNodeCount*3+1] = (p.y || 0) * exp; 
-        pos[renderedNodeCount*3+2] = (p.z || 0) * exp;
+        const px = (p.x || 0) * exp;
+        const py = (p.y || 0) * exp;
+        const pz = (p.z || 0) * exp;
+        
+        if (isInstanced) {
+            dummy.position.set(px, py, pz);
+            if (isGalaxyHub) {
+                dummy.scale.setScalar(4.0); // 🪐 Galaxies are 4x larger and majestic!
+            } else {
+                dummy.scale.setScalar(1.0); // Regular nodes
+            }
+            dummy.updateMatrix();
+            pointsMesh.setMatrixAt(renderedNodeCount, dummy.matrix);
+        } else {
+            pos[renderedNodeCount*3] = px; 
+            pos[renderedNodeCount*3+1] = py; 
+            pos[renderedNodeCount*3+2] = pz;
+        }
+        
+        // 🪐 Galaxy Majestic Rings & Floating Labels Group
+        if (isGalaxyHub && window.galaxyGroup) {
+            // 1. Orbital Ring
+            const ringGeo = new THREE.RingGeometry(24000, 30000, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xf59e0b,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(px, py, pz);
+            ring.rotation.x = Math.PI / 2; // Flat horizontal disc
+            ring.userData = { galaxyId: p.id, isRing: true };
+            window.galaxyGroup.add(ring);
+
+            // 2. Floating Text label
+            const galName = (p.metadata && p.metadata.galaxy_name) ? p.metadata.galaxy_name : (p.cluster_id || 'Core Galaxy');
+            if (typeof createTextSprite === 'function') {
+                const label = createTextSprite(galName.toUpperCase(), "#f59e0b");
+                label.position.set(px, py + 45000, pz); // Positioned above the node
+                label.scale.set(160000, 40000, 1);
+                label.userData = { galaxyId: p.id, isLabel: true };
+                window.galaxyGroup.add(label);
+            }
+        }
         
         let displayColor;
-        if (heatmapMode && currentHeatmap[p.id] !== undefined) {
+        if (isGalaxyHub) {
+            displayColor = "#f59e0b"; // Majestic Golden for Galaxy Hubs!
+        } else if (heatmapMode && currentHeatmap[p.id] !== undefined) {
             const temp = currentHeatmap[p.id]; 
             const r = Math.floor(temp * 255);
             const b = Math.floor((1 - temp) * 255);
@@ -63,20 +328,44 @@ function updateThreeScene(points, links = null) {
         }
         const opacity = p.opacity !== undefined ? p.opacity : 1.0;
         const color = new THREE.Color(displayColor);
-        col[renderedNodeCount*3] = color.r * opacity; 
-        col[renderedNodeCount*3+1] = color.g * opacity; 
-        col[renderedNodeCount*3+2] = color.b * opacity;
+        
+        if (isInstanced) {
+            pointsMesh.setColorAt(renderedNodeCount, color.clone().multiplyScalar(opacity));
+        } else {
+            col[renderedNodeCount*3] = color.r * opacity; 
+            col[renderedNodeCount*3+1] = color.g * opacity; 
+            col[renderedNodeCount*3+2] = color.b * opacity;
+        }
         
         renderedNodeCount++;
     }
-    pointsMesh.geometry.attributes.position.needsUpdate = true;
-    pointsMesh.geometry.attributes.color.needsUpdate = true;
-    renderClusters(vaultPoints);
+
+    if (isInstanced) {
+        pointsMesh.instanceMatrix.needsUpdate = true;
+        if (pointsMesh.instanceColor) {
+            pointsMesh.instanceColor.needsUpdate = true;
+        }
+    } else {
+        pointsMesh.geometry.attributes.position.needsUpdate = true;
+        pointsMesh.geometry.attributes.color.needsUpdate = true;
+    }
+
+    renderClusters(window.vaultPoints);
     const drawCount = Math.floor(renderedNodeCount * timeTravelFactor);
-    pointsMesh.geometry.setDrawRange(0, drawCount);
+    
+    if (isInstanced) {
+        pointsMesh.count = drawCount;
+    } else {
+        pointsMesh.geometry.setDrawRange(0, drawCount);
+    }
 
     // [v4.1] Optimized Multimodal Rendering: Filter first, then spawn
-    multimodalGroup.clear();
+    // 1. [v11.2] Safe Disposal of existing multimodal sprites (Prevent Texture Leaks)
+    if (typeof safeDispose === 'function') {
+        safeDispose(multimodalGroup);
+    } else {
+        multimodalGroup.clear();
+    }
     const mediaNodes = vaultPoints.filter(p => p.media_type && multimodalTextures[p.media_type]).slice(0, 100); // Cap sprites
     mediaNodes.forEach(p => {
         const material = new THREE.SpriteMaterial({ 
@@ -93,8 +382,8 @@ function updateThreeScene(points, links = null) {
     });
 
     // 1. Creiamo una mappa rapida dei punti correnti sullo schermo
-    const ptsMap = {};
-    vaultPoints.forEach(p => ptsMap[p.id] = p);
+    const ptsMapInternal = {};
+    vaultPoints.forEach(p => ptsMapInternal[p.id] = p);
 
     // 2. [v8.4] BATCH LINK RENDERING (LineSegments) - Ultra High Performance
     if (layersVisibility.edges && currentLinks && currentLinks.length > 0 && typeof linksMesh !== 'undefined') {
@@ -103,6 +392,7 @@ function updateThreeScene(points, links = null) {
         const maxBatch = currentLinks.length;
         let linkIdx = 0;
         const galaxyLinkCounts = {}; // Track links per galaxy
+        window.activeRenderedLinks = []; // Export pre-filtered active links for high-performance 60FPS loop
 
         for (let i = 0; i < maxBatch; i++) {
             const l = currentLinks[i];
@@ -112,13 +402,13 @@ function updateThreeScene(points, links = null) {
                 continue;
             }
 
-            const src = ptsMap[l.source];
-            const dst = ptsMap[l.target];
+            const src = ptsMapInternal[l.source];
+            const dst = ptsMapInternal[l.target];
             
             if (src && dst) {
                 const rel = (l.relation || "").toLowerCase();
-                const srcIsGalaxy = (src.is_galaxy === true || (src.metadata && src.metadata.is_galaxy === true));
-                const dstIsGalaxy = (dst.is_galaxy === true || (dst.metadata && dst.metadata.is_galaxy === true));
+                const srcIsGalaxy = (src.theme && themeHubs[src.theme] === src.id);
+                const dstIsGalaxy = (dst.theme && themeHubs[dst.theme] === dst.id);
                 const isInterGalactic = (srcIsGalaxy !== dstIsGalaxy);
                 
                 if (isInterGalactic) {
@@ -127,18 +417,14 @@ function updateThreeScene(points, links = null) {
                     
                     if (!galaxyLinkCounts[galName]) galaxyLinkCounts[galName] = 0;
                     
-                    // [v10.8] Strict Single Anchor: Only 1 link between Mother Nebula and each External Galaxy
-                    if (galaxyLinkCounts[galName] >= 1) {
+                    // Allow up to 50% of intergalactic links, with a minimum of 2 visible tethers per galaxy for solid structural connection
+                    if (i % 2 !== 0 && galaxyLinkCounts[galName] >= 2) {
                         continue; 
                     }
                     galaxyLinkCounts[galName]++;
                 } else {
-                    // [v10.8] Strict 10% Filter for all other standard edges
-                    const isSpecial = (rel.includes('anchor') || rel.includes('laser') || rel.includes('bridge') || rel.includes('causes'));
-                    if (!isSpecial) {
-                        const hash = (src.id.charCodeAt(0) + dst.id.charCodeAt(i % 10) + i) % 100;
-                        if (hash > 10) continue; // Show only 10% of standard synapses
-                    }
+                    // Standard edge: render exactly 10% of standard synapses
+                    if (i % 10 !== 0) continue;
                 }
 
                 const exp = nebulaExpansionFactor || 1.0;
@@ -166,18 +452,24 @@ function updateThreeScene(points, links = null) {
                 else if (rel === 'prevents') { r=0.9; g=0.2; b=0.2; r2=r; g2=g; b2=b; }
                 else if (rel === 'requires') { r=0.2; g=0.5; b=1.0; r2=r; g2=g; b2=b; }
                 else if (rel === 'synapse') { 
-                    r=isLightTheme ? 0.15 : 0.08; g=r; b=r;
+                    // [v18.0] Enhanced steel-blue brightness for visibility on dark theme
+                    r=isLightTheme ? 0.45 : 0.35; g=r; b=r + 0.15; 
                     r2=r; g2=g; b2=b;
                 } else if (rel === 'galaxy_internal') {
-                    if (isLightTheme) { r=0.25; g=0.25; b=0.25; } 
-                    else { r=0.15; g=0.15; b=0.15; }
+                    // [v18.0] Enhanced gray brightness for galaxy internal synapses
+                    if (isLightTheme) { r=0.45; g=0.45; b=0.45; } 
+                    else { r=0.35; g=0.35; b=0.35; }
                     r2=r; g2=g; b2=b;
                 }
 
                 linkCol[linkIdx*6] = r; linkCol[linkIdx*6+1] = g; linkCol[linkIdx*6+2] = b;
                 linkCol[linkIdx*6+3] = r2; linkCol[linkIdx*6+4] = g2; linkCol[linkIdx*6+5] = b2;
                 
+                // Export the mapped link for high-speed physics sync
+                window.activeRenderedLinks.push({ srcId: l.source, dstId: l.target, linkIdx: linkIdx });
+                
                 linkIdx++;
+                if (linkIdx >= 1000000) break;
             }
         }
         linksMesh.geometry.setDrawRange(0, linkIdx * 2);
@@ -200,7 +492,11 @@ window.refreshIgnoranceGaps = async () => {
         const r = await fetch('/api/metacognition/gaps', { headers: { 'X-API-KEY': VAULT_KEY }});
         const d = await r.json();
         
-        ignoranceGroup.clear();
+        if (typeof safeDispose === 'function') {
+            safeDispose(ignoranceGroup);
+        } else {
+            ignoranceGroup.clear();
+        }
         if (d.status === 'success' && d.gaps) {
             d.gaps.forEach(gap => {
                 const geo = new THREE.SphereGeometry(gap.radius, 32, 32);
@@ -242,13 +538,20 @@ window.refreshIgnoranceGaps = async () => {
 function renderClusters(points) {
     if (!clusterNodesGroup) return;
     const isLight = document.body.classList.contains('light-theme');
-    clusterNodesGroup.clear();
+    if (typeof safeDispose === 'function') {
+        safeDispose(clusterNodesGroup);
+    } else {
+        clusterNodesGroup.clear();
+    }
     if (!clusterFocus) return;
     const clusters = {};
     points.forEach(p => {
         const theme = p.theme || 'default';
         if (theme === 'default') return;
-        if (!clusters[theme]) clusters[theme] = { x:0, y:0, z:0, count:0, color: p.color };
+        if (!clusters[theme]) clusters[theme] = { x:0, y:0, z:0, count:0, color: p.color, isGalaxy: false };
+        if (p.is_galaxy === true || (p.metadata && (p.metadata.is_galaxy === true || p.metadata.galaxy_name))) {
+            clusters[theme].isGalaxy = true;
+        }
         clusters[theme].x += p.x;
         clusters[theme].y += p.y;
         clusters[theme].z += p.z;
@@ -258,8 +561,8 @@ function renderClusters(points) {
         const c = clusters[theme];
         const density = currentDensity;
         const clusterHash = (theme.charCodeAt(0) + theme.length) % 100;
-        if (clusterHash > (density * 100)) continue; // Filter clusters too
-        if (c.count > 3) {
+        if (!c.isGalaxy && clusterHash > (density * 100)) continue; // Filter clusters too
+        if (c.count > 3 || c.isGalaxy) {
             const avgX = c.x / c.count;
             const avgY = c.y / c.count;
             const avgZ = c.z / c.count;
@@ -391,6 +694,11 @@ window.triggerSemanticShockwave = function() {
         let frame = 0;
         const totalFrames = 120; // Animazione più lunga e fluida (2 secondi a 60fps)
         
+        const isInstanced = window.pointsMesh.isInstancedMesh;
+        const dummy = isInstanced ? new THREE.Object3D() : null;
+        const matrix = isInstanced ? new THREE.Matrix4() : null;
+        const pos = isInstanced ? new THREE.Vector3() : null;
+
         function animateGalacticGravity() {
             frame++;
             const progress = frame / totalFrames;
@@ -400,37 +708,132 @@ window.triggerSemanticShockwave = function() {
             window.pointsMesh.position.y = originalY + Math.sin(frame * 0.5) * (30000 * (1 - progress));
             
             // 2. Trazione verso il centro della Galassia e Repulsione tra Galassie
-            const posAttr = window.pointsMesh.geometry.attributes.position;
-            const array = posAttr.array;
-            
-            for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
-                const p = window.vaultPoints[i];
-                const cid = p.cluster_id || 'default';
-                const center = centers[cid];
-                
-                if (center) {
-                    // Spostiamo i punti verso il loro centro galattico
-                    const targetX = center.x + (p.x * exp - center.x) * 0.8; // Compressione interna
-                    const targetY = center.y + (p.y * exp - center.y) * 0.8;
-                    const targetZ = center.z + (p.z * exp - center.z) * 0.8;
+            if (isInstanced) {
+                for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                    const p = window.vaultPoints[i];
+                    const cid = p.cluster_id || 'default';
+                    const center = centers[cid];
                     
-                    // Applichiamo una spinta centrifuga alle galassie (repulsione esterna)
-                    // Più il centro è lontano dall'origine, più lo spingiamo fuori
-                    const repulsionX = center.x * 1.2; 
-                    const repulsionY = center.y * 1.2;
-                    const repulsionZ = center.z * 1.2;
+                    if (center) {
+                        window.pointsMesh.getMatrixAt(i, matrix);
+                        pos.setFromMatrixPosition(matrix);
+                        
+                        const isGalaxyNode = (p.is_galaxy === true || (p.metadata && p.metadata.is_galaxy === true) || (p.theme && p.theme !== 'default'));
+                        const expansionFactor = isGalaxyNode ? 3.5 : 0.8;
+                        const targetX = center.x + (p.x * exp - center.x) * expansionFactor;
+                        const targetY = center.y + (p.y * exp - center.y) * expansionFactor;
+                        const targetZ = center.z + (p.z * exp - center.z) * expansionFactor;
+                        
+                        const repulsionX = center.x * 1.2; 
+                        const repulsionY = center.y * 1.2;
+                        const repulsionZ = center.z * 1.2;
 
-                    // Interpolazione dinamica
-                    const finalX = targetX + (repulsionX - center.x) * ease;
-                    const finalY = targetY + (repulsionY - center.y) * ease;
-                    const finalZ = targetZ + (repulsionZ - center.z) * ease;
+                        const finalX = targetX + (repulsionX - center.x) * ease;
+                        const finalY = targetY + (repulsionY - center.y) * ease;
+                        const finalZ = targetZ + (repulsionZ - center.z) * ease;
 
-                    array[i*3] += (finalX - array[i*3]) * 0.05 * (1-progress);
-                    array[i*3+1] += (finalY - array[i*3+1]) * 0.05 * (1-progress);
-                    array[i*3+2] += (finalZ - array[i*3+2]) * 0.05 * (1-progress);
+                        pos.x += (finalX - pos.x) * 0.05 * (1-progress);
+                        pos.y += (finalY - pos.y) * 0.05 * (1-progress);
+                        pos.z += (finalZ - pos.z) * 0.05 * (1-progress);
+
+                        dummy.position.copy(pos);
+                        dummy.updateMatrix();
+                        window.pointsMesh.setMatrixAt(i, dummy.matrix);
+                    }
                 }
+                window.pointsMesh.instanceMatrix.needsUpdate = true;
+            } else {
+                const posAttr = window.pointsMesh.geometry.attributes.position;
+                const array = posAttr.array;
+                
+                for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                    const p = window.vaultPoints[i];
+                    const cid = p.cluster_id || 'default';
+                    const center = centers[cid];
+                    
+                    if (center) {
+                        const isGalaxyNode = (p.is_galaxy === true || (p.metadata && p.metadata.is_galaxy === true) || (p.theme && p.theme !== 'default'));
+                        const expansionFactor = isGalaxyNode ? 3.5 : 0.8;
+                        const targetX = center.x + (p.x * exp - center.x) * expansionFactor;
+                        const targetY = center.y + (p.y * exp - center.y) * expansionFactor;
+                        const targetZ = center.z + (p.z * exp - center.z) * expansionFactor;
+                        
+                        const repulsionX = center.x * 1.2; 
+                        const repulsionY = center.y * 1.2;
+                        const repulsionZ = center.z * 1.2;
+
+                        const finalX = targetX + (repulsionX - center.x) * ease;
+                        const finalY = targetY + (repulsionY - center.y) * ease;
+                        const finalZ = targetZ + (repulsionZ - center.z) * ease;
+
+                        array[i*3] += (finalX - array[i*3]) * 0.05 * (1-progress);
+                        array[i*3+1] += (finalY - array[i*3+1]) * 0.05 * (1-progress);
+                        array[i*3+2] += (finalZ - array[i*3+2]) * 0.05 * (1-progress);
+                    }
+                }
+                posAttr.needsUpdate = true;
             }
-            posAttr.needsUpdate = true;
+
+            // 3. [v11.0] Dynamic Synaptic Link Alignment
+            if (typeof linksMesh !== 'undefined' && window.lastNeuralLinks) {
+                const ptsMap = {};
+                const matrixTmp = new THREE.Matrix4();
+                const posTmp = new THREE.Vector3();
+                const isInst = window.pointsMesh.isInstancedMesh;
+                const activeNodes = new Set(window.vaultPoints.map(pt => pt.id));
+                
+                for (let i = 0; i < Math.min(window.vaultPoints.length, 30000); i++) {
+                    const p = window.vaultPoints[i];
+                    if (isInst) {
+                        window.pointsMesh.getMatrixAt(i, matrixTmp);
+                        posTmp.setFromMatrixPosition(matrixTmp);
+                        ptsMap[p.id] = posTmp.clone();
+                    } else {
+                        const posAttr = window.pointsMesh.geometry.attributes.position;
+                        ptsMap[p.id] = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+                    }
+                }
+                
+                const linkPos = linksMesh.geometry.attributes.position.array;
+                let linkIdx = 0;
+                const currentLinks = window.lastNeuralLinks;
+                
+                for (let i = 0; i < currentLinks.length; i++) {
+                    const l = currentLinks[i];
+                    if (!activeNodes.has(l.source) || !activeNodes.has(l.target)) {
+                        continue;
+                    }
+                    const src = ptsMap[l.source];
+                    const dst = ptsMap[l.target];
+                    if (src && dst) {
+                        const rel = (l.relation || "").toLowerCase();
+                        const srcIsGalaxy = (src.theme && themeHubs[src.theme] === src.id);
+                        const dstIsGalaxy = (dst.theme && themeHubs[dst.theme] === dst.id);
+                        const isInterGalactic = (srcIsGalaxy !== dstIsGalaxy);
+                        
+                        if (isInterGalactic) {
+                            // Inter-galactic links limits
+                        } else {
+                            const isSpecial = (rel.includes('anchor') || rel.includes('laser') || rel.includes('bridge') || rel.includes('causes'));
+                            if (!isSpecial) {
+                                const hash = (l.source.charCodeAt(0) + l.target.charCodeAt(i % 10) + i) % 100;
+                                if (hash > 10) continue;
+                            }
+                        }
+                        
+                        linkPos[linkIdx*6] = src.x;
+                        linkPos[linkIdx*6+1] = src.y;
+                        linkPos[linkIdx*6+2] = src.z;
+                        linkPos[linkIdx*6+3] = dst.x;
+                        linkPos[linkIdx*6+4] = dst.y;
+                        linkPos[linkIdx*6+5] = dst.z;
+                        
+                        linkIdx++;
+                        if (linkIdx >= 1000000) break;
+                    }
+                }
+                linksMesh.geometry.attributes.position.needsUpdate = true;
+            }
             
             if (frame < totalFrames) requestAnimationFrame(animateGalacticGravity);
             else window.pointsMesh.position.y = originalY;
@@ -737,27 +1140,38 @@ class MeshWormhole {
     }
 
     destroy() {
-        window.scene.remove(this.group);
-    }
-
-    destroy() {
-        window.scene.remove(this.group);
+        if (typeof safeDispose === 'function') {
+            safeDispose(this.group);
+        } else {
+            window.scene.remove(this.group);
+        }
     }
 }
 
 window.meshWormholes = {};
 window.syncMeshWormholes = async () => {
+    if (!window.scene) return;
     try {
         const r = await fetch('/api/mesh/peers', { headers: { 'X-API-KEY': VAULT_KEY }});
         const d = await r.json();
         let peers = d.peers || [];
+
+        // Filtra via il proprio nodo locale per evitare duplicati visivi nel Cycloscope
+        const myLocalId = (window._myVaultIdentity && window._myVaultIdentity.id) || null;
+        if (myLocalId) {
+            peers = peers.filter(p => p.id !== myLocalId);
+        }
 
         // Includiamo i demo peers nella sincronizzazione 3D
         if (window.demoPeers) {
             peers = [...peers, ...window.demoPeers];
         }
         
-        const currentIds = peers.filter(p => !p.paused).map(p => p.id);
+        const currentIds = peers.filter(p => {
+            const isOffline = !p.isDemo && (!p.last_seen || (Date.now()/1000 - p.last_seen >= 60));
+            return !p.paused && !isOffline;
+        }).map(p => p.id);
+        
         Object.keys(window.meshWormholes).forEach(id => {
             if (!currentIds.includes(id)) {
                 window.meshWormholes[id].destroy();
@@ -766,7 +1180,8 @@ window.syncMeshWormholes = async () => {
         });
 
         peers.forEach(p => {
-            if (p.paused) return; // 🛡️ Non renderizzare peer in pausa
+            const isOffline = !p.isDemo && (!p.last_seen || (Date.now()/1000 - p.last_seen >= 60));
+            if (p.paused || isOffline) return; // 🛡️ Non renderizzare peer in pausa o offline
             if (!window.meshWormholes[p.id]) {
                 console.log("🕸️ [Mesh] Inizializzazione Wormhole per:", p.id);
                 window.meshWormholes[p.id] = new MeshWormhole(p);
@@ -1010,7 +1425,7 @@ window.onNebulaClick = (event) => {
     } else if (intersectsClusters.length > 0) {
         hitNodeId = intersectsClusters[0].object.userData.id;
     } else if (intersectsNodes.length > 0) {
-        const nodeIdx = intersectsNodes[0].index;
+        const nodeIdx = intersectsNodes[0].instanceId !== undefined ? intersectsNodes[0].instanceId : intersectsNodes[0].index;
         if (nodeIdx !== undefined && vaultPoints && vaultPoints[nodeIdx]) {
             hitNodeId = vaultPoints[nodeIdx].id;
         } else {

@@ -10,7 +10,7 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 
 class NativeKMeans:
-    """Implementazione K-Means ultraveloce in puro PyTorch per MPS/CUDA"""
+    """Implementazione K-Means ultraveloce in puro PyTorch per MPS/CUDA con supporto Minsky Guardian"""
     def __init__(self, n_clusters: int, n_iter: int = 15, device: str = 'cpu'):
         self.n_clusters = n_clusters
         self.n_iter = n_iter
@@ -18,11 +18,28 @@ class NativeKMeans:
         self.centroids = None
 
     def fit(self, x: torch.Tensor):
+        # 🧪 [v11.0 - Step 2 Hardening] Minsky Guardian cooperative scheduling
+        from orchestration.minsky_guardian import MinskyGuardian
+        original_device = self.device
+        
+        if MinskyGuardian.is_suspended():
+            print("⚠️ [Minsky Guardian] GPU Memory contract exceeded. Forcing K-Means fallback to CPU to protect GPU 3D Nebula rendering...")
+            self.device = 'cpu'
+            x = x.cpu()
+            
         N, D = x.shape
+        x = x.to(self.device)
+        
         # Inizializzazione Forgy
         indices = torch.randperm(N)[:self.n_clusters]
-        self.centroids = x[indices].clone()
+        self.centroids = x[indices].clone().to(self.device)
+        
         for _ in range(self.n_iter):
+            # Se la memoria si satura durante le iterazioni, esegue micro-cooldown di throttling
+            if MinskyGuardian.is_suspended():
+                import time
+                time.sleep(0.05) # 50ms di riposo per scaricare la GPU
+                
             x_norm = (x ** 2).sum(1, keepdim=True)
             c_norm = (self.centroids ** 2).sum(1).unsqueeze(0)
             dist = x_norm + c_norm - 2.0 * torch.mm(x, self.centroids.t())
@@ -32,12 +49,21 @@ class NativeKMeans:
             counts = counts.clamp(min=1e-8)
             new_centroids.scatter_add_(0, labels.unsqueeze(1).expand(-1, D), x)
             self.centroids = new_centroids / counts
+            
+        # Ripristina il device originario
+        self.device = original_device
 
     def assign(self, x: torch.Tensor) -> torch.Tensor:
-        x_norm = (x ** 2).sum(1, keepdim=True)
-        c_norm = (self.centroids ** 2).sum(1).unsqueeze(0)
-        dist = x_norm + c_norm - 2.0 * torch.mm(x, self.centroids.t())
-        return dist.argmin(dim=1).to(torch.uint8)
+        if self.centroids is not None:
+            device = self.centroids.device
+            x = x.to(device)
+            x_norm = (x ** 2).sum(1, keepdim=True)
+            c_norm = (self.centroids ** 2).sum(1).unsqueeze(0)
+            dist = x_norm + c_norm - 2.0 * torch.mm(x, self.centroids.t())
+            return dist.argmin(dim=1).to(torch.uint8)
+        else:
+            return torch.zeros(x.shape[0], dtype=torch.uint8, device=x.device)
+
 
 class TwoStageTurboSearch:
     """

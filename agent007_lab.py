@@ -1,11 +1,15 @@
 import time
 import uuid
 import json
+import logging
+import asyncio
 import numpy as np
 import httpx
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from enum import Enum
+from orchestration.cognitive_loops import SovereignCognitiveLoop
+
 
 @dataclass
 class TensionNode:
@@ -35,10 +39,13 @@ class Agent007Lab:
     """
     def __init__(self, engine):
         self.engine = engine
+        self.logger = logging.getLogger("Agent007Lab")
         # Usiamo l'engine prefilter per le query persistenti (v9.0 thread-safe)
         self.prefilter = engine._prefilter
         self._init_db()
         self.agents = ["Prosecutor", "Defender", "Arbitrator"] # Per analytics report
+        self.cognitive_loop = SovereignCognitiveLoop(self)
+
 
     def _init_db(self):
         """Prepara le tabelle per la tensione e i dibattiti."""
@@ -115,10 +122,32 @@ class Agent007Lab:
             node = self.engine._nodes.get(cid[0])
             if node: evidence_texts.append(node.text)
 
-        # 2. Generazione Argomenti via SLM (Ollama)
-        p_arg = await self._generate_agent_move("Prosecutor", text, evidence_texts)
-        d_arg = await self._generate_agent_move("Defender", text, [])
-        v_report = await self._generate_verdict(text, [p_arg, d_arg])
+        # 2. Generazione Argomenti via Sovereign Cognitive Reasoning Loop (Concorrente / Asincrono)
+        p_res, d_res = await asyncio.gather(
+            self.cognitive_loop.execute_reasoning("Prosecutor", text, evidence_texts),
+            self.cognitive_loop.execute_reasoning("Defender", text, [])
+        )
+        
+        p_arg = p_res["response"]
+        d_arg = d_res["response"]
+        
+        # Arbitro (L'arbitro/giudice che emette il verdetto finale)
+        v_res = await self.cognitive_loop.execute_reasoning("Arbitrator", text, [p_arg, d_arg])
+        v_raw = v_res["response"]
+        
+        # Parsing strutturato del verdetto dell'arbitro
+        v_report = {"score": 5, "risks": ["Ambiguity"], "rec": "Check manual review."}
+        try:
+            if "{" in v_raw and "}" in v_raw:
+                json_part = v_raw[v_raw.find("{"):v_raw.rfind("}")+1]
+                v_report = json.loads(json_part)
+            else:
+                v_report = json.loads(v_raw)
+        except Exception as e:
+            self.logger.warning(f"Failed to parse verdict JSON: {e}. Raw response: {v_raw}")
+            v_report["rec"] = v_raw
+            if "risk" in v_raw.lower():
+                v_report["risks"] = ["Identified by Arbitrator during reasoning"]
 
         # 3. --- QUORUM MATEMATICO DETERMINISTICO ---
         # a. LLM Score (0-1)
@@ -151,7 +180,18 @@ class Agent007Lab:
             "integrity_level": "High" if final_quorum_score > 0.7 else "Medium" if final_quorum_score > 0.4 else "Critical",
             "top_risks": v_report.get("risks", ["Ambiguity"]),
             "recommendation": v_report.get("rec", "No recommendation."),
-            "debate_log": [p_arg, d_arg]
+            "debate_log": [p_arg, d_arg],
+            "thinking": {
+                "prosecutor_thought": p_res["thought_trace"],
+                "prosecutor_model": p_res["model_used"],
+                "prosecutor_mode": p_res["reasoning_mode"],
+                "defender_thought": d_res["thought_trace"],
+                "defender_model": d_res["model_used"],
+                "defender_mode": d_res["reasoning_mode"],
+                "arbitrator_thought": v_res["thought_trace"],
+                "arbitrator_model": v_res["model_used"],
+                "arbitrator_mode": v_res["reasoning_mode"]
+            }
         }
         
         self.prefilter.execute(
@@ -164,6 +204,7 @@ class Agent007Lab:
             self.engine.active_learning.process_rejection(node_id, reason="supreme_court_veto")
             
         return verdict
+
 
 
     async def _generate_agent_move(self, role: str, target_text: str, evidence: List[str]) -> str:

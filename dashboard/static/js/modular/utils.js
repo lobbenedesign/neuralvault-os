@@ -1,6 +1,42 @@
 /**
  * 🛠️ NEURALVAULT UTILS
+ * Memory Management & Utility Functions
  */
+
+/**
+ * [v11.2] SAFE DISPOSE: Deep recursive cleanup of Three.js objects to prevent GPU memory leaks.
+ * This is the primary defense against the 1GB+ cache accumulation.
+ */
+function safeDispose(object) {
+    if (!object) return;
+
+    // Recursive disposal for groups/containers
+    if (object.children) {
+        while (object.children.length > 0) {
+            safeDispose(object.children[0]);
+            object.remove(object.children[0]);
+        }
+    }
+
+    // Dispose Geometry
+    if (object.geometry) {
+        object.geometry.dispose();
+    }
+
+    // Dispose Material(s)
+    if (object.material) {
+        if (Array.isArray(object.material)) {
+            object.material.forEach(mat => {
+                if (mat.map) mat.map.dispose();
+                mat.dispose();
+            });
+        } else {
+            if (object.material.map) object.material.map.dispose();
+            object.material.dispose();
+        }
+    }
+}
+window.safeDispose = safeDispose;
 
 function log(msg, color = '#4ade80') {
     window.log = log; 
@@ -80,3 +116,65 @@ function lerpColor(a, b, amount) {
     const bl = ab + (bb - ab) * amount;
     return (r << 16) | (g << 8) | bl;
 }
+/**
+ * 🧹 [v11.2] DEEP SPACE PURGE: Manual aggressive memory cleanup.
+ * Clears all non-essential WebGL groups and forces Garbage Collection hint.
+ */
+function triggerDeepSpacePurge() {
+    if (typeof log === 'function') log("🛡️ [MemoryGuardian] Initiating Deep Space Purge...", "#f97316");
+    
+    // 1. Purge Groups
+    const groupsToPurge = [
+        window.multimodalGroup,
+        window.clusterNodesGroup,
+        window.ignoranceGroup,
+        window.agentsContainer
+    ];
+
+    groupsToPurge.forEach(group => {
+        if (group) safeDispose(group);
+    });
+
+    // 2. Clear Object Lists
+    window.reaperCubes = [];
+    window.medicalCubes = [];
+    window.skywalkerLasers = [];
+    window.yodaBullets = [];
+
+    // 3. Trigger Scene Re-sync
+    if (typeof refreshVaultState === 'function') refreshVaultState();
+    
+    setTimeout(() => {
+        if (typeof log === 'function') log("✅ [MemoryGuardian] Purge Complete. Cache liberated.", "#4ade80");
+    }, 1000);
+}
+window.triggerDeepSpacePurge = triggerDeepSpacePurge;
+
+/**
+ * 📊 [v11.2] UPDATE MEMORY TELEMETRY: Sync HUD with renderer info.
+ */
+function updateMemoryTelemetry() {
+    if (!window.renderer || !window.renderer.info) return;
+    
+    const mem = window.renderer.info.memory;
+    const geosEl = document.getElementById('val-gpu-geos');
+    const texturesEl = document.getElementById('val-gpu-textures');
+    const scoreEl = document.getElementById('gpu-health-score');
+    
+    if (geosEl) geosEl.innerText = mem.geometries;
+    if (texturesEl) texturesEl.innerText = mem.textures;
+    
+    if (scoreEl) {
+        if (mem.geometries > 500) {
+            scoreEl.innerText = "CRITICAL";
+            scoreEl.style.color = "#ef4444";
+        } else if (mem.geometries > 200) {
+            scoreEl.innerText = "WARNING";
+            scoreEl.style.color = "#f59e0b";
+        } else {
+            scoreEl.innerText = "STABLE";
+            scoreEl.style.color = "#4ade80";
+        }
+    }
+}
+window.updateMemoryTelemetry = updateMemoryTelemetry;

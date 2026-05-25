@@ -65,14 +65,20 @@ class SovereignGraphPartitioner:
         # 4. Storage & Application
         self.partitions = new_partitions
         
-        # [v9.1] Update Metadata in Prefilter for Shard-aware retrieval
+        # [v11.2 Optimization] Use executemany for high-performance batch updates in DuckDB
+        update_data = []
         for pid, nids in self.partitions.items():
             for nid in nids:
-                # Registriamo lo shard nel database per query velocizzate
-                self.engine._prefilter.con.execute(
-                    "UPDATE vault_metadata SET collection = ? WHERE node_id = ?",
-                    [f"shard_{pid}", nid]
+                update_data.append((f"shard_{pid}", nid))
+        
+        try:
+            with self.engine._prefilter._lock:
+                self.engine._prefilter.con.executemany(
+                    "UPDATE vault_metadata SET collection = ? WHERE id = ?",
+                    update_data
                 )
+        except Exception as ue:
+            logger.error(f"❌ Error applying partitioning updates to DuckDB: {ue}")
         
         duration = time.time() - start_time
         logger.info(f"✅ Partitioning complete in {duration:.2f}s. {k} shards created.")

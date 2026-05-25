@@ -6,9 +6,9 @@ NeuralVault is a sovereign knowledge management system with Z3 formal logic,
 Kùzu causal graphs, and Sobol-Owen QMC simulations.
 
 - **Vault Health**: 98%
-- **Nodes**: 16675
-- **Wiki Pages**: 1
-- **Last Sync**: 2026-05-14T07:56:48.862060
+- **Nodes**: 11880
+- **Wiki Pages**: 9
+- **Last Sync**: 2026-05-25T18:48:10.565013
 
 ## Navigation for Agents
 - **Search**: Use `/api/search` for semantic retrieval.
@@ -18,4 +18,12 @@ Kùzu causal graphs, and Sobol-Owen QMC simulations.
 ## Core Concepts
 
 ## Knowledge Index
+- [Log](wiki/log.md)
+- [Index](wiki/index.md)
 - [Sovereign Wiki Schema](wiki/SOVEREIGN_WIKI_SCHEMA.md)
+- [Summary](wiki/General/Summary.md)
+- [General](wiki/General/General.md)
+- [Sovereign Wiki](wiki/General/SOVEREIGN_WIKI.md)
+- [Riassunto Python](wiki/General/riassunto_python.md)
+- [Log](wiki/General/log.md)
+- [Aegis Protocol](wiki/General/Aegis_Protocol.md)

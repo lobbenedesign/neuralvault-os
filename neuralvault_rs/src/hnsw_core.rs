@@ -272,3 +272,66 @@ impl HNSWCore {
         &self.vectors[start..start + self.dim]
     }
 }
+
+impl crate::index::GpuVectorIndex for HNSWCore {
+    fn insert(&mut self, node_id: String, vector: Vec<f32>) {
+        self.insert(node_id, vector);
+    }
+
+    fn delete(&mut self, node_id: String) -> bool {
+        self.delete(node_id)
+    }
+
+    fn search(&self, query: Vec<f32>, k: usize, ef: usize) -> Vec<(String, f32)> {
+        let mut ep = if let Some(e) = self.entry_point { e } else { return Vec::new() };
+        
+        for l in (1..=(self.max_level as usize)).rev() {
+            let results = self.search_layer(&query, ep, 1, l);
+            if let Some(best) = results.first() {
+                ep = best.0;
+            }
+        }
+
+        let results = self.search_layer(&query, ep, ef, 0);
+        
+        results.into_iter()
+            .take(k)
+            .map(|(idx, dist)| {
+                (self.node_ids[idx].clone(), dist)
+            })
+            .collect()
+    }
+
+    fn len(&self) -> usize {
+        self.node_ids.len()
+    }
+
+    fn get_edges_sample(&self, max_edges: usize) -> Vec<(String, String)> {
+        self.get_edges_sample(max_edges)
+    }
+
+    fn total_edges(&self) -> usize {
+        self.layers_counts.iter().map(|c| c.iter().sum::<u32>() as usize).sum()
+    }
+
+    fn max_level(&self) -> i32 {
+        self.max_level
+    }
+
+    fn pin_to_hardware(&self) -> bool {
+        #[cfg(unix)]
+        unsafe {
+            let ptr = self.vectors.as_ptr() as *const libc::c_void;
+            let size = self.vectors.len() * std::mem::size_of::<Vec<f32>>();
+            if libc::mlock(ptr, size) == 0 {
+                println!("🏎️ [Hardware] HNSW Index pinned to Fast RAM/HBM.");
+                return true;
+            }
+        }
+        false
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+}

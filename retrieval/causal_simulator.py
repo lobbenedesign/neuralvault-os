@@ -1,5 +1,6 @@
 import logging
 import json
+import hashlib
 from typing import List, Dict, Any, Optional
 from index.node import RelationType
 import numpy as np
@@ -116,7 +117,7 @@ class CausalSimulator:
     async def _run_deep_monte_carlo(self, start_id: str, val: float, subgraph: Dict, depth: int, iterations: int, lens_weights: Dict) -> Dict[str, Any]:
         """Esegue il calcolo stocastico pesante, con accelerazione Rust se disponibile."""
         try:
-            from neuralvault_rs import run_stochastic_simulation_rs
+            from neuralvault_rs import run_stochastic_simulation_rs, PyGpuQmcDriver
             
             # Formattazione dati per Rust: HashMap<String, Vec<(String, f32)>>
             rust_graph = {}
@@ -132,6 +133,15 @@ class CausalSimulator:
                     rust_graph[nid].append((e.target_id, w))
             
             self.logger.info(f"🏎️ [Accelerazione Rust] Avvio simulazione Monte Carlo ({iterations} iterazioni)...")
+            
+            # Step 8: Leverage PyGpuQmcDriver telemetry and direct VRAM buffer allocation mapping
+            try:
+                driver = PyGpuQmcDriver(42, 1)
+                driver.allocate_buffers(iterations)
+                self.logger.info(f"⚡ [QmcHostPipeline] VRAM Buffers Allocated:\n{driver.get_performance_report()}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Direct VRAM allocation simulation failed: {e}. Proceeding with standard CPU memory mappings.")
+
             stats = run_stochastic_simulation_rs(
                 start_id, 
                 val, 
@@ -143,14 +153,30 @@ class CausalSimulator:
             
             return self._format_rust_results(start_id, stats, iterations, subgraph=subgraph)
             
-        except ImportError:
-            self.logger.warning("⚠️ Rust extension not found. Falling back to Python (Sobol Optimized).")
+        except (ImportError, Exception) as outer_e:
+            self.logger.warning(f"⚠️ Rust extension or GPU acceleration failed: {outer_e}. Falling back to Python (Sobol Optimized).")
             all_outcomes = []
             
-            # [v9.0] Phase D: Sobol-Owen Optimization
-            # Generate QMC noise for all iterations upfront to ensure low-discrepancy coverage
-            qmc_sampler = QuasiMonteCarloSampler(dimension=1)
-            sobol_noise = qmc_sampler.get_samples(iterations).flatten()
+            # [v9.0] Phase D: Sobol-Owen Optimization / Step 8: PyGpuQmcDriver Accelerated Generation
+            sobol_noise = None
+            try:
+                from neuralvault_rs import PyGpuQmcDriver
+                self.logger.info("⚡ [QmcHostPipeline] Instantiating PyGpuQmcDriver for Owen-Scrambled low-discrepancy Sobol noise generation...")
+                driver = PyGpuQmcDriver(42, 1)
+                if driver.allocate_buffers(iterations):
+                    # Dispatch to obtain Owen-scrambled GPU noise matrix
+                    noise_list = driver.dispatch_simulation(iterations, 0.15)
+                    sobol_noise = np.array(noise_list, dtype=np.float32)
+                    self.logger.info(f"⚡ [QmcHostPipeline] Successfully generated {len(sobol_noise)} Owen-scrambled noise points. Telemetry:\n{driver.get_performance_report()}")
+                else:
+                    raise RuntimeError("Failed to allocate direct VRAM buffers on GPU driver.")
+            except Exception as inner_e:
+                self.logger.warning(f"⚠️ GPU QMC Driver dispatch failed: {inner_e}. Falling back to standard CPU QMC sampler.")
+                
+            if sobol_noise is None:
+                # Sequential CPU-based fallback
+                qmc_sampler = QuasiMonteCarloSampler(dimension=1)
+                sobol_noise = qmc_sampler.get_samples(iterations).flatten()
             
             for i in range(iterations):
                 # We pass the i-th Sobol sample to the pass
@@ -275,48 +301,68 @@ class CausalSimulator:
 
     async def interview_node(self, node_id: str, simulation_context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        🧪 [v12.7] Sovereign Interview (PG-RAG): Intervista identitaria certificata.
-        Spostiamo il focus dalla narrativa alla causalità documentale.
+        🧪 [v9.1] Sovereign GSE Interview (Self-Consistency Pass).
+        Intervista identitaria incatenata matematicamente allo storico Hard Memory.
         """
         node = self.engine.get_node(node_id)
         if not node: return {"error": "Nodo non trovato"}
         
-        # 🎭 [PG-RAG] Recupero evidenze comportamentali (Lexicon, Obligations, Precedents)
-        persona_data = {"OBLIGATIONS": [], "PRECEDENTS": [], "LEXICON": []}
+        # 🎭 [PG-RAG] Recupero evidenze comportamentali e DOCUMENTALI (Self-Consistency)
+        evidence_data = {"OBLIGATIONS": [], "PRECEDENTS": [], "LEXICON": [], "EVIDENCE_NODES": []}
         if hasattr(self.engine, 'agent007'):
-            res = self.engine.agent007.execute("SELECT category, content FROM agent007_personas WHERE entity_id = ?", (node.title or node_id,)).fetchall()
-            for cat, content in res:
-                if cat in persona_data: persona_data[cat].append(content)
+            # Recuperiamo non solo il contenuto, ma anche i nodi di evidenza per la citazione obbligatoria
+            res = self.engine.agent007.execute("""
+                SELECT category, content, evidence_node_id 
+                FROM agent007_personas 
+                WHERE entity_id = ?
+            """, (node.title or node_id,)).fetchall()
+            
+            for cat, content, evidence_id in res:
+                if cat in evidence_data:
+                    evidence_data[cat].append(content)
+                    if evidence_id: evidence_data["EVIDENCE_NODES"].append(evidence_id)
 
         impact_data = next((n for n in simulation_context.get("affected_nodes", []) if n["id"] == node_id), None)
         impact_val = impact_data["impact"] if impact_data else 0.0
         
         prompt = f"""
-        ### IDENTITY PROTOCOL: PG-RAG
+        ### IDENTITY PROTOCOL: GSE SELF-CONSISTENCY (v9.1)
         ### SUBJECT: "{node.title or node_id}"
-        ### BEHAVIORAL ANCHORS:
-        - OBLIGATIONS: {persona_data['OBLIGATIONS']}
-        - PRECEDENTS: {persona_data['PRECEDENTS']}
-        - LEXICON: {persona_data['LEXICON']}
         
-        ### CONTEXT:
-        Contenuto: {node.text[:500]}
-        Impatto Simulato: {impact_val} (Target: {simulation_context.get('root_id')})
+        ### HARD MEMORY ANCHORS (Non-Negotiable):
+        - OBLIGATIONS: {evidence_data['OBLIGATIONS']}
+        - PRECEDENTS: {evidence_data['PRECEDENTS']}
+        - LEXICON: {evidence_data['LEXICON']}
+        - SOURCE_NODES: {evidence_data['EVIDENCE_NODES']}
+        
+        ### CONTEXTUAL STATE:
+        Current Text: {node.text[:800]}
+        Simulated Impact: {impact_val} relative to {simulation_context.get('root_id')}
         
         ### TASK:
-        Reagisci all'impatto mantenendo la coerenza con i tuoi vincoli contrattuali e precedenti storici.
-        Usa lo STILE SITREP: Conciso, professionale, zero aggettivi emotivi, focus su impatto e probabilità.
-        Rispondi in prima persona come se fossi l'entità.
+        Rispondi come l'avatar di "{node.title or node_id}". 
+        
+        ### RIGID PROTOCOL:
+        1. SELF-CONSISTENCY: Ogni tua affermazione deve essere supportata da un'evidenza presente negli ANCHORS.
+        2. CITATION: Usa il tag [CITE:node_id] dopo ogni fatto citato. Se l'ID non è esplicito, usa [CITE:HardMemory].
+        3. NO FICTION: Se non hai evidenze per una domanda, rispondi: "NESSUN DATO DISPONIBILE NELLO STORICO EMAIL [CITE:SYSTEM]".
+        4. STILE: SITREP (Conciso, Prima Persona, Freddezza Analitica).
         """
         
-        # Utilizziamo lo sciame per generare la risposta
-        response = await self.engine.orchestrator.get_consensus_response(prompt, f"Node Interview: {node.title or node_id}")
+        # Esecuzione con verifica interna dello sciame (consensus)
+        response = await self.engine.orchestrator.get_consensus_response(prompt, f"GSE Interview: {node.title or node_id}")
         
+        # [v9.1] Audit Pass: Verifica se sono presenti le citazioni
+        if "[CITE:" not in response:
+            response += "\n\n⚠️ WARNING: RESPONSE LACKS MATHEMATICAL ANCHORING (UNVERIFIED)."
+
         return {
             "node_id": node_id,
             "title": node.title or node_id,
             "impact": impact_val,
-            "response": response
+            "response": response,
+            "evidence_count": len(evidence_data["EVIDENCE_NODES"]),
+            "protocol": "GSE-v9.1-CONSISTENCY"
         }
 
     async def generate_strategic_report(self, simulation_results: Dict[str, Any]) -> Dict[str, Any]:
@@ -501,58 +547,86 @@ class CausalSimulator:
         }
 
     async def simulate_across_time(self, start_id: str, val: float) -> Dict[str, Any]:
-        """[v8.1] Simula l'impatto su 3 orizzonti temporali (1m, 6m, 12m)."""
+        """[v10.1] Simula l'impatto su 3 orizzonti temporali (1m, 6m, 12m) in PARALLELO."""
         horizons = {
             "immediate": 1.0,
             "mid_term": 0.7,  # Decadimento semantico
             "long_term": 0.4
         }
         
+        # [v10.1] Pattern Hydra: Esecuzione parallela dei 3 orizzonti (Claude optimization)
+        tasks = []
+        h_names = list(horizons.keys())
+        for h_name in h_names:
+            decay = horizons[h_name]
+            tasks.append(self.simulate_intervention(start_id, val * decay, iterations=50))
+            
+        sim_results = await asyncio.gather(*tasks)
+        
         results = {}
-        for h_name, decay in horizons.items():
-            # Eseguiamo una simulazione Monte Carlo per ogni orizzonte con decadimento
-            results[h_name] = await self.simulate_intervention(start_id, val * decay, iterations=50)
+        for i, h_name in enumerate(h_names):
+            results[h_name] = sim_results[i]
             
         return results
 
     async def calculate_causal_gradient(self, target_id: str, desired_impact: float = 1.0) -> Dict[str, Any]:
         """
         📐 [v9.1] CAUSAL GRADIENT DESCENT.
-        Trova la minima variazione necessaria per influenzare il target verso il valore desiderato.
+        Identifica i nodi driver ottimali per indurre un cambiamento specifico nel target.
         """
-        self.logger.info(f"📐 Calcolo Causal Gradient per Target: {target_id} (Desired: {desired_impact})")
+        target_node = self.engine.get_node(target_id)
+        if not target_node: return {"error": "Target node not found"}
         
-        # 1. Identifica i potenziali driver (nodi che influenzano il target)
-        drivers = await self._run_retro_causal_search(target_id, depth=3)
-        potential_drivers = drivers.get("affected_nodes", [])[:10] # Top 10 driver
+        self.logger.info(f"📐 Gradient Descent su Target: {target_node.title} ({target_id}) | Obiettivo: {desired_impact}")
         
-        gradients = []
+        # 1. Ricerca Retro-Causale per identificare i driver
+        drivers_res = await self._run_retro_causal_search(target_id, depth=3)
+        potential_drivers = drivers_res.get("affected_nodes", [])[:8] # Top 8 driver
+        
+        if not potential_drivers:
+            return {"error": "Nessun driver causale identificato per questo target."}
+            
+        results = []
         for driver in potential_drivers:
             did = driver["id"]
-            # Calcoliamo la sensibilità: delta_target / delta_driver
-            # Eseguiamo due micro-simulazioni per calcolare il gradiente locale
-            s1 = await self.simulate_intervention(did, intervention_value=0.1, iterations=100)
-            s2 = await self.simulate_intervention(did, intervention_value=0.2, iterations=100)
+            dtitle = driver["title"]
             
-            impact1 = next((n["impact"] for n in s1["affected_nodes"] if n["id"] == target_id), 0.0)
-            impact2 = next((n["impact"] for n in s2["affected_nodes"] if n["id"] == target_id), 0.0)
+            # 2. Calcolo della Derivata Causale (Finite Differences)
+            # Delta 0.1
+            s1 = await self.simulate_intervention(did, intervention_value=0.05, iterations=100)
+            s2 = await self.simulate_intervention(did, intervention_value=0.15, iterations=100)
             
-            # Gradiente = (d_target) / (d_driver)
-            local_gradient = (impact2 - impact1) / 0.1
+            val1 = next((n["impact"] for n in s1["affected_nodes"] if n["id"] == target_id), 0.0)
+            val2 = next((n["impact"] for n in s2["affected_nodes"] if n["id"] == target_id), 0.0)
             
-            if abs(local_gradient) > 0.001:
-                # Intervento necessario = Desired / Gradiente
-                required_intervention = desired_impact / local_gradient
-                gradients.append({
-                    "driver_id": did,
-                    "driver_title": driver["driver_title"] if "driver_title" in driver else driver["title"],
-                    "sensitivity": round(local_gradient, 4),
-                    "suggested_intervention": round(required_intervention, 3),
-                    "efficiency_score": round(abs(local_gradient), 3)
-                })
-        
+            gradient = (val2 - val1) / 0.1 # Delta x = 0.1
+            
+            if abs(gradient) < 0.01: continue
+            
+            # 3. Intervento Suggerito
+            suggested_intervention = desired_impact / gradient
+            efficiency = abs(gradient)
+            
+            # Limite di sicurezza sull'intervento (non suggeriamo valori impossibili)
+            if abs(suggested_intervention) > 5.0:
+                recommendation = "Efficienza troppo bassa. Richiede sforzo sproporzionato."
+            else:
+                dir_text = "incrementare" if suggested_intervention > 0 else "ridurre"
+                recommendation = f"Per ottenere Δ{desired_impact}, occorre {dir_text} '{dtitle}' di circa {abs(suggested_intervention):.2f} unità."
+
+            results.append({
+                "driver_id": did,
+                "driver_title": dtitle,
+                "gradient": round(gradient, 4),
+                "suggested_delta": round(suggested_intervention, 3),
+                "efficiency": round(efficiency, 3),
+                "recommendation": recommendation
+            })
+            
         return {
-            "target_id": target_id,
+            "status": "success",
+            "target": {"id": target_id, "title": target_node.title},
             "desired_impact": desired_impact,
-            "optimal_interventions": sorted(gradients, key=lambda x: x["efficiency_score"], reverse=True)
+            "strategic_drivers": sorted(results, key=lambda x: x["efficiency"], reverse=True),
+            "protocol": "METIS-GRADIENT-V1"
         }

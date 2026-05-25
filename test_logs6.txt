@@ -1,0 +1,209 @@
+objc[31683]: Class AVFFrameReceiver is implemented in both /opt/homebrew/Cellar/ffmpeg/8.0.1/lib/libavdevice.62.1.100.dylib (0x1692b0328) and /Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/venv/lib/python3.14/site-packages/cv2/.dylibs/libavdevice.61.3.100.dylib (0x170cac3a8). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+objc[31683]: Class AVFAudioReceiver is implemented in both /opt/homebrew/Cellar/ffmpeg/8.0.1/lib/libavdevice.62.1.100.dylib (0x1692b0378) and /Users/giuseppelobbene/Downloads/DATABASE VETTORIALE/venv/lib/python3.14/site-packages/cv2/.dylibs/libavdevice.61.3.100.dylib (0x170cac3f8). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+INFO:NeuralVault-Voice:🎙️ Caricamento Whisper (tiny) su cpu...
+INFO:     Started server process [31683]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+The following layers were not sharded: bert.encoder.layer.*.intermediate.dense.bias, bert.embeddings.token_type_embeddings.weight, bert.embeddings.LayerNorm.weight, bert.embeddings.LayerNorm.bias, bert.encoder.layer.*.attention.output.dense.bias, bert.encoder.layer.*.attention.self.key.bias, bert.encoder.layer.*.attention.output.LayerNorm.weight, classifier.weight, bert.encoder.layer.*.attention.self.value.weight, bert.encoder.layer.*.attention.output.LayerNorm.bias, bert.encoder.layer.*.output.LayerNorm.bias, bert.embeddings.position_embeddings.weight, bert.encoder.layer.*.intermediate.dense.weight, bert.encoder.layer.*.attention.self.query.weight, bert.encoder.layer.*.output.dense.weight, bert.encoder.layer.*.output.LayerNorm.weight, bert.encoder.layer.*.attention.self.value.bias, bert.embeddings.word_embeddings.weight, bert.pooler.dense.bias, classifier.bias, bert.encoder.layer.*.attention.output.dense.weight, bert.encoder.layer.*.output.dense.bias, bert.encoder.layer.*.attention.self.query.bias, bert.encoder.layer.*.attention.self.key.weight, bert.pooler.dense.weight
+🛡️ [Aegis] Event Bus Initialized: vault_data/aegis_event_log.jsonl
+🔒 [Security] Custom Sovereign Key ACTIVE.
+🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v9.6.0 Sovereign Hegemony...
+🛡️ [System] Signal Hijack ACTIVE: Ctrl+C will force exit.
+🧬 NeuralVault: Hardware Trace -> CUDA: False | METAL: True
+🦆 [DuckDB] Hyper-Optimization Active (Checkpoint/WAL consolidation).
+🦆 NeuralVault: DuckDB Analytical Engine online.
+⏳ [Fusion] Attivazione Neural Reranker (TinyBERT)...
+Loading weights:   0%|          | 0/41 [00:00<?, ?it/s]Loading weights: 100%|██████████| 41/41 [00:00<00:00, 25386.25it/s]
+🎯 [Fusion] Cross-Encoder Activated [OFFLINE/LOCAL READY].
+🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v9.7.0 Sovereign Maturity...
+🚀 TurboQuant v3 (Native PQ + Fast Ingest): Engine ACTIVE on MPS
+🧬 [Consensus v0.4.5] Binary Mesh Engine Online (Node: vault_37809bf1)
+✨ [NeuralVault] Cognitive Decay Daemon: ONLINE
+🛡️ [System] Inizio procedura di Self-Healing...
+🛡️ [Recovery] Ripristinati 72754 eventi dal log binario.
+✅ Consensus: 72754 eventi nel ledger ripristinati.
+⚡ [Snapshot] Instant Boot attivato: caricamento da snapshot...
+⚡ [Snapshot] Instant Boot completato in 0.01s.
+🕯️ [Boot] Avvio Hot Hydration (Limit: 30000)...
+🏺 [Hydration] Iniezione di 30000 nodi nella Neural Grid...
+   ➞ Sincronizzazione: 0.0% (1/30000)   ➞ Sincronizzazione: 0.3% (101/30000)   ➞ Sincronizzazione: 0.7% (201/30000)   ➞ Sincronizzazione: 1.0% (301/30000)   ➞ Sincronizzazione: 1.3% (401/30000)   ➞ Sincronizzazione: 1.7% (501/30000)   ➞ Sincronizzazione: 2.0% (601/30000)   ➞ Sincronizzazione: 2.3% (701/30000)   ➞ Sincronizzazione: 2.7% (801/30000)   ➞ Sincronizzazione: 3.0% (901/30000)   ➞ Sincronizzazione: 3.3% (1001/30000)   ➞ Sincronizzazione: 3.7% (1101/30000)   ➞ Sincronizzazione: 4.0% (1201/30000)   ➞ Sincronizzazione: 4.3% (1301/30000)   ➞ Sincronizzazione: 4.7% (1401/30000)   ➞ Sincronizzazione: 5.0% (1501/30000)   ➞ Sincronizzazione: 5.3% (1601/30000)   ➞ Sincronizzazione: 5.7% (1701/30000)   ➞ Sincronizzazione: 6.0% (1801/30000)   ➞ Sincronizzazione: 6.3% (1901/30000)   ➞ Sincronizzazione: 6.7% (2001/30000)   ➞ Sincronizzazione: 7.0% (2101/30000)   ➞ Sincronizzazione: 7.3% (2201/30000)   ➞ Sincronizzazione: 7.7% (2301/30000)   ➞ Sincronizzazione: 8.0% (2401/30000)   ➞ Sincronizzazione: 8.3% (2501/30000)   ➞ Sincronizzazione: 8.7% (2601/30000)   ➞ Sincronizzazione: 9.0% (2701/30000)   ➞ Sincronizzazione: 9.3% (2801/30000)   ➞ Sincronizzazione: 9.7% (2901/30000)   ➞ Sincronizzazione: 10.0% (3001/30000)   ➞ Sincronizzazione: 10.3% (3101/30000)   ➞ Sincronizzazione: 10.7% (3201/30000)   ➞ Sincronizzazione: 11.0% (3301/30000)   ➞ Sincronizzazione: 11.3% (3401/30000)   ➞ Sincronizzazione: 11.7% (3501/30000)   ➞ Sincronizzazione: 12.0% (3601/30000)   ➞ Sincronizzazione: 12.3% (3701/30000)   ➞ Sincronizzazione: 12.7% (3801/30000)   ➞ Sincronizzazione: 13.0% (3901/30000)   ➞ Sincronizzazione: 13.3% (4001/30000)   ➞ Sincronizzazione: 13.7% (4101/30000)   ➞ Sincronizzazione: 14.0% (4201/30000)   ➞ Sincronizzazione: 14.3% (4301/30000)   ➞ Sincronizzazione: 14.7% (4401/30000)   ➞ Sincronizzazione: 15.0% (4501/30000)   ➞ Sincronizzazione: 15.3% (4601/30000)   ➞ Sincronizzazione: 15.7% (4701/30000)   ➞ Sincronizzazione: 16.0% (4801/30000)   ➞ Sincronizzazione: 16.3% (4901/30000)   ➞ Sincronizzazione: 16.7% (5001/30000)   ➞ Sincronizzazione: 17.0% (5101/30000)   ➞ Sincronizzazione: 17.3% (5201/30000)   ➞ Sincronizzazione: 17.7% (5301/30000)   ➞ Sincronizzazione: 18.0% (5401/30000)   ➞ Sincronizzazione: 18.3% (5501/30000)   ➞ Sincronizzazione: 18.7% (5601/30000)   ➞ Sincronizzazione: 19.0% (5701/30000)   ➞ Sincronizzazione: 19.3% (5801/30000)   ➞ Sincronizzazione: 19.7% (5901/30000)   ➞ Sincronizzazione: 20.0% (6001/30000)   ➞ Sincronizzazione: 20.3% (6101/30000)   ➞ Sincronizzazione: 20.7% (6201/30000)   ➞ Sincronizzazione: 21.0% (6301/30000)   ➞ Sincronizzazione: 21.3% (6401/30000)   ➞ Sincronizzazione: 21.7% (6501/30000)   ➞ Sincronizzazione: 22.0% (6601/30000)   ➞ Sincronizzazione: 22.3% (6701/30000)   ➞ Sincronizzazione: 22.7% (6801/30000)   ➞ Sincronizzazione: 23.0% (6901/30000)   ➞ Sincronizzazione: 23.3% (7001/30000)   ➞ Sincronizzazione: 23.7% (7101/30000)   ➞ Sincronizzazione: 24.0% (7201/30000)   ➞ Sincronizzazione: 24.3% (7301/30000)   ➞ Sincronizzazione: 24.7% (7401/30000)   ➞ Sincronizzazione: 25.0% (7501/30000)   ➞ Sincronizzazione: 25.3% (7601/30000)   ➞ Sincronizzazione: 25.7% (7701/30000)   ➞ Sincronizzazione: 26.0% (7801/30000)   ➞ Sincronizzazione: 26.3% (7901/30000)   ➞ Sincronizzazione: 26.7% (8001/30000)   ➞ Sincronizzazione: 27.0% (8101/30000)   ➞ Sincronizzazione: 27.3% (8201/30000)   ➞ Sincronizzazione: 27.7% (8301/30000)   ➞ Sincronizzazione: 28.0% (8401/30000)   ➞ Sincronizzazione: 28.3% (8501/30000)   ➞ Sincronizzazione: 28.7% (8601/30000)   ➞ Sincronizzazione: 29.0% (8701/30000)   ➞ Sincronizzazione: 29.3% (8801/30000)   ➞ Sincronizzazione: 29.7% (8901/30000)   ➞ Sincronizzazione: 30.0% (9001/30000)   ➞ Sincronizzazione: 30.3% (9101/30000)   ➞ Sincronizzazione: 30.7% (9201/30000)   ➞ Sincronizzazione: 31.0% (9301/30000)   ➞ Sincronizzazione: 31.3% (9401/30000)   ➞ Sincronizzazione: 31.7% (9501/30000)   ➞ Sincronizzazione: 32.0% (9601/30000)   ➞ Sincronizzazione: 32.3% (9701/30000)   ➞ Sincronizzazione: 32.7% (9801/30000)   ➞ Sincronizzazione: 33.0% (9901/30000)   ➞ Sincronizzazione: 33.3% (10001/30000)   ➞ Sincronizzazione: 33.7% (10101/30000)   ➞ Sincronizzazione: 34.0% (10201/30000)   ➞ Sincronizzazione: 34.3% (10301/30000)   ➞ Sincronizzazione: 34.7% (10401/30000)   ➞ Sincronizzazione: 35.0% (10501/30000)   ➞ Sincronizzazione: 35.3% (10601/30000)   ➞ Sincronizzazione: 35.7% (10701/30000)   ➞ Sincronizzazione: 36.0% (10801/30000)   ➞ Sincronizzazione: 36.3% (10901/30000)   ➞ Sincronizzazione: 36.7% (11001/30000)   ➞ Sincronizzazione: 37.0% (11101/30000)   ➞ Sincronizzazione: 37.3% (11201/30000)   ➞ Sincronizzazione: 37.7% (11301/30000)   ➞ Sincronizzazione: 38.0% (11401/30000)   ➞ Sincronizzazione: 38.3% (11501/30000)   ➞ Sincronizzazione: 38.7% (11601/30000)   ➞ Sincronizzazione: 39.0% (11701/30000)   ➞ Sincronizzazione: 39.3% (11801/30000)   ➞ Sincronizzazione: 39.7% (11901/30000)   ➞ Sincronizzazione: 40.0% (12001/30000)   ➞ Sincronizzazione: 40.3% (12101/30000)   ➞ Sincronizzazione: 40.7% (12201/30000)   ➞ Sincronizzazione: 41.0% (12301/30000)   ➞ Sincronizzazione: 41.3% (12401/30000)   ➞ Sincronizzazione: 41.7% (12501/30000)   ➞ Sincronizzazione: 42.0% (12601/30000)   ➞ Sincronizzazione: 42.3% (12701/30000)   ➞ Sincronizzazione: 42.7% (12801/30000)   ➞ Sincronizzazione: 43.0% (12901/30000)   ➞ Sincronizzazione: 43.3% (13001/30000)   ➞ Sincronizzazione: 43.7% (13101/30000)   ➞ Sincronizzazione: 44.0% (13201/30000)   ➞ Sincronizzazione: 44.3% (13301/30000)   ➞ Sincronizzazione: 44.7% (13401/30000)   ➞ Sincronizzazione: 45.0% (13501/30000)   ➞ Sincronizzazione: 45.3% (13601/30000)   ➞ Sincronizzazione: 45.7% (13701/30000)   ➞ Sincronizzazione: 46.0% (13801/30000)   ➞ Sincronizzazione: 46.3% (13901/30000)   ➞ Sincronizzazione: 46.7% (14001/30000)   ➞ Sincronizzazione: 47.0% (14101/30000)   ➞ Sincronizzazione: 47.3% (14201/30000)   ➞ Sincronizzazione: 47.7% (14301/30000)   ➞ Sincronizzazione: 48.0% (14401/30000)   ➞ Sincronizzazione: 48.3% (14501/30000)   ➞ Sincronizzazione: 48.7% (14601/30000)   ➞ Sincronizzazione: 49.0% (14701/30000)   ➞ Sincronizzazione: 49.3% (14801/30000)   ➞ Sincronizzazione: 49.7% (14901/30000)   ➞ Sincronizzazione: 50.0% (15001/30000)   ➞ Sincronizzazione: 50.3% (15101/30000)   ➞ Sincronizzazione: 50.7% (15201/30000)   ➞ Sincronizzazione: 51.0% (15301/30000)   ➞ Sincronizzazione: 51.3% (15401/30000)   ➞ Sincronizzazione: 51.7% (15501/30000)   ➞ Sincronizzazione: 52.0% (15601/30000)   ➞ Sincronizzazione: 52.3% (15701/30000)   ➞ Sincronizzazione: 52.7% (15801/30000)   ➞ Sincronizzazione: 53.0% (15901/30000)   ➞ Sincronizzazione: 53.3% (16001/30000)   ➞ Sincronizzazione: 53.7% (16101/30000)   ➞ Sincronizzazione: 54.0% (16201/30000)   ➞ Sincronizzazione: 54.3% (16301/30000)   ➞ Sincronizzazione: 54.7% (16401/30000)   ➞ Sincronizzazione: 55.0% (16501/30000)   ➞ Sincronizzazione: 55.3% (16601/30000)   ➞ Sincronizzazione: 55.7% (16701/30000)   ➞ Sincronizzazione: 56.0% (16801/30000)   ➞ Sincronizzazione: 56.3% (16901/30000)   ➞ Sincronizzazione: 56.7% (17001/30000)   ➞ Sincronizzazione: 57.0% (17101/30000)   ➞ Sincronizzazione: 57.3% (17201/30000)   ➞ Sincronizzazione: 57.7% (17301/30000)   ➞ Sincronizzazione: 58.0% (17401/30000)   ➞ Sincronizzazione: 58.3% (17501/30000)   ➞ Sincronizzazione: 58.7% (17601/30000)   ➞ Sincronizzazione: 59.0% (17701/30000)   ➞ Sincronizzazione: 59.3% (17801/30000)   ➞ Sincronizzazione: 59.7% (17901/30000)   ➞ Sincronizzazione: 60.0% (18001/30000)   ➞ Sincronizzazione: 60.3% (18101/30000)   ➞ Sincronizzazione: 60.7% (18201/30000)   ➞ Sincronizzazione: 61.0% (18301/30000)   ➞ Sincronizzazione: 61.3% (18401/30000)   ➞ Sincronizzazione: 61.7% (18501/30000)   ➞ Sincronizzazione: 62.0% (18601/30000)   ➞ Sincronizzazione: 62.3% (18701/30000)   ➞ Sincronizzazione: 62.7% (18801/30000)   ➞ Sincronizzazione: 63.0% (18901/30000)   ➞ Sincronizzazione: 63.3% (19001/30000)   ➞ Sincronizzazione: 63.7% (19101/30000)   ➞ Sincronizzazione: 64.0% (19201/30000)   ➞ Sincronizzazione: 64.3% (19301/30000)   ➞ Sincronizzazione: 64.7% (19401/30000)   ➞ Sincronizzazione: 65.0% (19501/30000)   ➞ Sincronizzazione: 65.3% (19601/30000)   ➞ Sincronizzazione: 65.7% (19701/30000)   ➞ Sincronizzazione: 66.0% (19801/30000)   ➞ Sincronizzazione: 66.3% (19901/30000)   ➞ Sincronizzazione: 66.7% (20001/30000)   ➞ Sincronizzazione: 67.0% (20101/30000)   ➞ Sincronizzazione: 67.3% (20201/30000)   ➞ Sincronizzazione: 67.7% (20301/30000)   ➞ Sincronizzazione: 68.0% (20401/30000)   ➞ Sincronizzazione: 68.3% (20501/30000)   ➞ Sincronizzazione: 68.7% (20601/30000)   ➞ Sincronizzazione: 69.0% (20701/30000)   ➞ Sincronizzazione: 69.3% (20801/30000)   ➞ Sincronizzazione: 69.7% (20901/30000)   ➞ Sincronizzazione: 70.0% (21001/30000)   ➞ Sincronizzazione: 70.3% (21101/30000)   ➞ Sincronizzazione: 70.7% (21201/30000)   ➞ Sincronizzazione: 71.0% (21301/30000)   ➞ Sincronizzazione: 71.3% (21401/30000)   ➞ Sincronizzazione: 71.7% (21501/30000)   ➞ Sincronizzazione: 72.0% (21601/30000)   ➞ Sincronizzazione: 72.3% (21701/30000)   ➞ Sincronizzazione: 72.7% (21801/30000)   ➞ Sincronizzazione: 73.0% (21901/30000)   ➞ Sincronizzazione: 73.3% (22001/30000)   ➞ Sincronizzazione: 73.7% (22101/30000)   ➞ Sincronizzazione: 74.0% (22201/30000)   ➞ Sincronizzazione: 74.3% (22301/30000)   ➞ Sincronizzazione: 74.7% (22401/30000)   ➞ Sincronizzazione: 75.0% (22501/30000)   ➞ Sincronizzazione: 75.3% (22601/30000)   ➞ Sincronizzazione: 75.7% (22701/30000)   ➞ Sincronizzazione: 76.0% (22801/30000)   ➞ Sincronizzazione: 76.3% (22901/30000)   ➞ Sincronizzazione: 76.7% (23001/30000)   ➞ Sincronizzazione: 77.0% (23101/30000)   ➞ Sincronizzazione: 77.3% (23201/30000)   ➞ Sincronizzazione: 77.7% (23301/30000)   ➞ Sincronizzazione: 78.0% (23401/30000)   ➞ Sincronizzazione: 78.3% (23501/30000)   ➞ Sincronizzazione: 78.7% (23601/30000)   ➞ Sincronizzazione: 79.0% (23701/30000)   ➞ Sincronizzazione: 79.3% (23801/30000)   ➞ Sincronizzazione: 79.7% (23901/30000)   ➞ Sincronizzazione: 80.0% (24001/30000)   ➞ Sincronizzazione: 80.3% (24101/30000)   ➞ Sincronizzazione: 80.7% (24201/30000)   ➞ Sincronizzazione: 81.0% (24301/30000)   ➞ Sincronizzazione: 81.3% (24401/30000)   ➞ Sincronizzazione: 81.7% (24501/30000)   ➞ Sincronizzazione: 82.0% (24601/30000)   ➞ Sincronizzazione: 82.3% (24701/30000)   ➞ Sincronizzazione: 82.7% (24801/30000)   ➞ Sincronizzazione: 83.0% (24901/30000)   ➞ Sincronizzazione: 83.3% (25001/30000)   ➞ Sincronizzazione: 83.7% (25101/30000)   ➞ Sincronizzazione: 84.0% (25201/30000)   ➞ Sincronizzazione: 84.3% (25301/30000)   ➞ Sincronizzazione: 84.7% (25401/30000)   ➞ Sincronizzazione: 85.0% (25501/30000)   ➞ Sincronizzazione: 85.3% (25601/30000)   ➞ Sincronizzazione: 85.7% (25701/30000)   ➞ Sincronizzazione: 86.0% (25801/30000)   ➞ Sincronizzazione: 86.3% (25901/30000)   ➞ Sincronizzazione: 86.7% (26001/30000)   ➞ Sincronizzazione: 87.0% (26101/30000)   ➞ Sincronizzazione: 87.3% (26201/30000)   ➞ Sincronizzazione: 87.7% (26301/30000)   ➞ Sincronizzazione: 88.0% (26401/30000)   ➞ Sincronizzazione: 88.3% (26501/30000)   ➞ Sincronizzazione: 88.7% (26601/30000)   ➞ Sincronizzazione: 89.0% (26701/30000)   ➞ Sincronizzazione: 89.3% (26801/30000)   ➞ Sincronizzazione: 89.7% (26901/30000)   ➞ Sincronizzazione: 90.0% (27001/30000)   ➞ Sincronizzazione: 90.3% (27101/30000)   ➞ Sincronizzazione: 90.7% (27201/30000)   ➞ Sincronizzazione: 91.0% (27301/30000)   ➞ Sincronizzazione: 91.3% (27401/30000)   ➞ Sincronizzazione: 91.7% (27501/30000)   ➞ Sincronizzazione: 92.0% (27601/30000)   ➞ Sincronizzazione: 92.3% (27701/30000)   ➞ Sincronizzazione: 92.7% (27801/30000)   ➞ Sincronizzazione: 93.0% (27901/30000)   ➞ Sincronizzazione: 93.3% (28001/30000)   ➞ Sincronizzazione: 93.7% (28101/30000)   ➞ Sincronizzazione: 94.0% (28201/30000)   ➞ Sincronizzazione: 94.3% (28301/30000)   ➞ Sincronizzazione: 94.7% (28401/30000)   ➞ Sincronizzazione: 95.0% (28501/30000)   ➞ Sincronizzazione: 95.3% (28601/30000)   ➞ Sincronizzazione: 95.7% (28701/30000)   ➞ Sincronizzazione: 96.0% (28801/30000)   ➞ Sincronizzazione: 96.3% (28901/30000)   ➞ Sincronizzazione: 96.7% (29001/30000)   ➞ Sincronizzazione: 97.0% (29101/30000)   ➞ Sincronizzazione: 97.3% (29201/30000)   ➞ Sincronizzazione: 97.7% (29301/30000)   ➞ Sincronizzazione: 98.0% (29401/30000)   ➞ Sincronizzazione: 98.3% (29501/30000)   ➞ Sincronizzazione: 98.7% (29601/30000)   ➞ Sincronizzazione: 99.0% (29701/30000)   ➞ Sincronizzazione: 99.3% (29801/30000)   ➞ Sincronizzazione: 99.7% (29901/30000)   ➞ Sincronizzazione: 100.0% (30000/30000)INFO:MeshSync:📡 Mesh Sync Engine AVVIATO.
+INFO:NeuralVault-Multimodal:🏺 [Multimodal] Sovereign Processor initialized on mps (Forensics: Surgical-Diarization).
+INFO:NeuralEventBus:📡 Subscriber added for NeuralEventType.COURT_REQUIRED
+INFO:NeuralEventBus:📡 Subscriber added for NeuralEventType.EVOLUTION_ADVICE_NEEDED
+INFO:NeuralEventBus:📡 Subscriber added for NeuralEventType.WIKI_GENERATED
+INFO:KuzuProjection:🦆 [Kùzu] Graph Projection Initialized: ./vault_data/kuzudb
+INFO:CompoundingWiki:📊 Wiki Cross-Reference Index initialized.
+INFO:CompoundingWiki:🛡️ Epistemic Claims Table (v10.0) Ready.
+INFO:CompoundingWiki:📄 llms.txt synchronized to root and wiki dir.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:NIC:🧠 [NIC] Inizio addestramento su 15692 vettori...
+INFO:Mesh-Discovery:📡 Discovery: Servizio registrato su 192.168.1.158:8001
+
+✅ [Hydration] Sincronizzazione completata.
+🏺 [Memory] RAM Reclaimed post-hydration.
+📸 [Snapshot] Inizio Sovereign Snapshot Engine...
+📸 [Snapshot] Dump completato in 0.89s (617 KB)
+🕵️ Agent007-march: Intelligence Extension ACTIVE.
+🕵️ Agent007-march: Sovereign Intelligence Engine ONLINE.
+🏛️ Agent007-Blueprint: Mission Architect READY.
+🏛️ Sovereign Ledger: Integrity Chain ACTIVE.
+🧠 Active Learning: Self-Tuning Circuit Breaker ACTIVE.
+🌌 Entropy Monitor: Dreaming Trigger ENABLED.
+Ollama Uplink: http://127.0.0.1:11434 ... ✅ READY
+🤖 [BOOT] R2-D2 Initialized at: {'x': -1500000.0, 'y': 0.0, 'z': 1500000.0}
+🌉 [BOOT] CB-003 Bridger Initialized at: {'x': 1800000.0, 'y': 0.0, 'z': -1800000.0}
+🛰️ [BOOT] FS-77 Skywalker Initialized at: {'x': 8000000.0, 'y': 3000000.0, 'z': 8000000.0}
+🟢 [BOOT] YO-001 Yoda Initialized at: {'x': -9000000.0, 'y': -4000000.0, 'z': -9000000.0}
+🛰️ [BOOT] DN-099 Mandalorian Initialized at: {'x': 25000000.0, 'y': 0.0, 'z': -25000000.0}
+🖨️ [BOOT] PB-404 Sovereign Pressman Initialized at: {'x': 500000.0, 'y': 500000.0, 'z': 500000.0}
+🛡️ [Aegis] Hardware SITREP:
+   - OS: Darwin (arm64)
+   - Device: MPS
+   - Tier: TIER_2
+   - RAM: 16.0 GB
+   - Cores: 8
+📊 [Lab/Stats] Persistent history anchored to baseline. Session counters cleared.
+🏥 [Multimodal Health] Analisi prerequisiti in corso...
+  - Apple Silicon (MPS): ✅ ACTIVE
+  - Whisper Engine: ✅ READY
+  - ImageBind Huge: ✅ READY
+  - Ollama Uplink: http://127.0.0.1:11434 ...
+🔭 [Watcher] Proactive Codebase Observer Active.
+🛸 [Neural Lab] Kinetic Swarm v24.3.1 - Resilience Shield Active.
+🚀 [Operational Shift] Swarm Perimetro: EVOLUTION Mode active.
+🏺 [v9.0] Operational Strategy Engines (Playbook, Shadow, Simplifier) & SSE Bridge v9.7 ACTIVE.
+📡 [Mesh] Discovery Online. PubKey: 75+TtBnDFS...
+🦾 [NIC] Codebook Neurale caricato correttamente.
+🚀 [System] Neural Lab Orchestrator READY.
+🛡️ [Maintenance] Running automated shard backup...
+🛡️ [Backup] Archiviata istantanea di sicurezza in: 20260516_164846
+🛡️ [Maintenance] No active shards to clone.
+🕴️ [SMITH-AURA-OS-] Status: Ispezione Completata: Peer Sicuro
+🕴️ [SMITH-NEURAL-V] Status: Ispezione Completata: Peer Sicuro
+🟡 [Lab] Submitting mission for JA-001 (Prio: 25)
+DEBUG: is loop running? True
+📡 [Bridge] Analisi Semantica: 12333 documenti web vs 2707 file sorgente...
+📊 [Bridge] Similarità Massima rilevata: 0.1756 (Threshold: 0.75)
+⚠️ [Bridge] Skipping legacy O(N^2) text matching to prevent event loop blocking. (12333x2707)
+🧬 [Bridger] Initial sync completed: 0 legacy bridges found.
+INFO:     127.0.0.1:51206 - "GET /events?api_key=sovereign_vault_alpha_2026_secure_core HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51207 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for DI-007 (Prio: 50)
+DEBUG: is loop running? True
+🧬 Hardware DNA: Darwin-arm64 | Backend: APPLE METAL
+INFO:     127.0.0.1:51207 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51207 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51207 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:NIC:✅ [NIC] Addestramento completato. Compressione attiva.
+🏗️ [Bridge] Ingestione codebase granulare da ....
+🧠 [Kernel] Ingesting batch of 1 nodes...
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for RP-001 (Prio: 25)
+DEBUG: is loop running? True
+✅ [Kernel] Engine now contains 15693 active nodes.
+🔗 [L2 Anchor] Merkle Root ba8ce0a99d71 FIRMATO e ANCORATO.
+📄 [L2 Trace] Transaction Hash: 0x4a7c9af107e545a4b68beac74af6e3c224b96d59a0f26f2475b15261bb1187a0
+🏛️ [Ledger] Memory Block Committed & Anchored. Root: ba8ce0a99d71b78d...
+📡 [SSE Bridge] Propagating event: NODE_CREATED
+🧠 [Kernel] Ingesting batch of 1 nodes...
+✅ [Kernel] Engine now contains 15694 active nodes.
+🔗 [L2 Anchor] Merkle Root e96890a621a1 FIRMATO e ANCORATO.
+📄 [L2 Trace] Transaction Hash: 0xa01175c3c60e5568b3db2fa6c089a49102caea65f14bdab1e614c7024bb7cddb
+🏛️ [Ledger] Memory Block Committed & Anchored. Root: e96890a621a123d3...
+📡 [SSE Bridge] Propagating event: NODE_CREATED
+🧠 [Kernel] Ingesting batch of 1 nodes...
+✅ [Kernel] Engine now contains 15695 active nodes.
+🔗 [L2 Anchor] Merkle Root 975d137981a0 FIRMATO e ANCORATO.
+📄 [L2 Trace] Transaction Hash: 0x52788965a4e61844c9bd1dd88e576abb30c84567db94f69b87d7476c488a806f
+🏛️ [Ledger] Memory Block Committed & Anchored. Root: 975d137981a02807...
+📡 [SSE Bridge] Propagating event: NODE_CREATED
+🧠 [Kernel] Ingesting batch of 1 nodes...
+⚠️ [Backpressure] System Clogged (RAM: 60.6%). Waiting for breath (2s)...
+✅ [Kernel] Engine now contains 15696 active nodes.
+🔗 [L2 Anchor] Merkle Root b9c925980ae2 FIRMATO e ANCORATO.
+📄 [L2 Trace] Transaction Hash: 0x31eabfe3f60c97ab0c6b08d66b9f4fe9b611760354f823f4cb6ec586ecc48c12
+🏛️ [Ledger] Memory Block Committed & Anchored. Root: b9c925980ae274d0...
+📡 [SSE Bridge] Propagating event: NODE_CREATED
+🧠 [Kernel] Ingesting batch of 1 nodes...
+✅ [Kernel] Engine now contains 15697 active nodes.
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for SN-008 (Prio: 50)
+DEBUG: is loop running? True
+🔗 [L2 Anchor] Merkle Root a5179b065e05 FIRMATO e ANCORATO.
+📄 [L2 Trace] Transaction Hash: 0x4ef60c7a41eaedb85cbb8ff7de3163be273cb7c9aa78a269a7cb921d90bbed02
+🏛️ [Ledger] Memory Block Committed & Anchored. Root: a5179b065e051165...
+📡 [SSE Bridge] Propagating event: NODE_CREATED
+✅ [Bridge] Codebase sincronizzata: 5 nuovi, 47 aggiornati.
+🧠 [LLM Intercept] Modello: qwen2.5:3b | Azione:                  Analizza il seguente testo ed estrai ENTITÀ (Nomi, Luoghi, Organizzazioni, Concetti...
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for QA-101 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for SE-007 (Prio: 5)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for R2-D2 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for SY-009 (Prio: 90)
+DEBUG: is loop running? True
+🧠 [LLM Intercept] Modello: qwen2.5:3b | Azione:              ### ROLE: REVERSE IDENTITY ENGINEER             ### TARGET: SOURCE_CODE_SIGNATURE      ...
+DEBUG: Entering query method with text: ...
+🧠 [LLM Intercept] Modello: qwen2.5:3b | Azione:                  Analizza il seguente testo ed estrai ENTITÀ (Nomi, Luoghi, Organizzazioni, Concetti...
+INFO:     127.0.0.1:51234 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51234 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51234 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for CB-003 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for FS-77 (Prio: 75)
+DEBUG: is loop running? True
+🧠 [LLM Intercept] Modello: qwen2.5:3b | Azione:              ### ROLE: REVERSE IDENTITY ENGINEER             ### TARGET: SOURCE_CODE_SIGNATURE      ...
+DEBUG: Entering query method with text: ...
+🧠 [LLM Intercept] Modello: qwen2.5:3b | Azione:                  Analizza il seguente testo ed estrai ENTITÀ (Nomi, Luoghi, Organizzazioni, Concetti...
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for YO-001 (Prio: 75)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for DN-099 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for NC-001 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for AD-007 (Prio: 50)
+DEBUG: is loop running? True
+📡 [Bridge] Analisi Semantica: 12333 documenti web vs 2712 file sorgente...
+📊 [Bridge] Similarità Massima rilevata: 0.1756 (Threshold: 0.75)
+⚠️ [Bridge] Skipping legacy O(N^2) text matching to prevent event loop blocking. (12333x2712)
+INFO:     127.0.0.1:51240 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51240 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for PB-404 (Prio: 50)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🟡 [Lab] Submitting mission for AG-001 (Prio: 5)
+DEBUG: is loop running? True
+DEBUG: dummy_fut FAILED with TimeoutError: 
+🧪 [Health] Orchestrator Event Loop: RUNNING
+📡 [Bridge] Analisi Semantica: 12333 documenti web vs 2712 file sorgente...
+INFO:     127.0.0.1:51249 - "GET /api/mesh/peers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51250 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51251 - "GET /api/models/benchmarks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51252 - "GET /api/swarm/audit-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51249 - "GET /api/lab/evolution/suggestions HTTP/1.1" 200 OK
+📊 [Bridge] Similarità Massima rilevata: 0.1756 (Threshold: 0.75)
+⚠️ [Bridge] Skipping legacy O(N^2) text matching to prevent event loop blocking. (12333x2712)
+INFO:     127.0.0.1:51249 - "GET /api/mesh/peers HTTP/1.1" 200 OK
+🕴️ [SMITH-AURA-OS-] Status: Pattugliamento Link: AURA-OS-... [SAFE]
+🕴️ [SMITH-NEURAL-V] Status: Pattugliamento Link: NEURAL-V... [SAFE]
+🕴️ [SMITH-AURA-OS-] Status: Ispezione Completata: Peer Sicuro
+🕴️ [SMITH-NEURAL-V] Status: Ispezione Completata: Peer Sicuro
+INFO:     127.0.0.1:51258 - "GET /api/mesh/peers HTTP/1.1" 200 OK
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 11 leaked semaphore objects to clean up at shutdown: {'/loky-31683-aasoao08', '/loky-31683-h5135v_g', '/loky-31683-af5dnij2', '/loky-31683-snj_t63a', '/mp-4cvuvnky', '/loky-31683-m60_ipmj', '/mp-ursbhk0e', '/mp-1fnverni', '/loky-31683-czn4v3eg', '/mp-0acej_ni', '/mp-kxqg8pk_'}
+  warnings.warn(

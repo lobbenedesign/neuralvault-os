@@ -152,7 +152,7 @@ class PlayerController {
         this.powerups = [];
         this.lastShotTime = 0;
         this.enemiesKilled = 0;
-        this.nextBossThreshold = 50;
+        this.nextBossThreshold = 10;
         
         // 🛡️ [v13.5] Defense & Heavy Weapons State
         this.shieldCharges = 3;
@@ -399,7 +399,7 @@ class PlayerController {
             this.health = 100;
             this.score = 0;
             this.enemiesKilled = 0;
-            this.nextBossThreshold = 50;
+            this.nextBossThreshold = 10;
             this.ultraBlasterAmmo = 0;
             this.createCombatHUD();
             document.documentElement.classList.add('combat-mode-active');
@@ -608,6 +608,7 @@ class PlayerController {
         const scoreContainer = document.createElement('div');
         scoreContainer.innerHTML = `
             <div style="color:#38bdf8; font-weight:bold; font-size:1.5rem; text-align:right; text-shadow:0 0 5px #38bdf8;">SCORE: <span id="combat-score-val">0</span></div>
+            <div style="color:#f59e0b; font-weight:bold; font-size:1rem; text-align:right; text-shadow:0 0 5px #f59e0b;">KILLS: <span id="combat-kills-val">0</span> / <span id="combat-next-boss-val">10</span></div>
             <div id="combat-ammo-container" style="color:#a855f7; font-weight:bold; font-size:1rem; text-align:right; display:none; text-shadow:0 0 5px #a855f7;">ULTRA BLASTER: <span id="combat-ammo-val">0</span></div>
         `;
 
@@ -641,6 +642,10 @@ class PlayerController {
 
         if (healthBar) healthBar.style.width = Math.max(0, this.health) + '%';
         if (scoreVal) scoreVal.innerText = this.score;
+        const killsVal = document.getElementById('combat-kills-val');
+        const nextBossVal = document.getElementById('combat-next-boss-val');
+        if (killsVal) killsVal.innerText = this.enemiesKilled;
+        if (nextBossVal) nextBossVal.innerText = this.nextBossThreshold;
         if (ammoCont && ammoVal) {
             ammoCont.style.display = 'block';
             ammoCont.innerHTML = `
@@ -930,7 +935,7 @@ class PlayerController {
         // Check for boss spawn every 50 kills
         if (this.enemiesKilled >= this.nextBossThreshold) {
             this.spawnBoss();
-            this.nextBossThreshold += 50;
+            this.nextBossThreshold += 10;
         }
 
         // --- Lasers Physics (Player) ---
@@ -958,11 +963,11 @@ class PlayerController {
                     this.spawnExplosion(e.mesh.position, 0xef4444);
                     this.sfx.playExplosion();
                     
-                    // 🚀 [v13.5] Diverse Powerup Drops
+                    // 🚀 [v13.5] Diverse Powerup Drops (Increased to 60% total drop rate)
                     const roll = Math.random();
-                    if (roll < 0.15) this.spawnPowerup(e.mesh.position.clone(), 'SENTINEL');
-                    else if (roll < 0.30) this.spawnPowerup(e.mesh.position.clone(), 'CANNON');
-                    else if (roll < 0.40) this.spawnPowerup(e.mesh.position.clone(), 'ULTRA');
+                    if (roll < 0.25) this.spawnPowerup(e.mesh.position.clone(), 'SENTINEL');
+                    else if (roll < 0.45) this.spawnPowerup(e.mesh.position.clone(), 'CANNON');
+                    else if (roll < 0.60) this.spawnPowerup(e.mesh.position.clone(), 'ULTRA');
                     break;
                 }
             }
@@ -1026,6 +1031,7 @@ class PlayerController {
                 this.health -= 10;
                 this.scene.remove(e.mesh);
                 this.enemies.splice(i, 1);
+                this.enemiesKilled++;
                 this.updateCombatHUD();
                 this.sfx.playExplosion();
             } else if (now - e.lastShot > e.shootDelay) {
@@ -1050,16 +1056,17 @@ class PlayerController {
         this.bosses.forEach(b => {
             b.mesh.lookAt(this.shipMesh.position);
             const dir = new THREE.Vector3().subVectors(this.shipMesh.position, b.mesh.position).normalize();
-            b.mesh.position.add(dir.multiplyScalar(1500 * delta)); // Faster seeking for giant ship
+            // 🚀 [v14.1] Aggressive Boss Speed (Matching player base speed)
+            b.mesh.position.add(dir.multiplyScalar(12000 * delta)); 
 
             if (b.healthBar) {
                 b.healthBar.position.copy(b.mesh.position);
-                b.healthBar.position.y += 12000;
+                b.healthBar.position.y += 120000;
                 b.healthBar.lookAt(this.camera.position);
             }
 
-            if (now - b.lastShot > 800) { // Faster fire rate
-                if (b.mesh.position.distanceTo(this.shipMesh.position) < 80000) {
+            if (now - b.lastShot > 600) { // Aggressive fire rate
+                if (b.mesh.position.distanceTo(this.shipMesh.position) < 1500000) {
                     // 🔫 Fire from a random turret
                     const turret = b.turrets[Math.floor(Math.random() * b.turrets.length)];
                     const turretWorldPos = new THREE.Vector3();
@@ -1139,7 +1146,7 @@ class PlayerController {
             p.mesh.rotation.y += 0.05;
             p.mesh.rotation.z += 0.02;
             
-            if (p.mesh.position.distanceTo(this.shipMesh.position) < 8000) {
+            if (p.mesh.position.distanceTo(this.shipMesh.position) < 50000) {
                 if (p.type === 'SENTINEL') {
                     this.shieldCharges = 3;
                     if (typeof log === 'function') log("🛡️ SENTINEL ACQUIRED: SHIELDS RECHARGED!", "#38bdf8");
@@ -1220,75 +1227,115 @@ class PlayerController {
     }
 
     spawnBoss() {
+        console.log("👾 [Combat] BOSS SPAWN TRIGGERED at threshold:", this.nextBossThreshold);
         const group = new THREE.Group();
         
-        // 🏛️ [v13.2] Advanced Imperial Star Destroyer
-        const hullMat = new THREE.MeshBasicMaterial({ color: 0x64748b });
+        // 🏛️ [v14.1] MEGA STAR DESTROYER - Ultra Detailed
+        const hullMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 }); // Lighter grey for better contrast
+        const darkHullMat = new THREE.MeshBasicMaterial({ color: 0x475569 });
+        const engineGlowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
         
-        // Main Wedge (Huge)
-        const wedgeGeo = new THREE.CylinderGeometry(0, 8000, 25000, 3);
+        // 1. Main Wedge (The iconic silhouette)
+        const wedgeGeo = new THREE.CylinderGeometry(0, 160000, 500000, 3);
         wedgeGeo.rotateX(Math.PI / 2);
         wedgeGeo.rotateZ(Math.PI / 6);
         const wedge = new THREE.Mesh(wedgeGeo, hullMat);
-        wedge.scale.set(1, 0.25, 1);
+        wedge.scale.set(1, 0.2, 1);
         group.add(wedge);
 
-        // Superstructure
-        const superGeo = new THREE.BoxGeometry(4000, 1500, 6000);
-        const superMesh = new THREE.Mesh(superGeo, hullMat);
-        superMesh.position.set(0, 1500, -5000);
-        group.add(superMesh);
+        // 2. Lateral Trenches (Depth)
+        for(let side of [-1, 1]) {
+            const trench = new THREE.Mesh(new THREE.BoxGeometry(10000, 15000, 480000), darkHullMat);
+            trench.position.set(side * 40000, 0, 0);
+            trench.rotation.y = side * 0.1;
+            group.add(trench);
+        }
 
-        // Shield Domes
-        const domeGeo = new THREE.SphereGeometry(400, 16, 16);
-        const dome1 = new THREE.Mesh(domeGeo, hullMat);
-        dome1.position.set(800, 3500, -6000);
-        const dome2 = new THREE.Mesh(domeGeo, hullMat);
-        dome2.position.set(-800, 3500, -6000);
-        group.add(dome1, dome2);
+        // 3. Central Superstructure Hierarchy
+        const deck1 = new THREE.Mesh(new THREE.BoxGeometry(80000, 10000, 120000), hullMat);
+        deck1.position.set(0, 20000, -80000);
+        group.add(deck1);
 
-        // 🔫 Automated Turrets
+        const deck2 = new THREE.Mesh(new THREE.BoxGeometry(50000, 8000, 80000), darkHullMat);
+        deck2.position.set(0, 30000, -100000);
+        group.add(deck2);
+
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(30000, 6000, 20000), hullMat);
+        bridge.position.set(0, 38000, -110000);
+        group.add(bridge);
+
+        // 4. Iconic Shield Domes (Sensor Arrays)
+        const domeGeo = new THREE.SphereGeometry(8000, 16, 16);
+        for(let side of [-1, 1]) {
+            const dome = new THREE.Mesh(domeGeo, hullMat);
+            dome.position.set(side * 15000, 45000, -115000);
+            group.add(dome);
+        }
+
+        // 5. Massive Engines (Rear Glow)
+        const engineGeo = new THREE.CylinderGeometry(20000, 25000, 15000, 16);
+        engineGeo.rotateX(Math.PI / 2);
+        const enginePositions = [[0, 0, -250000], [50000, 0, -245000], [-50000, 0, -245000]];
+        enginePositions.forEach(p => {
+            const engine = new THREE.Mesh(engineGeo, darkHullMat);
+            engine.position.set(p[0], p[1], p[2]);
+            group.add(engine);
+            
+            const glow = new THREE.Mesh(new THREE.CircleGeometry(22000, 16), engineGlowMat);
+            glow.position.set(p[0], p[1], p[2] - 7600);
+            glow.rotation.y = Math.PI;
+            group.add(glow);
+        });
+
+        // 🔫 Automated Heavy Turret Batteries
         const turrets = [];
-        const turretGeo = new THREE.BoxGeometry(400, 400, 400);
+        const turretGeo = new THREE.BoxGeometry(8000, 6000, 8000);
         const turretMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
         
         const turretPositions = [
-            [-3000, 500, 2000], [3000, 500, 2000],
-            [-2000, 500, -4000], [2000, 500, -4000],
-            [0, 2500, -3000], [0, 500, 8000]
+            [-50000, 15000, 50000], [50000, 15000, 50000],
+            [-30000, 25000, -20000], [30000, 25000, -20000],
+            [-10000, 42000, -110000], [10000, 42000, -110000],
+            [0, 10000, 150000] // Front battery
         ];
 
         turretPositions.forEach(p => {
-            const turret = new THREE.Mesh(turretGeo, turretMat);
-            turret.position.set(p[0], p[1], p[2]);
-            group.add(turret);
-            turrets.push(turret);
+            const tGroup = new THREE.Group();
+            const base = new THREE.Mesh(turretGeo, turretMat);
+            tGroup.add(base);
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(1000, 1000, 15000), turretMat);
+            barrel.rotateX(Math.PI / 2); barrel.position.z = 8000;
+            tGroup.add(barrel);
+            
+            tGroup.position.set(p[0], p[1], p[2]);
+            group.add(tGroup);
+            turrets.push(tGroup);
         });
 
         // 🏥 Boss Health Bar
         const healthBarGroup = new THREE.Group();
-        const bgGeo = new THREE.PlaneGeometry(20000, 1000);
+        const bgGeo = new THREE.PlaneGeometry(200000, 10000);
         const bgMesh = new THREE.Mesh(bgGeo, new THREE.MeshBasicMaterial({ color: 0x310000, side: THREE.DoubleSide }));
         
-        const fgGeo = new THREE.PlaneGeometry(20000, 1000);
-        fgGeo.translate(10000, 0, 0); 
+        const fgGeo = new THREE.PlaneGeometry(200000, 10000);
+        fgGeo.translate(100000, 0, 0); 
         const fgMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
         const fgMesh = new THREE.Mesh(fgGeo, fgMat);
-        fgMesh.position.x = -10000;
+        fgMesh.position.x = -100000;
         healthBarGroup.add(bgMesh, fgMesh);
 
-        // Spawn logic
-        const spawnDist = 150000;
+        // Spawn logic - Rescaled distance to 3,000,000 for visibility
+        const spawnDist = 3000000;
         const forward = new THREE.Vector3(0, 0, -spawnDist).applyEuler(this.rotation);
         group.position.copy(this.shipMesh.position).add(forward);
-        healthBarGroup.position.copy(group.position).add(new THREE.Vector3(0, 10000, 0));
+        healthBarGroup.position.copy(group.position).add(new THREE.Vector3(0, 120000, 0));
         
         this.scene.add(group);
         this.scene.add(healthBarGroup);
         
         this.bosses.push({ 
             mesh: group, 
-            hp: 2000, 
+            hp: 10000, 
             lastShot: Date.now(), 
             healthBar: healthBarGroup, 
             healthBarFill: fgMesh,
@@ -1320,16 +1367,17 @@ class PlayerController {
     spawnPowerup(pos, type = 'ULTRA') {
         let geo, mat, color;
         if (type === 'SENTINEL') {
-            // Rotating light blue sphere (Sentinel style)
-            geo = new THREE.SphereGeometry(1500, 16, 16);
+            // 🛡️ [v14.2] Normalized Sentinel Sprite (40% of Alien: 32,000 unit diameter)
+            geo = new THREE.SphereGeometry(16000, 16, 16);
             color = 0x38bdf8;
         } else if (type === 'CANNON') {
-            // Massive Blaster Cannon Sprite approximation
-            geo = new THREE.CylinderGeometry(800, 800, 5000);
+            // 🚀 [v14.2] Normalized Cannon Sprite (40% of Alien: 32,000 unit height)
+            geo = new THREE.CylinderGeometry(10000, 10000, 32000);
             geo.rotateX(Math.PI / 2);
             color = 0xf43f5e;
         } else {
-            geo = new THREE.BoxGeometry(1000, 1000, 1000);
+            // ⚡ [v14.2] Normalized Ultra Sprite (40% of Alien: 32,000 unit box)
+            geo = new THREE.BoxGeometry(32000, 32000, 32000);
             color = 0xa855f7;
         }
 

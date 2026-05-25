@@ -1,7 +1,8 @@
 import time
 import math
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import logging
+from datetime import datetime
 
 logger = logging.getLogger("EpistemicEngine")
 
@@ -95,7 +96,7 @@ class EpistemicCalculator:
         # Combine ID and timestamp of each supporting node
         foundation = "|".join([f"{n['id']}_{n.get('updated_at', n.get('created_at', 0))}" for n in sorted(supporting_nodes, key=lambda x: x['id'])])
         fingerprint = hashlib.sha256(f"{node_id}:{foundation}".encode()).hexdigest()
-        logger.info(f"🧬 Fingerprint generated for {node_id}: {fingerprint[:8]}...")
+        logger.debug(f"🧬 Fingerprint generated for {node_id}: {fingerprint[:8]}...")
         return fingerprint
 
     def validate_fingerprint(self, current_fingerprint: str, node_id: str, current_supporting_nodes: List[Dict]) -> bool:

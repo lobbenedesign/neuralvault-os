@@ -104,8 +104,28 @@ class Agent007Intelligence:
         """
         Protocollo Agent007-NER v9.0.0: Estrazione Reale via Ollama con Fallback Euristico.
         """
+        import asyncio
+        if self.engine and hasattr(self.engine, 'orchestrator'):
+            while getattr(self.engine.orchestrator, 'priority_mode', False):
+                await asyncio.sleep(1.0)
+                
         entities = []
         relations = []
+
+        # --- LAZY SEMAPHORE INITIALIZATION ---
+        if not hasattr(self, '_ollama_sem') or self._ollama_sem is None:
+            self._ollama_sem = asyncio.Semaphore(1)
+
+        # --- ADAPTIVE BACKPRESSURE CHECK ---
+        try:
+            sys_ram = psutil.virtual_memory().percent
+            sys_cpu = psutil.cpu_percent(interval=None)
+            if sys_ram > 80.0 or sys_cpu > 85.0:
+                print(f"⚠️ [Agent007] ADAPTIVE BACKPRESSURE: System resources saturated (RAM: {sys_ram}%, CPU: {sys_cpu}%). Forcing fast_mode=True to prevent lockup. Cooling down for 5s...")
+                fast_mode = True
+                await asyncio.sleep(5.0) # Forza un rallentamento cinetico per abbassare l'uso di CPU/RAM
+        except Exception as pe:
+            print(f"⚠️ [Agent007] Error checking system stats: {pe}")
         
         # --- ATTEMPT REAL LLM NER (OLLAMA) ---
         ollama_extracted = False
@@ -147,13 +167,15 @@ class Agent007Intelligence:
                 base_url = settings.get("ollama_url", "http://localhost:11434")
                 start_time = time.time()
                 # Timeout rimosso per permettere code di elaborazione (utile per grossi batch web)
-                with httpx.Client(timeout=None) as client:
-                    resp = client.post(f"{base_url}/api/generate", json={
-                        "model": selected_model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "format": "json"
-                    })
+                # Serialized execution via semaphore and asynchronous HTTP request
+                async with self._ollama_sem:
+                    async with httpx.AsyncClient(timeout=None) as client:
+                        resp = await client.post(f"{base_url}/api/generate", json={
+                            "model": selected_model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "format": "json"
+                        })
                     
                     duration_ms = (time.time() - start_time) * 1000
                     
@@ -321,6 +343,16 @@ class Agent007Intelligence:
         """
         🕵️ Protocollo Persona-Graph RAG (PG-RAG): Ingegneria Inversa dell'Identità.
         """
+        # --- ADAPTIVE SYSTEM LOAD CHECK ---
+        try:
+            sys_ram = psutil.virtual_memory().percent
+            sys_cpu = psutil.cpu_percent(interval=None)
+            if sys_ram > 95.0 or sys_cpu > 95.0:
+                print(f"⚠️ [Agent007] PG-RAG Persona Extraction skipped due to system load (RAM: {sys_ram}%, CPU: {sys_cpu}%).")
+                return
+        except Exception:
+            pass
+
         for ent in entities[:3]: # Limite a 3 entità per batch per evitare timeout
             name = ent.get('name')
             if not name: continue
@@ -341,23 +373,25 @@ class Agent007Intelligence:
             """
             
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(f"{base_url}/api/generate", json={
-                        "model": model, "prompt": prompt, "stream": False, "format": "json"
-                    })
-                    if resp.status_code == 200:
-                        data = json.loads(resp.json().get("response", "{}"))
-                        
-                        with self._lock:
-                            for cat, items in data.items():
-                                category = cat.upper()[:-1] if cat.endswith('s') else cat.upper()
-                                for item in items:
-                                    if len(item) < 5: continue
-                                    self.con.execute("""
-                                        INSERT OR REPLACE INTO agent007_personas 
-                                        (entity_id, category, content, evidence_node_id)
-                                        VALUES (?, ?, ?, ?)
-                                    """, (name, category, item, source_node_id))
+                # Serialized execution via semaphore and asynchronous HTTP request
+                async with self._ollama_sem:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(f"{base_url}/api/generate", json={
+                            "model": model, "prompt": prompt, "stream": False, "format": "json"
+                        })
+                        if resp.status_code == 200:
+                            data = json.loads(resp.json().get("response", "{}"))
+                            
+                            with self._lock:
+                                for cat, items in data.items():
+                                    category = cat.upper()[:-1] if cat.endswith('s') else cat.upper()
+                                    for item in items:
+                                        if len(item) < 5: continue
+                                        self.con.execute("""
+                                            INSERT OR REPLACE INTO agent007_personas 
+                                            (entity_id, category, content, evidence_node_id)
+                                            VALUES (?, ?, ?, ?)
+                                        """, (name, category, item, source_node_id))
             except: pass
 
     def get_entity_context(self, entity_name: str) -> Dict[str, Any]:

@@ -206,7 +206,7 @@ class NeuralVaultEngine:
         self.partitioner = SovereignGraphPartitioner(self) # [v9.0]
         self.last_routing = None
         
-        print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v8.4.0 Sovereign Maturity...")
+        print(f"🚀 [BOOT-TRACE-77i] CARICAMENTO CORE NEURALE v9.7.0 Sovereign Maturity...")
         self._tq_search = TwoStageTurboSearch(dim=dim)
             
         # v0.4.0 Pillars
@@ -284,12 +284,22 @@ class NeuralVaultEngine:
         self.mesh = MeshSyncManager(self, local_node_id=str(uuid.uuid4()))
         self.mesh.start()
         
+        # v11.0: P2P Wormholes Engine
+        from network.wormhole import SovereignWormholeManager
+        self.wormholes = SovereignWormholeManager(self)
+        
         self._synaptic_cursor = 0; # v17.0: Global scan cursor
         print("🕵️ Agent007-march: Sovereign Intelligence Engine ONLINE.")
         print("🏛️ Agent007-Blueprint: Mission Architect READY.")
         print("🏛️ Sovereign Ledger: Integrity Chain ACTIVE.")
         print("🧠 Active Learning: Self-Tuning Circuit Breaker ACTIVE.")
         print("🌌 Entropy Monitor: Dreaming Trigger ENABLED.")
+
+
+    @property
+    def db(self):
+        """[v9.7] Compatibility alias for the analytical engine (DuckDB)."""
+        return self._prefilter
 
 
     def _recovery_boot(self):
@@ -501,30 +511,39 @@ class NeuralVaultEngine:
 
     def _get_semantic_chunks(self, text: str) -> List[str]:
         """
-        Spezza il testo seguendo confini logici (Fase Singolarità: Modulo 1).
-        Evita di tagliare frasi a metà e mantiene i paragrafi coesi.
+        [v2.0] Markdown-Aware Semantic Chunking.
+        Taglia rigorosamente in corrispondenza degli heading (#) o paragrafi doppi.
+        Preserva l'integrità strutturale invece di un banale limite di caratteri.
         """
         if not text: return []
-        
-        # Se il testo è breve, un unico chunk
         if len(text) < 300: return [text]
         
-        # Euristica: Spezziamo su doppi a capo o singoli a capo se il testo è denso
-        split_token = "\n\n" if "\n\n" in text else "\n"
-        raw_chunks = [p.strip() for p in text.split(split_token) if p.strip()]
-        final_chunks = []
-        current_chunk = ""
+        import re
+        # Separa sezioni basate su Header Markdown
+        sections = re.split(r'\n(?=#{1,4}\s)', text)
         
-        for p in raw_chunks:
-            if len(current_chunk) + len(p) < 1200:
-                current_chunk += "\n\n" + p if current_chunk else p
-            else:
-                if current_chunk: final_chunks.append(current_chunk)
-                current_chunk = p
-                
-        if current_chunk:
-            final_chunks.append(current_chunk)
+        final_chunks = []
+        for sec in sections:
+            sec = sec.strip()
+            if not sec: continue
             
+            # Se la sezione è < 1200 chars, conservala intera (alta coesione semantica)
+            if len(sec) < 1200:
+                final_chunks.append(sec)
+                continue
+                
+            # Altrimenti spezzala ulteriormente sui doppi a capo
+            raw_chunks = [p.strip() for p in sec.split("\n\n") if p.strip()]
+            current_chunk = ""
+            for p in raw_chunks:
+                if len(current_chunk) + len(p) < 1200:
+                    current_chunk += "\n\n" + p if current_chunk else p
+                else:
+                    if current_chunk: final_chunks.append(current_chunk)
+                    current_chunk = p
+            if current_chunk:
+                final_chunks.append(current_chunk)
+                
         return final_chunks
 
     def delete_node(self, node_id: str):
@@ -628,6 +647,19 @@ class NeuralVaultEngine:
                 topic=relation,
                 description=f"Sinapsi creata: {source_id[:8]} --({relation})--> {target_id[:8]}"
             )
+            
+            # [Aegis v10.2] Project to event-sourced graph
+            try:
+                from retrieval.aegis_bus import aegis_bus
+                aegis_bus.emit("CAUSAL_EDGE_ADDED", {
+                    "source": source_id,
+                    "target": target_id,
+                    "type": str(relation),
+                    "weight": float(weight)
+                })
+            except Exception as e:
+                print(f"⚠️ [Aegis Bus Error] Failed to emit CAUSAL_EDGE_ADDED: {e}")
+                
             return True
         return False
 
@@ -704,29 +736,125 @@ class NeuralVaultEngine:
 
     async def upsert_text(self, text: str, collection: str = "default", metadata: Dict = None, node_id: str = None) -> VaultNode:
         """
-        v1.3.0: High-Fidelity Semantic Ingestion.
+        v2.0.0: High-Fidelity Semantic Ingestion + Contextual Retrieval (Anthropic 2024).
         """
         meta = metadata or {}
         filename = meta.get("source", "raw_input")
+        doc_title = meta.get("title", filename)
         
-        # 1. Semantic Boundary Analysis
+        # --- AST Code Extraction per Python Files (Sprint 2) ---
+        file_type = meta.get("file_type", "")
+        if filename.endswith(".py") or file_type == "py":
+            try:
+                from retrieval.ast_extractor import SovereignASTExtractor
+                from pathlib import Path
+                extractor = SovereignASTExtractor(Path.cwd())
+                ast_data = extractor.extract_ast_from_text(text, filename, meta.get("namespace", "root") + "/" + filename)
+                
+                if ast_data and "module" in ast_data:
+                    # Abbiamo estratto l'AST con successo!
+                    print(f"🌲 [AST] Parsed {filename}: {len(ast_data['classes'])} classi, {len(ast_data['functions'])} funzioni trovate.")
+                    
+                    # Raccogliamo tutti i nodi generati
+                    nodes = []
+                    coll = meta.get("source", "default")
+                    
+                    # Ingest Module
+                    m_data = ast_data["module"]
+                    m_node = VaultNode(id=m_data["id"], collection=coll, text=m_data["text"], vector=self._embed_text(m_data["text"]), metadata={**meta, "type": m_data["type"]})
+                    nodes.append(m_node)
+                    
+                    # Mappa ID per linking rapido
+                    node_map = {m_data["id"]: m_node}
+                    
+                    # Ingest Classes
+                    for c_data in ast_data["classes"]:
+                        c_node = VaultNode(id=c_data["id"], collection=coll, text=c_data["text"], vector=self._embed_text(c_data["text"]), metadata={**meta, "type": c_data["type"]})
+                        nodes.append(c_node)
+                        node_map[c_data["id"]] = c_node
+                        # Edge: Class -> Module
+                        c_node.edges.append(SemanticEdge(target_id=c_data["parent_id"], relation=RelationType.CHILD_OF, weight=1.0))
+                    
+                    # Ingest Functions
+                    for f_data in ast_data["functions"]:
+                        f_node = VaultNode(id=f_data["id"], collection=coll, text=f_data["text"], vector=self._embed_text(f_data["text"]), metadata={**meta, "type": f_data["type"]})
+                        nodes.append(f_node)
+                        node_map[f_data["id"]] = f_node
+                        # Edge: Function -> Parent (Class or Module)
+                        f_node.edges.append(SemanticEdge(target_id=f_data["parent_id"], relation=RelationType.CHILD_OF, weight=1.0))
+                        
+                    # Calls (Call Graph)
+                    for call_data in ast_data["calls"]:
+                        caller = node_map.get(call_data["caller_id"])
+                        if caller:
+                            # Edge implicito verso il nome della funzione (potrebbe essere risolto in un secondo passo)
+                            # Per ora teniamo traccia del nome nei metadati
+                            if "calls" not in caller.metadata: caller.metadata["calls"] = []
+                            caller.metadata["calls"].append(call_data["callee_name"])
+
+                    await self.upsert_batch(nodes)
+                    print(f"🧠 [Kernel] AST Ingest: Ingeriti {len(nodes)} nodi strutturali per {filename}.")
+                    return nodes[0]
+            except Exception as ast_err:
+                print(f"⚠️ [AST] Fallito per {filename}, fallback al chunking standard. Err: {ast_err}")
+
+        # 1. Semantic Boundary Analysis (Markdown-Aware)
         semantic_chunks = self._get_semantic_chunks(text)
         
         if len(semantic_chunks) > 1:
-            nodes = []
-            for i, chunk_text in enumerate(semantic_chunks):
-                cid = f"{node_id or uuid.uuid4().hex[:6]}_{i}"
-                v = self._embed_text(chunk_text)
-                coll = meta.get("source", "default")
-                nodes.append(VaultNode(id=cid, collection=coll, text=chunk_text, vector=v, metadata={**meta, "chunk_idx": i}))
+            # --- CONTEXTUAL RETRIEVAL (Parallel Fast Sweeping) ---
+            async def _get_context(c_text):
+                if hasattr(self, 'orchestrator') and self.orchestrator:
+                    try:
+                        prompt = (
+                            f"Document: {doc_title}\n\n"
+                            f"Below is a chunk from this document:\n<chunk>\n{c_text[:500]}\n</chunk>\n\n"
+                            f"Write a single sentence (max 20 words) explaining the context of this chunk within the document. Return ONLY the sentence."
+                        )
+                        model = getattr(self, 'settings', {}).get("chat", "llama3.2:3b") if hasattr(self, 'settings') else "llama3.2:3b"
+                        return await self.orchestrator.ask_fast(prompt, model=model)
+                    except: return ""
+                return ""
             
-            # Creazione sinapsi sequenziali automatiche (Narrative Chain)
+            import asyncio
+            sem = asyncio.Semaphore(3) # Limit parallel requests to Ollama to prevent ReadTimeout
+            
+            async def _get_context_safe(c_text):
+                async with sem:
+                    return await _get_context(c_text)
+                    
+            contexts = await asyncio.gather(*[_get_context_safe(c) for c in semantic_chunks])
+            
+            nodes = []
+            for i, (chunk_text, ctx) in enumerate(zip(semantic_chunks, contexts)):
+                cid = f"{node_id or uuid.uuid4().hex[:6]}_{i}"
+                
+                contextualized_text = chunk_text
+                meta_aggiornata = {**meta, "chunk_idx": i}
+                
+                if ctx and len(ctx.strip()) > 10:
+                    context_summary = ctx.strip().replace('"', '')
+                    # Vector is calculated on contextualized text
+                    contextualized_text = f"Context: {context_summary}\n\n{chunk_text}"
+                    meta_aggiornata["context_summary"] = context_summary
+                    
+                v = self._embed_text(contextualized_text)
+                coll = meta.get("source", "default")
+                
+                # Node stores the RAW original chunk, hiding the context trick from the user
+                nodes.append(VaultNode(id=cid, collection=coll, text=chunk_text, vector=v, metadata=meta_aggiornata))
+            
+            # Creazione sinapsi gerarchiche (Narrative Chain & Parent-Child)
             for i in range(len(nodes) - 1):
                 nodes[i].edges.append(SemanticEdge(target_id=nodes[i+1].id, relation=RelationType.SEQUENTIAL))
+                
+            if node_id:
+                for n in nodes:
+                    n.edges.append(SemanticEdge(target_id=node_id, relation=RelationType.CHILD_OF, weight=1.0))
             
             await self.upsert_batch(nodes)
             
-            print(f"🧠 [Kernel] Structural Ingest: Created {len(nodes)} logic nodes for {filename}.")
+            print(f"🧠 [Kernel] Contextual Ingest: Created {len(nodes)} logic nodes for {filename}.")
             return nodes[0]
             
         # 2. Fallback: Spezziamo testi lunghi se non strutturati
@@ -1175,9 +1303,11 @@ class NeuralVaultEngine:
         # [v4.2.0] CORRECTIVE RAG (CRAG)
         # Se i risultati sono poveri (< 0.4 score) o assenti, attiviamo il recupero correttivo
         # [v8.4.3] Evitiamo di triggerare CRAG per query vuote (es. da Semantic Diff)
+        # [v9.7.1] SKIP CRAG during Priority Mode to maximize responsiveness
         is_context_poor = not results or results[0].final_score < 0.45
+        skip_crag = getattr(self, 'priority_mode', False)
         
-        if is_context_poor and hasattr(self, 'orchestrator') and len(query_text.strip()) > 3:
+        if is_context_poor and hasattr(self, 'orchestrator') and len(query_text.strip()) > 3 and not skip_crag:
             print(f"📡 [CRAG] Low confidence retrieval ({results[0].final_score if results else 0:.2f}). Triggering knowledge expansion...")
             try:
                 # Incursione rapida via Skywalker Agent (FS-77)
@@ -1387,7 +1517,9 @@ class NeuralVaultEngine:
                     "theme": cluster_key,
                     "label": (n.text[:40] + "...") if n.text else "...",
                     "created_at": n.created_at,
-                    "media_type": n.metadata.get("media_type")
+                    "media_type": n.metadata.get("media_type"),
+                    "is_galaxy": n.metadata.get("is_galaxy", False),
+                    "metadata": n.metadata
                 })
             except Exception:
                 continue

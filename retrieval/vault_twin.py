@@ -2,6 +2,7 @@ import logging
 import json
 import uuid
 import copy
+import time
 from typing import Dict, Any, List, Optional, Set
 from index.node import VaultNode
 
@@ -29,7 +30,7 @@ class SovereignVaultTwin:
             "delta_nodes": {},                   # Nodes added or modified in the twin
             "deleted_ids": set(),                # Nodes deleted in the twin
             "mutations": [],
-            "created_at": uuid.uuid1().timestamp
+            "created_at": time.time()
         }
         
         self.logger.info(f"🌓 CoW Twin Created: {twin_id}. Initial impact: 0 nodes.")

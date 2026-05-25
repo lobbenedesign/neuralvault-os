@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css?v=2.7.7">
     <link rel="stylesheet" href="/static/css/wiki_optimizations.css?v=8.4">
+    <link rel="stylesheet" href="/static/css/wiki_v3.css?v=9.6">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style id="wiki-premium-tooltips">
@@ -918,35 +919,60 @@
     <section class="top-section">
         <aside class="sidebar" id="main-app-sidebar">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <div style="font-size: 1.2rem; font-weight: 800; background: linear-gradient(135deg, #a855f7, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">NEXUS VAULT</div>
+                <div style="display: flex; align-items: center;">
+                    <div style="font-size: 1.2rem; font-weight: 800; background: linear-gradient(135deg, #a855f7, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">NEURAL VAULT</div>
+                    <span style="background: rgba(168, 85, 247, 0.25); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc; font-size: 0.55rem; padding: 2px 6px; border-radius: 4px; font-weight: 900; margin-left: 8px; font-family: 'JetBrains Mono'; vertical-align: middle; display: inline-block;">v10.2</span>
+                </div>
                 <button onclick="toggleMainSidebar()" style="background: transparent; border: none; color: rgba(255,255,255,0.3); cursor: pointer; transition: 0.3s;" title="Collapse Sidebar"><i class="fas fa-chevron-left"></i></button>
             </div>
             
             <div style="margin-bottom: 2.5rem; border-left: 2px solid #4ade80; padding-left: 1rem; position: relative;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
                     <div style="font-size: 0.55rem; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase;" id="label-system-status" data-i18n="system_status">SYSTEM STATUS</div>
                     <div id="language-toggle" onclick="toggleLanguage()" style="cursor: pointer; font-size: 1.1rem; transition: 0.3s;" title="Switch Language">
                         <span id="current-flag">🇬🇧</span>
                     </div>
                 </div>
-                <div style="font-size: 0.75rem; color: #4ade80; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; margin-top: 5px;">
-                    <span class="pulse-dot"></span> <span id="label-kernel-online" data-i18n="kernel_online">KERNEL ONLINE</span>
+                
+                <!-- 📡 Horizontal Row of 4 Icons with premium tooltips -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.6rem;">
+                    <!-- 1. Kernel Status Icon (Online Check) -->
+                    <div style="cursor: help;" title="Kernel: Online (In esecuzione su Apple Silicon / CPU)">
+                        <i class="fas fa-check-circle" style="color: #4ade80; font-size: 0.85rem; filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.4));"></i>
+                    </div>
+                    
+                    <!-- 2. Secure Status Icon (Aegis Security Check) -->
+                    <div style="cursor: help;" title="Secure: 100% (Integrità dati e cifratura Merkle attiva)">
+                        <i class="fas fa-shield-alt" style="color: #4ade80; font-size: 0.85rem; filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.4));"></i>
+                        <!-- Keep ID integrity-score active & hidden to support dynamic JS status text updates without crashing -->
+                        <span id="integrity-score" style="display: none;">100% SECURE</span>
+                    </div>
+                    
+                    <!-- 3. Oracle Status Icon (Rhombus/Gem Uplink Check) -->
+                    <div style="cursor: help; transform: rotate(45deg); display: inline-block;" title="Oracle: 100% (Uplink con l'Oracolo Neurale attivo)">
+                        <i class="fas fa-square" style="color: #3b82f6; font-size: 0.75rem; filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4));"></i>
+                    </div>
+                    
+                    <!-- 4. Health Status Icon (Heartbeat System Check) -->
+                    <div style="cursor: help;" title="Health: 100% (Stato di salute dei shard e dei tier ottimale)">
+                        <i class="fas fa-heartbeat" style="color: #0d9488; font-size: 0.85rem; filter: drop-shadow(0 0 3px rgba(13, 148, 136, 0.4));"></i>
+                    </div>
                 </div>
 
-                <!-- 🛡️ [v11.5] Moved Integrity Status -->
-                <div id="self-healing-hud" style="margin-top: 15px; display: flex; align-items: center; gap: 8px; cursor: help;" data-tooltip="Self-Healing Engine: Monitoraggio bit-rot e integrità Merkle.">
-                    <i class="fas fa-shield-alt" id="integrity-icon" style="color: #4ade80; font-size: 0.9rem;"></i>
-                    <span id="integrity-score" style="color: #4ade80; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.5px;">100% SECURE</span>
-                </div>
-
-                <!-- 🧬 [v11.5] Moved Cognitive DNA (Smaller) -->
-                <div id="cognitive-dna-hud" style="margin-top: 8px; display: flex; align-items: center; gap: 8px; opacity: 0.8; cursor: help;" data-tooltip="Query DNA Fingerprint: Analisi proattiva del profilo cognitivo.">
-                    <i class="fas fa-dna" style="color: #3b82f6; font-size: 0.7rem;"></i>
+                <!-- 🧬 [v11.5] Dynamic Cognitive DNA status text -->
+                <div id="cognitive-dna-hud" style="display: flex; align-items: center; gap: 6px; opacity: 0.85; cursor: help;" title="Query DNA Fingerprint: Analisi proattiva del profilo cognitivo.">
+                    <i class="fas fa-dna" style="color: #3b82f6; font-size: 0.75rem;"></i>
                     <span id="cognitive-status" style="font-size: 0.55rem; color: #94a3b8; font-family: 'JetBrains Mono';">Analyzing DNA...</span>
                 </div>
             </div>
             <nav style="display: flex; flex-direction: column; gap: 0.25rem;">
                 <div class="nav-item active" onclick="showSection('overview')" id="nav-overview" data-i18n="nav_overview">PANORAMICA MEMORIA</div>
+                <div class="nav-item" onclick="showSection('tactical')" id="nav-tactical">
+                    <i class="fas fa-satellite" style="margin-right: 10px;"></i> <span data-i18n="nav_tactical">GRAPH LAB</span>
+                </div>
+                <div class="nav-item" onclick="showSection('vrag2d')" id="nav-vrag2d">
+                    <i class="fas fa-project-diagram" style="margin-right: 10px;"></i> <span>2D V-RAG</span>
+                </div>
                 <div class="nav-item" onclick="showSection('lab')" id="nav-lab">
                     <i class="fas fa-microscope" style="margin-right: 10px;"></i> <span data-i18n="nav_lab">LABORATORIO NEURALE</span>
                 </div>
@@ -1404,12 +1430,26 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <!-- 🖨️ [PB-404] Paperboy HUD -->
+                                    <div class="agent-mission-item mt-2 inactive-agent" id="pressman-hud-icon" onclick="toggleFollow('PB-404')">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="agent-avatar-mini" style="background:#8b5cf6; box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);"><i class="fas fa-newspaper"></i></div>
+                                            <div class="flex-grow-1" style="width: 100%;">
+                                                <div class="agent-name-mini" style="color: #a78bfa;">PB-404 PAPERBOY</div>
+                                                <div id="pressman-mission-stat" class="stat-badge" style="background:rgba(139, 92, 246, 0.1); color: #a78bfa; display: flex; gap: 4px; font-size: 0.5rem; width: 100%;">
+                                                    <span>ARTICLES: <span id="val-pressman-artifacts">0</span></span>
+                                                    <span style="border-left: 1px solid rgba(139, 92, 246, 0.3); padding-left: 4px;">STATUS: <span id="val-pressman-status">Idle</span></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
                     <!-- 🕵️ NODE INSPECTOR MODAL (Sovereign Deep Inspection v4.8) -->
                     <div id="node-inspector-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(25px); z-index: 40000; display: none; align-items: center; justify-content: center; padding: 2rem;">
@@ -1458,26 +1498,15 @@
 
                     <!-- 🌐 SOVEREIGN UNIFIED HUD (Persistent Immersion Deck) -->
                     <div id="cycloscope-hud" style="position: absolute; bottom: 2rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: 90%; display: flex; align-items: center; justify-content: center; gap: 1rem; z-index: 50000; pointer-events: none;">
-                        <!-- 🌑 [v9.0] SHADOW STATS -->
-                        <div id="shadow-stats-hud" class="glass-card" style="padding: 0.5rem 1rem; border: 1px solid rgba(59, 130, 246, 0.4); display: flex; align-items: center; gap: 10px; pointer-events: all; cursor: help;" title="Oracle Predictive Accuracy (Shadow Mode)">
-                            <div class="quantum-hud" style="width: 14px; height: 14px;"></div>
-                            <div style="font-size: 0.6rem; font-weight: 800; color: #3b82f6; letter-spacing: 1px;">
-                                ORACLE: <span id="val-shadow-acc">100%</span>
-                            </div>
-                        </div>
+                        <!-- Hidden trackers to preserve JS updates safely -->
+                        <span id="val-shadow-acc" style="display:none;">100%</span>
+                        <span id="val-vault-health" style="display:none;">100%</span>
 
-                        <!-- 🌡️ [v9.0] HEALTH STATS -->
-                        <div id="health-stats-hud" class="glass-card" style="padding: 0.5rem 1rem; border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; gap: 10px; pointer-events: all; cursor: help;" title="Global Vault Knowledge Health (Ebbinghaus Decay)">
-                            <i class="fas fa-heartbeat" style="color: #10b981; font-size: 0.8rem;"></i>
-                            <div style="font-size: 0.6rem; font-weight: 800; color: #10b981; letter-spacing: 1px;">
-                                HEALTH: <span id="val-vault-health">100%</span>
-                            </div>
+                        <!-- 🧬 [v4.3.1] REM Phase Indicator -->
+                        <div id="rem-phase-indicator" class="super-metrics-hud hidden" data-tooltip="Fase REM: Consolidamento neurale in corso. Il sistema sta ottimizzando il grafo e risolvendo contraddizioni.">
+                            <div class="pulse-dot" style="background: #a855f7; box-shadow: 0 0 15px #a855f7;"></div>
+                            <span style="color: #a855f7; font-weight: 800;">REM PHASE ACTIVE</span>
                         </div>
-            <!-- 🧬 [v4.3.1] REM Phase Indicator -->
-            <div id="rem-phase-indicator" class="super-metrics-hud hidden" data-tooltip="Fase REM: Consolidamento neurale in corso. Il sistema sta ottimizzando il grafo e risolvendo contraddizioni.">
-                <div class="pulse-dot" style="background: #a855f7; box-shadow: 0 0 15px #a855f7;"></div>
-                <span style="color: #a855f7; font-weight: 800;">REM PHASE ACTIVE</span>
-            </div>
 
             <!-- DNA & Integrity moved to Sidebar [v11.5] -->
                         <!-- 💎 [LEFT] QUALITY SELECTOR -->
@@ -1540,10 +1569,1380 @@
                                     </div>
                                 </div>
                              </div>
+                             <div style="position: relative;">
+                                <button onclick="toggleGalaxyRepulsionMenu()" class="btn-push-sovereign" style="background: rgba(168, 85, 247, 0.1); border: none; color: #a855f7; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Galaxy Repulsion Force"><i class="fas fa-atom"></i></button>
+                                <div id="galaxy-repulsion-menu" class="hidden" style="position: absolute; bottom: 65px; left: 0; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; width: 220px; padding: 1rem; flex-direction: column; gap: 0.8rem; box-shadow: 0 -10px 30px rgba(0,0,0,0.5); z-index: 16000; display: none;">
+                                    <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; margin-bottom: 0.5rem; letter-spacing: 1px;">REPULSIONE_GALASSIE</div>
+                                    <input type="range" id="galaxy-repulsion-slider" min="1" max="100" step="1" value="25" style="width: 100%; cursor: pointer; accent-color: #a855f7;" oninput="updateGalaxyRepulsion(this.value)">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.5rem; color: #8b949e; font-family: 'JetBrains Mono';">
+                                        <span>1x</span>
+                                        <span>25x (Rac)</span>
+                                        <span>50x</span>
+                                        <span>100x</span>
+                                    </div>
+                                    <div id="repulsion-value-label" style="font-size: 0.55rem; color: #a855f7; font-family: 'JetBrains Mono'; text-align: center; font-weight: bold; margin-top: 2px;">Moltiplicatore: 25.0x</div>
+                                </div>
+                             </div>
                              <button id="rotation-toggle-btn" onclick="toggleRotation()" class="btn-push-sovereign" style="background: rgba(16, 185, 129, 0.1); border: none; color: #10b981; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;" data-i18n-title="label_rotation_pause" title="Pause/Play Rotation"><i class="fas fa-pause"></i></button>
                              <button onclick="toggleCycloscopeFullscreen()" class="btn-push-sovereign" style="background: rgba(34, 211, 238, 0.1); border: none; color: #22d3ee; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;" data-i18n-title="label_immersion" title="Total Immersion"><i class="fas fa-expand"></i></button>
                         </div>
                     </div>
+                </div>
+            </div>
+            <!-- 🛸 2D V-RAG View -->
+            <div id="vrag2d-view" class="view-container" style="display: none; width: 100%; height: 100%; overflow: hidden; padding: 20px;">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gl-bg: #0a0c12;
+  --gl-panel: #111420;
+  --gl-border: rgba(255,255,255,0.07);
+  --gl-accent: #6366f1;
+  --gl-accent2: #22d3ee;
+  --gl-text: #e2e8f0;
+  --gl-muted: #64748b;
+  --gl-god: #f59e0b;
+  --gl-surprise: #ec4899;
+}
+#vrag2d-view { background: var(--gl-bg); font-family: var(--font-sans, sans-serif); color: var(--gl-text); }
+
+#graph-lab { display: flex; height: 100%; width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--gl-border); background: var(--gl-bg); }
+
+#sidebar { width: 240px; min-width: 240px; background: var(--gl-panel); border-right: 1px solid var(--gl-border); display: flex; flex-direction: column; }
+#sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--gl-border); }
+#sidebar-title { font-size: 11px; font-weight: 500; letter-spacing: .08em; color: var(--gl-muted); text-transform: uppercase; }
+#search-box { width: 100%; margin-top: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--gl-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; color: var(--gl-text); outline: none; }
+#search-box::placeholder { color: var(--gl-muted); }
+#search-box:focus { border-color: var(--gl-accent); }
+
+#filters { padding: 12px 16px; border-bottom: 1px solid var(--gl-border); }
+.filter-label { font-size: 11px; color: var(--gl-muted); margin-bottom: 8px; font-weight: 500; }
+.filter-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pill { font-size: 11px; padding: 3px 9px; border-radius: 20px; border: 1px solid; cursor: pointer; transition: all .15s; user-select: none; }
+.pill.active { color: white; }
+
+#god-nodes-panel { padding: 12px 16px; border-bottom: 1px solid var(--gl-border); }
+.god-node-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; cursor: pointer; border-radius: 4px; }
+.god-node-item:hover { opacity: .75; }
+.god-badge { width: 8px; height: 8px; border-radius: 50%; background: var(--gl-god); flex-shrink: 0; }
+.god-label { font-size: 12px; color: var(--gl-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.god-degree { font-size: 11px; color: var(--gl-muted); }
+
+#surprises-panel { padding: 12px 16px; flex: 1; overflow-y: auto; }
+.surprise-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); cursor: pointer; }
+.surprise-item:hover { opacity: .75; }
+.surprise-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gl-surprise); margin-top: 4px; flex-shrink: 0; }
+.surprise-text { font-size: 11px; color: var(--gl-muted); line-height: 1.5; }
+.surprise-text strong { color: var(--gl-text); font-weight: 500; }
+
+#canvas-area { flex: 1; position: relative; overflow: hidden; }
+#graph-canvas { width: 100%; height: 100%; }
+
+#node-info { position: absolute; top: 12px; right: 12px; width: 210px; background: var(--gl-panel); border: 1px solid var(--gl-border); border-radius: 10px; padding: 14px; display: none; }
+#node-info.visible { display: block; }
+#ni-type { font-size: 10px; letter-spacing:.07em; text-transform: uppercase; color: var(--gl-muted); margin-bottom: 4px; }
+#ni-name { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+#ni-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ni-stat { background: rgba(255,255,255,.04); border-radius: 6px; padding: 7px 10px; }
+.ni-stat-label { font-size: 10px; color: var(--gl-muted); }
+.ni-stat-value { font-size: 14px; font-weight: 500; margin-top: 2px; }
+
+#toolbar { position: absolute; bottom: 12px; left: 12px; display: flex; gap: 6px; }
+.tb-btn { background: var(--gl-panel); border: 1px solid var(--gl-border); border-radius: 7px; padding: 7px 12px; font-size: 12px; color: var(--gl-text); cursor: pointer; transition: all .15s; }
+.tb-btn:hover { border-color: var(--gl-accent); color: var(--gl-accent); }
+.tb-btn.active { background: var(--gl-accent); border-color: var(--gl-accent); color: white; }
+
+#legend { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 10px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--gl-muted); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+#hud { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; }
+.hud-badge { background: rgba(10,12,18,.8); border: 1px solid var(--gl-border); border-radius: 6px; padding: 5px 10px; font-size: 11px; color: var(--gl-muted); backdrop-filter: blur(4px); }
+.hud-badge span { color: var(--gl-text); font-weight: 500; }
+
+#blast-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; display: none; }
+.blast-ring { border-radius: 50%; border: 2px solid rgba(239,68,68,.5); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); animation: blast 1.5s ease-out infinite; }
+@keyframes blast { 0%{width:20px;height:20px;opacity:1} 100%{width:120px;height:120px;opacity:0} }
+
+#edge-mode-btn.active { background: rgba(99,102,241,.2); border-color: var(--gl-accent); }
+#depth-filter { width: 90px; }
+
+.community-legend { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.comm-pill { width: 10px; height: 10px; border-radius: 3px; cursor: pointer; opacity: .9; transition: opacity .15s; }
+.comm-pill:hover { opacity: 1; transform: scale(1.2); }
+.comm-pill.dimmed { opacity: .25; }
+</style>
+
+<h2 class="sr-only" style="display:none;">Graph Lab — NeuralVault 2D knowledge graph explorer with god nodes, surprising connections, community detection, and impact analysis.</h2>
+
+<div id="graph-lab">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div id="sidebar-title">Graph Lab</div>
+      <input id="search-box" placeholder="Search nodes..." type="text" />
+      <div class="community-legend" id="comm-legend"></div>
+    </div>
+
+    <div id="filters">
+      <div class="filter-label">Node types</div>
+      <div class="filter-pills" id="type-filters"></div>
+    </div>
+
+    <div id="god-nodes-panel">
+      <div class="filter-label" style="margin-bottom:8px">God nodes <span style="color:var(--gl-god)">★</span></div>
+      <div id="god-list"></div>
+    </div>
+
+    <div id="surprises-panel">
+      <div class="filter-label" style="margin-bottom:8px">Surprising connections <span style="color:var(--gl-surprise)">↗</span></div>
+      <div id="surprise-list"></div>
+    </div>
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="graph-canvas"></canvas>
+
+    <div id="hud">
+      <div class="hud-badge">Nodes <span id="hud-nodes">0</span></div>
+      <div class="hud-badge">Edges <span id="hud-edges">0</span></div>
+      <div class="hud-badge">Communities <span id="hud-comm">0</span></div>
+    </div>
+
+    <div id="node-info">
+      <div id="ni-type"></div>
+      <div id="ni-name"></div>
+      <div id="ni-stats">
+        <div class="ni-stat"><div class="ni-stat-label">Degree</div><div class="ni-stat-value" id="ni-degree">-</div></div>
+        <div class="ni-stat"><div class="ni-stat-label">Community</div><div class="ni-stat-value" id="ni-comm">-</div></div>
+        <div class="ni-stat"><div class="ni-stat-label">Confidence</div><div class="ni-stat-value" id="ni-conf">-</div></div>
+        <div class="ni-stat"><div class="ni-stat-label">Type</div><div class="ni-stat-value" id="ni-type2">-</div></div>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <button class="tb-btn active" id="physics-btn" onclick="togglePhysics()">Physics ON</button>
+      <button class="tb-btn" id="blast-btn" onclick="toggleBlastMode()">Blast Radius</button>
+      <button class="tb-btn" onclick="resetCamera()">Reset</button>
+      <button class="tb-btn" id="edge-mode-btn" onclick="toggleEdgeMode()">Confidence</button>
+    </div>
+
+    <div id="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--gl-god)"></div>God node</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--gl-surprise)"></div>Surprise</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#10b981"></div>EXTRACTED</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#6366f1"></div>INFERRED</div>
+    </div>
+
+    <div id="blast-indicator">
+      <div class="blast-ring" style="animation-delay:0s"></div>
+      <div class="blast-ring" style="animation-delay:.5s"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const vragCanvas = document.getElementById('graph-canvas');
+const vragCtx = vragCanvas.getContext('2d');
+
+const vragCOLORS = {
+  module:    '#6366f1',
+  class:     '#f59e0b',
+  function:  '#10b981',
+  knowledge: '#22d3ee',
+  wiki:      '#8b5cf6',
+  agent:     '#ec4899',
+  concept:   '#0ea5e9',
+  default:   '#64748b'
+};
+
+const vragCOMM_COLORS = ['#6366f1','#22d3ee','#10b981','#f59e0b','#ec4899','#0ea5e9','#8b5cf6','#f97316','#14b8a6','#84cc16'];
+
+let vragGRAPH = { nodes: [], edges: [] };
+
+function vragSyncData() {
+  if (!window.vaultPoints || window.vaultPoints.length === 0) return;
+
+  const MAX_NODES = 1000;
+  
+  // Calculate degree for each node from window.lastNeuralLinks
+  const degreeMap = {};
+  const allLinks = window.lastNeuralLinks || [];
+  allLinks.forEach(l => {
+    degreeMap[l.source] = (degreeMap[l.source] || 0) + 1;
+    degreeMap[l.target] = (degreeMap[l.target] || 0) + 1;
+  });
+
+  // Sort nodes by degree and take top MAX_NODES
+  let sortedPoints = [...window.vaultPoints].sort((a, b) => (degreeMap[b.id] || 0) - (degreeMap[a.id] || 0));
+  let topPoints = sortedPoints.slice(0, MAX_NODES);
+  
+  const validIds = new Set(topPoints.map(p => p.id));
+  
+  // Create Nebula Madre
+  const motherNode = {
+      id: 'NEBULA_MADRE',
+      label: 'NEBULA MADRE (Aura OS)',
+      type: 'god',
+      community: 0,
+      x: 0,
+      y: 0,
+      degree: 100,
+      confidence: 1.0,
+      isGod: true,
+      _original: { id: 'NEBULA_MADRE', label: 'NEBULA MADRE' }
+  };
+  
+  // Extract Galaxies (Namespaces) from KB
+  const galaxies = {};
+  if (window.fullKBTreeList) {
+      window.fullKBTreeList.forEach(p => {
+          const ns = p.namespace || "General";
+          if (!galaxies[ns]) galaxies[ns] = [];
+          galaxies[ns].push(p.file_name);
+      });
+  } else {
+      // Fallback
+      galaxies["System"] = []; galaxies["Data"] = []; galaxies["General"] = [];
+  }
+  
+  const galaxyNodes = [];
+  const galaxyEdges = [];
+  const radiusGalaxies = 200;
+  let angleStep = (Math.PI * 2) / Object.keys(galaxies).length;
+  let currentAngle = 0;
+  
+  Object.keys(galaxies).forEach((ns, i) => {
+      const gId = `GALAXY_${ns}`;
+      validIds.add(gId);
+      galaxyNodes.push({
+          id: gId,
+          label: `Galassia: ${ns}`,
+          type: 'wiki',
+          community: (i % vragCOMM_COLORS.length),
+          x: Math.cos(currentAngle) * radiusGalaxies,
+          y: Math.sin(currentAngle) * radiusGalaxies,
+          degree: 50,
+          confidence: 1.0,
+          isGod: true,
+          _original: { id: gId, label: ns }
+      });
+      galaxyEdges.push({
+          s: 'NEBULA_MADRE',
+          t: gId,
+          rel: 'ORBITS',
+          conf: 'EXTRACTED',
+          isSurprise: false
+      });
+      currentAngle += angleStep;
+  });
+
+  const nodeElements = topPoints.map((p, index) => {
+    // Map cluster/label to community
+    let comm = 0;
+    if (p.cluster !== undefined) comm = p.cluster;
+    else if (p.group !== undefined) comm = p.group;
+    else comm = Math.abs(hashCode(p.type || 'default')) % vragCOMM_COLORS.length;
+
+    // Distribute nodes in a circle
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 300 + Math.random() * 500;
+
+    return {
+      id: p.id,
+      label: p.label || p.id,
+      type: p.type || 'knowledge',
+      community: comm,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      degree: degreeMap[p.id] || 0,
+      confidence: p.confidence || 0.9,
+      isGod: false, // Only Mother and Galaxies are God in this view
+      _original: p
+    };
+  });
+  
+  validIds.add('NEBULA_MADRE');
+
+  const regularEdges = allLinks
+    .filter(l => validIds.has(l.source) && validIds.has(l.target))
+    .map((l, idx) => {
+      const isSurprise = (idx % 50 === 0);
+      return {
+        s: l.source,
+        t: l.target,
+        rel: l.relation || l.type || 'RELATES_TO',
+        conf: l.confidence ? (l.confidence > 0.8 ? 'EXTRACTED' : 'INFERRED') : 'EXTRACTED',
+        isSurprise: isSurprise
+      };
+    });
+    
+  // Connect regular nodes to their respective galaxy
+  const fileToGalaxyMap = {};
+  if (window.fullKBTreeList) {
+      window.fullKBTreeList.forEach(p => {
+          fileToGalaxyMap[p.file_name] = `GALAXY_${p.namespace || 'General'}`;
+          fileToGalaxyMap[p.title] = `GALAXY_${p.namespace || 'General'}`;
+      });
+  }
+  
+  nodeElements.forEach(n => {
+      const gId = fileToGalaxyMap[n.id] || fileToGalaxyMap[n.label];
+      if (gId) {
+          regularEdges.push({
+              s: gId,
+              t: n.id,
+              rel: 'CONTAINS',
+              conf: 'EXTRACTED',
+              isSurprise: false
+          });
+      } else {
+          // If no mapped galaxy, connect randomly to one or mother
+          const target = (Math.random() > 0.5 && galaxyNodes.length > 0) ? galaxyNodes[Math.floor(Math.random() * galaxyNodes.length)].id : 'NEBULA_MADRE';
+          regularEdges.push({
+              s: target,
+              t: n.id,
+              rel: 'BELONGS_TO',
+              conf: 'INFERRED',
+              isSurprise: false
+          });
+      }
+  });
+
+  vragGRAPH.nodes = [motherNode, ...galaxyNodes, ...nodeElements];
+  vragGRAPH.edges = [...galaxyEdges, ...regularEdges];
+
+  // Reset velocities and UI
+  vragVelocities = {};
+  vragGRAPH.nodes.forEach(n => { vragVelocities[n.id] = {vx:0, vy:0}; });
+  
+  vragActiveTypes = new Set(vragGRAPH.nodes.map(n => n.type));
+  vragActiveCommunities = new Set(vragGRAPH.nodes.map(n => n.community));
+  
+  vragBuildUI();
+}
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0, len = str.length; i < len; i++) {
+      let chr = str.charCodeAt(i);
+      hash = (hash << 5) - hash + chr;
+      hash |= 0;
+  }
+  return hash;
+}
+
+
+let vragTransform = { x: 0, y: 0, scale: 1 };
+let vragSelectedNode = null;
+let vragHoveredNode = null;
+let vragIsDragging = false;
+let vragDragStart = { x: 0, y: 0 };
+let vragPhysicsOn = true;
+let vragBlastMode = false;
+let vragShowConfidence = false;
+let vragActiveTypes = new Set(Object.keys(vragCOLORS));
+let vragActiveCommunities = new Set(vragGRAPH.nodes.map(n => n.community));
+let vragActiveSearchQuery = '';
+let vragVelocities = {};
+let vragBlastCenter = null;
+
+vragGRAPH.nodes.forEach(n => { vragVelocities[n.id] = {vx:0, vy:0}; });
+
+function vragResize() {
+  const rect = vragCanvas.parentElement.getBoundingClientRect();
+  vragCanvas.width = rect.width;
+  vragCanvas.height = rect.height;
+  if (!vragTransform.x && !vragTransform.y) {
+    vragTransform.x = rect.width / 2;
+    vragTransform.y = rect.height / 2;
+  }
+}
+
+function vragWorldToScreen(wx, wy) {
+  return {
+    x: wx * vragTransform.scale + vragTransform.x,
+    y: wy * vragTransform.scale + vragTransform.y
+  };
+}
+function vragScreenToWorld(sx, sy) {
+  return {
+    x: (sx - vragTransform.x) / vragTransform.scale,
+    y: (sy - vragTransform.y) / vragTransform.scale
+  };
+}
+
+function vragNodeRadius(n) {
+  const base = n.isGod ? 14 : (n.degree > 7 ? 11 : n.degree > 4 ? 9 : 7);
+  return base * Math.sqrt(vragTransform.scale);
+}
+
+function vragGetNodeColor(n) {
+  if (n.id === vragSelectedNode) return '#fff';
+  if (vragBlastCenter && n.id !== vragBlastCenter) {
+    const blast = vragGetBlastRadius(vragBlastCenter);
+    if (blast.includes(n.id)) return '#ef4444';
+    return 'rgba(100,116,139,0.3)';
+  }
+  if (vragHoveredNode === n.id) return '#fff';
+  if (n.isGod) return vragCOLORS[n.type] || vragCOLORS.default;
+  return vragCOLORS[n.type] || vragCOLORS.default;
+}
+
+function vragIsVisible(n) {
+  if (!vragActiveTypes.has(n.type)) return false;
+  if (!vragActiveCommunities.has(n.community)) return false;
+  if (vragActiveSearchQuery) {
+    return n.label.toLowerCase().includes(vragActiveSearchQuery.toLowerCase());
+  }
+  return true;
+}
+
+function vragGetBlastRadius(nodeId, depth = 2) {
+  const visited = new Set([nodeId]);
+  let frontier = [nodeId];
+  for (let d = 0; d < depth; d++) {
+    const next = [];
+    vragGRAPH.edges.forEach(e => {
+      if (frontier.includes(e.s) && !visited.has(e.t)) { visited.add(e.t); next.push(e.t); }
+      if (frontier.includes(e.t) && !visited.has(e.s)) { visited.add(e.s); next.push(e.s); }
+    });
+    frontier = next;
+  }
+  visited.delete(nodeId);
+  return [...visited];
+}
+
+function vragApplyForces() {
+  if (!vragPhysicsOn) return;
+  const K = 80, REPEL = 4000, DAMP = 0.85, DT = 0.3;
+
+  vragGRAPH.nodes.forEach(n => {
+    if (!vragIsVisible(n)) return;
+    let fx = 0, fy = 0;
+
+    vragGRAPH.edges.forEach(e => {
+      let other = null;
+      if (e.s === n.id) other = vragGRAPH.nodes.find(x => x.id === e.t);
+      if (e.t === n.id) other = vragGRAPH.nodes.find(x => x.id === e.s);
+      if (!other || !vragIsVisible(other)) return;
+      const dx = other.x - n.x, dy = other.y - n.y;
+      const d = Math.sqrt(dx*dx+dy*dy) || 1;
+      const f = (d - K) * 0.03;
+      fx += dx/d * f; fy += dy/d * f;
+    });
+
+    vragGRAPH.nodes.forEach(m => {
+      if (m.id === n.id || !vragIsVisible(m)) return;
+      const dx = m.x - n.x, dy = m.y - n.y;
+      const d = Math.sqrt(dx*dx+dy*dy) || 1;
+      const f = REPEL / (d * d);
+      fx -= dx/d * f; fy -= dy/d * f;
+    });
+
+    const v = vragVelocities[n.id];
+    v.vx = (v.vx + fx * DT) * DAMP;
+    v.vy = (v.vy + fy * DT) * DAMP;
+    n.x += v.vx * DT;
+    n.y += v.vy * DT;
+  });
+}
+
+function vragDraw() {
+  const W = vragCanvas.width, H = vragCanvas.height;
+  vragCtx.clearRect(0, 0, W, H);
+
+  vragCtx.save();
+  vragCtx.translate(vragTransform.x, vragTransform.y);
+  vragCtx.scale(vragTransform.scale, vragTransform.scale);
+
+  // Draw edges
+  vragGRAPH.edges.forEach(e => {
+    const sn = vragGRAPH.nodes.find(n => n.id === e.s);
+    const tn = vragGRAPH.nodes.find(n => n.id === e.t);
+    if (!sn || !tn || !vragIsVisible(sn) || !vragIsVisible(tn)) return;
+
+    vragCtx.beginPath();
+    vragCtx.moveTo(sn.x, sn.y);
+
+    if (e.isSurprise) {
+      vragCtx.setLineDash([4,4]);
+      vragCtx.strokeStyle = 'rgba(236,72,153,0.5)';
+      vragCtx.lineWidth = 1.2 / vragTransform.scale;
+    } else if (vragShowConfidence && e.conf === 'INFERRED') {
+      vragCtx.setLineDash([3,3]);
+      vragCtx.strokeStyle = 'rgba(99,102,241,0.4)';
+      vragCtx.lineWidth = 0.8 / vragTransform.scale;
+    } else if (vragShowConfidence && e.conf === 'AMBIGUOUS') {
+      vragCtx.setLineDash([2,5]);
+      vragCtx.strokeStyle = 'rgba(245,158,11,0.3)';
+      vragCtx.lineWidth = 0.6 / vragTransform.scale;
+    } else {
+      vragCtx.setLineDash([]);
+      vragCtx.strokeStyle = 'rgba(100,116,139,0.25)';
+      vragCtx.lineWidth = 0.8 / vragTransform.scale;
+    }
+
+    if (vragBlastCenter && (e.s === vragBlastCenter || e.t === vragBlastCenter)) {
+      vragCtx.setLineDash([]);
+      vragCtx.strokeStyle = 'rgba(239,68,68,0.6)';
+      vragCtx.lineWidth = 1.5 / vragTransform.scale;
+    }
+
+    vragCtx.lineTo(tn.x, tn.y);
+    vragCtx.stroke();
+    vragCtx.setLineDash([]);
+
+    // Arrowhead
+    const angle = Math.atan2(tn.y - sn.y, tn.x - sn.x);
+    const ar = vragNodeRadius(tn);
+    const ax = tn.x - Math.cos(angle) * ar;
+    const ay = tn.y - Math.sin(angle) * ar;
+    vragCtx.beginPath();
+    vragCtx.moveTo(ax, ay);
+    vragCtx.lineTo(ax - 7/vragTransform.scale * Math.cos(angle - 0.4), ay - 7/vragTransform.scale * Math.sin(angle - 0.4));
+    vragCtx.lineTo(ax - 7/vragTransform.scale * Math.cos(angle + 0.4), ay - 7/vragTransform.scale * Math.sin(angle + 0.4));
+    vragCtx.closePath();
+    vragCtx.fillStyle = vragCtx.strokeStyle;
+    vragCtx.fill();
+
+    // Edge label on hover
+    if (vragHoveredNode === e.s || vragHoveredNode === e.t || vragSelectedNode === e.s || vragSelectedNode === e.t) {
+      const mx = (sn.x + tn.x) / 2, my = (sn.y + tn.y) / 2;
+      vragCtx.font = `${10/vragTransform.scale}px var(--font-sans, sans-serif)`;
+      vragCtx.fillStyle = 'rgba(148,163,184,0.9)';
+      vragCtx.textAlign = 'center';
+      vragCtx.fillText(e.rel, mx, my - 4/vragTransform.scale);
+    }
+  });
+
+  // Draw nodes
+  vragGRAPH.nodes.forEach(n => {
+    if (!vragIsVisible(n)) return;
+    const r = vragNodeRadius(n);
+    const color = vragCOLORS[n.type] || vragCOLORS.default;
+
+    // Community ring
+    if (n.community !== undefined) {
+      vragCtx.beginPath();
+      vragCtx.arc(n.x, n.y, r + 3/vragTransform.scale, 0, Math.PI*2);
+      vragCtx.strokeStyle = vragCOMM_COLORS[n.community % vragCOMM_COLORS.length] + '40';
+      vragCtx.lineWidth = 2/vragTransform.scale;
+      vragCtx.stroke();
+    }
+
+    // Node body
+    vragCtx.beginPath();
+    vragCtx.arc(n.x, n.y, r, 0, Math.PI*2);
+    const isSelected = n.id === vragSelectedNode;
+    const isHovered = n.id === vragHoveredNode;
+
+    if (isSelected) {
+      vragCtx.fillStyle = '#fff';
+      vragCtx.shadowColor = '#fff';
+      vragCtx.shadowBlur = 15;
+    } else if (isHovered) {
+      vragCtx.fillStyle = color;
+      vragCtx.shadowColor = color;
+      vragCtx.shadowBlur = 12;
+    } else if (vragBlastCenter && vragGetBlastRadius(vragBlastCenter).includes(n.id)) {
+      vragCtx.fillStyle = '#ef4444';
+      vragCtx.shadowColor = '#ef4444';
+      vragCtx.shadowBlur = 10;
+    } else {
+      vragCtx.fillStyle = color + 'cc';
+      vragCtx.shadowBlur = 0;
+    }
+
+    vragCtx.fill();
+    vragCtx.shadowBlur = 0;
+
+    // God node ring
+    if (n.isGod) {
+      vragCtx.beginPath();
+      vragCtx.arc(n.x, n.y, r + 5/vragTransform.scale, 0, Math.PI*2);
+      vragCtx.strokeStyle = vragCOLORS[n.type] + '60';
+      vragCtx.lineWidth = 1.5/vragTransform.scale;
+      vragCtx.stroke();
+    }
+
+    // Label
+    const labelAlpha = vragTransform.scale > 0.5 ? 1 : vragTransform.scale * 2;
+    if (labelAlpha > 0.1) {
+      vragCtx.font = `${(n.isGod ? 11 : 10)/vragTransform.scale}px var(--font-sans, sans-serif)`;
+      vragCtx.fillStyle = `rgba(226,232,240,${labelAlpha})`;
+      vragCtx.textAlign = 'center';
+      vragCtx.fillText(n.label, n.x, n.y + r + 12/vragTransform.scale);
+    }
+  });
+
+  vragCtx.restore();
+}
+
+function vragTick() {
+  vragApplyForces();
+  vragDraw();
+  requestAnimationFrame(vragTick);
+}
+
+// Interaction
+vragCanvas.addEventListener('mousedown', e => {
+  vragIsDragging = false;
+  vragDragStart = { x: e.clientX, y: e.clientY };
+});
+
+vragCanvas.addEventListener('mousemove', e => {
+  const rect = vragCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+
+  if (e.buttons === 1) {
+    const dx = e.clientX - vragDragStart.x, dy = e.clientY - vragDragStart.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) vragIsDragging = true;
+    if (vragIsDragging) { vragTransform.x += dx; vragTransform.y += dy; vragDragStart = {x:e.clientX, y:e.clientY}; }
+    return;
+  }
+
+  const world = vragScreenToWorld(sx, sy);
+  let found = null;
+  vragGRAPH.nodes.forEach(n => {
+    if (!vragIsVisible(n)) return;
+    const dx = n.x - world.x, dy = n.y - world.y;
+    if (Math.sqrt(dx*dx+dy*dy) < vragNodeRadius(n)/vragTransform.scale*1.5) found = n.id;
+  });
+  vragHoveredNode = found;
+  vragCanvas.style.cursor = found ? 'pointer' : 'grab';
+});
+
+vragCanvas.addEventListener('click', e => {
+  if (vragIsDragging) return;
+  const rect = vragCanvas.getBoundingClientRect();
+  const world = vragScreenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  let found = null;
+  vragGRAPH.nodes.forEach(n => {
+    if (!vragIsVisible(n)) return;
+    const dx = n.x - world.x, dy = n.y - world.y;
+    if (Math.sqrt(dx*dx+dy*dy) < vragNodeRadius(n)/vragTransform.scale*1.5) found = n;
+  });
+  if (found) {
+    vragSelectNode(found);
+  } else {
+    vragDeselectNode();
+  }
+});
+
+vragCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = vragCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const wx = (sx - vragTransform.x) / vragTransform.scale;
+  const wy = (sy - vragTransform.y) / vragTransform.scale;
+  vragTransform.scale *= factor;
+  vragTransform.scale = Math.max(0.1, Math.min(5, vragTransform.scale));
+  vragTransform.x = sx - wx * vragTransform.scale;
+  vragTransform.y = sy - wy * vragTransform.scale;
+}, { passive: false });
+
+function vragSelectNode(n) {
+  if (vragBlastMode) {
+    vragBlastCenter = vragBlastCenter === n.id ? null : n.id;
+    return;
+  }
+  vragSelectedNode = n.id;
+  document.getElementById('node-info').classList.add('visible');
+  document.getElementById('ni-type').textContent = n.type.toUpperCase();
+  document.getElementById('ni-name').textContent = n.label;
+  document.getElementById('ni-degree').textContent = n.degree;
+  document.getElementById('ni-comm').textContent = n.community;
+  document.getElementById('ni-conf').textContent = Math.round((n.confidence || 0.8) * 100) + '%';
+  document.getElementById('ni-type2').textContent = n.isGod ? 'God node' : 'Standard';
+}
+
+function vragDeselectNode() {
+  vragSelectedNode = null;
+  vragBlastCenter = null;
+  document.getElementById('node-info').classList.remove('visible');
+}
+
+function vragFocusNode(nodeId) {
+  const n = vragGRAPH.nodes.find(x => x.id === nodeId);
+  if (!n) return;
+  vragTransform.x = vragCanvas.width / 2 - n.x * vragTransform.scale;
+  vragTransform.y = vragCanvas.height / 2 - n.y * vragTransform.scale;
+  vragSelectNode(n);
+}
+
+function togglePhysics() {
+  vragPhysicsOn = !vragPhysicsOn;
+  const btn = document.getElementById('physics-btn');
+  btn.textContent = vragPhysicsOn ? 'Physics ON' : 'Physics OFF';
+  btn.classList.toggle('active', vragPhysicsOn);
+}
+
+function toggleBlastMode() {
+  vragBlastMode = !vragBlastMode;
+  vragBlastCenter = null;
+  const btn = document.getElementById('blast-btn');
+  btn.classList.toggle('active', vragBlastMode);
+  btn.textContent = vragBlastMode ? 'Click a node!' : 'Blast Radius';
+}
+
+function toggleEdgeMode() {
+  vragShowConfidence = !vragShowConfidence;
+  document.getElementById('edge-mode-btn').classList.toggle('active', vragShowConfidence);
+}
+
+function resetCamera() {
+  vragTransform = { x: vragCanvas.width/2, y: vragCanvas.height/2, scale: 1 };
+  vragDeselectNode();
+}
+
+// Build sidebar UI
+function vragBuildUI() {
+  const tf = document.getElementById('type-filters');
+  const cl = document.getElementById('comm-legend');
+  const gl = document.getElementById('god-list');
+  const sl = document.getElementById('surprise-list');
+  
+  if (tf) tf.innerHTML = '';
+  if (cl) cl.innerHTML = '';
+  if (gl) gl.innerHTML = '';
+  if (sl) sl.innerHTML = '';
+
+  // Type filters
+  const typeColors = vragCOLORS;
+  const typesUsed = [...new Set(vragGRAPH.nodes.map(n => n.type))];
+  typesUsed.forEach(type => {
+    const pill = document.createElement('div');
+    pill.className = 'pill active';
+    pill.textContent = type;
+    pill.style.borderColor = typeColors[type] || typeColors.default;
+    pill.style.color = typeColors[type] || typeColors.default;
+    pill.style.background = 'transparent';
+    pill.onclick = () => {
+      if (vragActiveTypes.has(type)) {
+        vragActiveTypes.delete(type);
+        pill.classList.remove('active');
+        pill.style.background = 'transparent';
+        pill.style.opacity = '0.5';
+      } else {
+        vragActiveTypes.add(type);
+        pill.classList.add('active');
+        pill.style.opacity = '1';
+      }
+    };
+    tf.appendChild(pill);
+  });
+
+  // Community legend
+  const commSet = new Set(vragGRAPH.nodes.map(n => n.community));
+  [...commSet].sort().forEach(c => {
+    const cp = document.createElement('div');
+    cp.className = 'comm-pill';
+    cp.title = `Community ${c}`;
+    cp.style.background = vragCOMM_COLORS[c % vragCOMM_COLORS.length];
+    cp.onclick = () => {
+      if (vragActiveCommunities.has(c)) { vragActiveCommunities.delete(c); cp.classList.add('dimmed'); }
+      else { vragActiveCommunities.add(c); cp.classList.remove('dimmed'); }
+    };
+    cl.appendChild(cp);
+  });
+
+  // God nodes
+  const godNodes = vragGRAPH.nodes.filter(n => n.isGod).sort((a,b) => b.degree - a.degree);
+  godNodes.forEach(n => {
+    const item = document.createElement('div');
+    item.className = 'god-node-item';
+    item.innerHTML = `<div class="god-badge"></div><div class="god-label">${n.label}</div><div class="god-degree">${n.degree}</div>`;
+    item.onclick = () => vragFocusNode(n.id);
+    gl.appendChild(item);
+  });
+
+  // Surprising connections
+  const surprises = vragGRAPH.edges.filter(e => e.isSurprise).slice(0, 50); // limit to 50 visually
+  surprises.forEach(e => {
+    const sn = vragGRAPH.nodes.find(n => n.id === e.s);
+    const tn = vragGRAPH.nodes.find(n => n.id === e.t);
+    if (!sn || !tn) return;
+    const item = document.createElement('div');
+    item.className = 'surprise-item';
+    item.innerHTML = `<div class="surprise-dot"></div><div class="surprise-text"><strong>${sn.label}</strong> → <strong>${tn.label}</strong><br>${e.rel} (${e.conf})</div>`;
+    item.onclick = () => {
+      vragFocusNode(sn.id);
+      setTimeout(() => vragFocusNode(tn.id), 400);
+    };
+    sl.appendChild(item);
+  });
+
+  // HUD
+  document.getElementById('hud-nodes').textContent = vragGRAPH.nodes.length;
+  document.getElementById('hud-edges').textContent = vragGRAPH.edges.length;
+  document.getElementById('hud-comm').textContent = new Set(vragGRAPH.nodes.map(n => n.community)).size;
+
+  // Search
+  document.getElementById('search-box').addEventListener('input', e => {
+    vragActiveSearchQuery = e.target.value;
+  });
+}
+
+vragResize();
+window.addEventListener('resize', () => { vragResize(); });
+vragBuildUI();
+vragTick();
+
+// Integration with Dashboard
+// Call sync data periodically or when tab is shown
+setInterval(() => {
+  if (document.getElementById('vrag2d-view').style.display !== 'none') {
+      // Only sync if nodes changed significantly
+      if (vragGRAPH.nodes.length === 0 || (window.vaultPoints && window.vaultPoints.length > 0 && Math.abs(vragGRAPH.nodes.length - window.vaultPoints.length) > 50)) {
+          vragSyncData();
+      }
+  }
+}, 5000);
+
+// Add an observer to trigger sync immediately when section is shown
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.attributeName === "style") {
+            const displayStyle = window.getComputedStyle(document.getElementById('vrag2d-view')).display;
+            if (displayStyle !== 'none' && vragGRAPH.nodes.length === 0) {
+                vragSyncData();
+            }
+        }
+    });
+});
+observer.observe(document.getElementById('vrag2d-view'), { attributes: true });
+
+// Initial sync attempt
+setTimeout(() => { vragSyncData(); }, 1500);
+</script>
+            </div>
+            <!-- 🛰️ [v17.0] GRAPH LAB IDE SPLIT PANEL VIEW (formerly Tactical Canvas) -->
+            <div id="tactical-view" class="view-container" style="display: none; width: 100%; height: 100%; background: #020617; overflow: hidden; padding: 0; flex-direction: row; align-items: stretch;">
+                
+                <!-- CUSTOM STYLE INJECTION -->
+                <style>
+                    .graph-lab-panel {
+                        background: rgba(15, 23, 42, 0.45);
+                        backdrop-filter: blur(25px) saturate(180%);
+                        -webkit-backdrop-filter: blur(25px) saturate(180%);
+                        border-color: rgba(255, 255, 255, 0.08);
+                        border-style: solid;
+                        display: flex;
+                        flex-direction: column;
+                        height: 100%;
+                        z-index: 10;
+                        position: relative;
+                    }
+                    /* Sidebar transitions */
+                    .graph-lab-sidebar {
+                        width: 380px;
+                        flex-shrink: 0;
+                        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+                        overflow: hidden;
+                        opacity: 1;
+                    }
+                    .graph-lab-sidebar.collapsed {
+                        width: 0 !important;
+                        opacity: 0;
+                        border-width: 0 !important;
+                    }
+                    
+                    /* Legend */
+                    .graph-lab-legend-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 0.5rem;
+                    }
+                    
+                    /* Focus Hop Controls */
+                    .focus-depth-container {
+                        background: rgba(0, 0, 0, 0.35);
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-radius: 100px;
+                        padding: 0.2rem;
+                        display: flex;
+                        align-items: center;
+                        gap: 0.2rem;
+                    }
+                    .focus-depth-pill {
+                        flex: 1;
+                        padding: 0.3rem 0;
+                        text-align: center;
+                        font-size: 0.65rem;
+                        font-family: 'JetBrains Mono';
+                        font-weight: 700;
+                        border-radius: 100px;
+                        background: transparent;
+                        border: none;
+                        color: #64748b;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    }
+                    .focus-depth-pill.active {
+                        background: rgba(0, 255, 157, 0.15);
+                        color: #00ff9d;
+                        box-shadow: inset 0 0 10px rgba(0, 255, 157, 0.1);
+                    }
+                    
+                    /* Tabbed container */
+                    .graph-lab-tab-bar {
+                        display: flex;
+                        gap: 0.25rem;
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                        overflow-x: auto;
+                        padding-bottom: 0.2rem;
+                        flex-shrink: 0;
+                    }
+                    .graph-lab-tab {
+                        padding: 0.4rem 0.8rem;
+                        background: rgba(15, 23, 42, 0.5);
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-bottom: none;
+                        border-top-left-radius: 6px;
+                        border-top-right-radius: 6px;
+                        font-size: 0.65rem;
+                        font-family: 'JetBrains Mono';
+                        color: #64748b;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 0.4rem;
+                        white-space: nowrap;
+                        transition: all 0.15s;
+                    }
+                    .graph-lab-tab.active {
+                        background: rgba(30, 41, 59, 0.8);
+                        border-color: rgba(0, 255, 157, 0.3) rgba(0, 255, 157, 0.3) transparent;
+                        color: #00ff9d;
+                    }
+                    .graph-lab-tab-close {
+                        color: #ef4444;
+                        opacity: 0.6;
+                    }
+                    .graph-lab-tab-close:hover {
+                        opacity: 1;
+                    }
+                    
+                    .graph-lab-code-container {
+                        flex: 1;
+                        background: rgba(0, 0, 0, 0.4);
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-radius: 8px;
+                        padding: 0.8rem;
+                        font-family: 'JetBrains Mono', monospace;
+                        font-size: 0.65rem;
+                        line-height: 1.45;
+                        overflow: auto;
+                        color: #cbd5e1;
+                    }
+                    .graph-lab-code-line {
+                        display: flex;
+                    }
+                    .graph-lab-line-num {
+                        color: #475569;
+                        text-align: right;
+                        padding-right: 0.8rem;
+                        user-select: none;
+                        width: 30px;
+                        border-right: 1px solid rgba(255, 255, 255, 0.05);
+                        margin-right: 0.8rem;
+                    }
+                    .graph-lab-line-val {
+                        flex: 1;
+                        white-space: pre-wrap;
+                    }
+                    
+                    /* Chat bubbles */
+                    .oracle-chat-log {
+                        flex: 1;
+                        overflow-y: auto;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.8rem;
+                        padding: 0.5rem;
+                    }
+                    .oracle-bubble {
+                        max-width: 85%;
+                        padding: 0.75rem 0.95rem;
+                        border-radius: 12px;
+                        font-size: 0.72rem;
+                        line-height: 1.45;
+                    }
+                    .oracle-bubble.user {
+                        background: rgba(59, 130, 246, 0.15);
+                        border: 1px solid rgba(59, 130, 246, 0.3);
+                        align-self: flex-end;
+                        border-bottom-right-radius: 2px;
+                        color: #fff;
+                    }
+                    .oracle-bubble.assistant {
+                        background: rgba(15, 23, 42, 0.65);
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        align-self: flex-start;
+                        border-bottom-left-radius: 2px;
+                        color: #cbd5e1;
+                    }
+                    .oracle-anchor {
+                        color: #00ff9d;
+                        background: rgba(0, 255, 157, 0.1);
+                        border: 1px dashed rgba(0, 255, 157, 0.3);
+                        border-radius: 4px;
+                        padding: 1px 5px;
+                        cursor: pointer;
+                        font-family: 'JetBrains Mono', monospace;
+                        font-size: 0.65rem;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 0.2rem;
+                        transition: all 0.2s;
+                    }
+                    .oracle-anchor:hover {
+                        background: rgba(0, 255, 157, 0.25);
+                        border-style: solid;
+                        box-shadow: 0 0 8px rgba(0, 255, 157, 0.2);
+                    }
+                </style>
+                
+                <!-- 1. LEFT SIDEBAR: Explorer, Inspector & Document Inspector -->
+                <!-- We also preserve ID "tactical-inspector" because of other scripts mapping to it -->
+                <div id="tactical-inspector" class="graph-lab-panel graph-lab-sidebar" style="border-right-width: 1px;">
+                    <!-- Panel Header -->
+                    <div class="graph-lab-panel-header">
+                        <div>
+                            <h3 class="graph-lab-panel-title">GRAPH LAB EXPLORER</h3>
+                            <span class="graph-lab-panel-subtitle">COGNITIVE FABRIC v17.0</span>
+                        </div>
+                        <div style="width: 10px; height: 10px; background: #00ff9d; border-radius: 50%; box-shadow: 0 0 10px #00ff9d; animation: pulse 2s infinite;"></div>
+                    </div>
+                    
+                    <!-- Sidebar Navigation (Search & Filters) -->
+                    <div class="graph-lab-scrollable" style="flex: 1; min-width: 380px;">
+                        
+                        <!-- Search container -->
+                        <div style="position: relative;">
+                            <input type="text" id="tactical-search-input" placeholder="Search cognitive nodes..." style="width: 100%; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; padding: 0.7rem 1rem 0.7rem 2.4rem; border-radius: 8px; font-size: 0.75rem; outline: none; transition: all 0.2s;" oninput="if(window.tacticalCanvas) window.tacticalCanvas.onSearchInput(this.value)" onfocus="this.style.borderColor='rgba(0, 255, 157, 0.4)'; this.style.boxShadow='0 0 12px rgba(0, 255, 157, 0.15)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.1)'">
+                            <i class="fas fa-search" style="position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 0.75rem;"></i>
+                            <div id="tactical-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 0.4rem; z-index: 2100; box-shadow: 0 10px 30px rgba(0,0,0,0.8);" class="graph-lab-scrollable"></div>
+                        </div>
+
+                        <!-- Focus Depth Controls -->
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <span style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Focus Depth Neighborhood</span>
+                            <div class="focus-depth-container">
+                                <button onclick="if(window.tacticalCanvas) window.tacticalCanvas.setFocusDepth(1, this)" class="focus-depth-pill">1 HOP</button>
+                                <button onclick="if(window.tacticalCanvas) window.tacticalCanvas.setFocusDepth(2, this)" class="focus-depth-pill">2 HOPS</button>
+                                <button onclick="if(window.tacticalCanvas) window.tacticalCanvas.setFocusDepth(3, this)" class="focus-depth-pill">3 HOPS</button>
+                                <button onclick="if(window.tacticalCanvas) window.tacticalCanvas.setFocusDepth(5, this)" class="focus-depth-pill">5 HOPS</button>
+                            </div>
+                        </div>
+
+                        <!-- Node Type Filters Grid -->
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <span style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Node Class Legend</span>
+                            <div id="graph-lab-node-filters" class="graph-lab-legend-grid">
+                                <!-- Will be dynamically populated or contains beautiful HSL static labels fallback -->
+                            </div>
+                        </div>
+
+                        <!-- Selection Mode & Tools -->
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <span style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Selection Mode</span>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+                                <button id="gl-mode-navigate" onclick="if(window.tacticalCanvas) window.tacticalCanvas.setSelectionMode('navigate')" style="padding: 0.5rem; background: rgba(0, 255, 157, 0.15); border: 1px solid rgba(0, 255, 157, 0.4); color: #00ff9d; border-radius: 6px; font-size: 0.65rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;"><i class="fas fa-mouse-pointer"></i> Nav</button>
+                                <button id="gl-mode-rect" onclick="if(window.tacticalCanvas) window.tacticalCanvas.setSelectionMode('rect')" style="padding: 0.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: #fff; border-radius: 6px; font-size: 0.65rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;"><i class="fas fa-vector-square"></i> Box</button>
+                                <button id="gl-mode-lasso" onclick="if(window.tacticalCanvas) window.tacticalCanvas.setSelectionMode('lasso')" style="padding: 0.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: #fff; border-radius: 6px; font-size: 0.65rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;"><i class="fas fa-draw-polygon"></i> Lazo</button>
+                            </div>
+                        </div>
+
+                        <!-- 2D/3D Tactical Canvas Stats Summary -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.8rem; text-align: center;">
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                                <div style="font-size: 0.45rem; color: #64748b; font-weight: 800;">NODES</div>
+                                <div id="tactical-node-count" style="font-size: 0.85rem; color: #00ff9d; font-family: 'JetBrains Mono'; font-weight: 900;">0</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                                <div style="font-size: 0.45rem; color: #64748b; font-weight: 800;">LINKS</div>
+                                <div id="tactical-link-count" style="font-size: 0.85rem; color: #3b82f6; font-family: 'JetBrains Mono'; font-weight: 900;">0</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.3); padding: 0.4rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                                <div style="font-size: 0.45rem; color: #64748b; font-weight: 800;">CLUSTERS</div>
+                                <div id="tactical-cluster-count" style="font-size: 0.85rem; color: #a855f7; font-family: 'JetBrains Mono'; font-weight: 900;">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Active Node Details View -->
+                        <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.8rem;">
+                            <!-- Empty State Placeholder -->
+                            <div id="tactical-node-info-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 0.8rem; color: #64748b; padding: 2rem 1rem; border: 1px dashed rgba(255,255,255,0.08); border-radius: 12px; background: rgba(0,0,0,0.15);">
+                                <i class="fas fa-satellite-dish" style="font-size: 1.5rem; color: #38bdf8; opacity: 0.7; animation: pulse 2s infinite;"></i>
+                                <span style="font-size: 0.65rem; font-weight: 500; line-height: 1.4;">Click any node on the canvas to inspect its cognitive details, relationships, and code dependencies.</span>
+                            </div>
+
+                            <!-- Selected Node Detail View -->
+                            <div id="tactical-node-info-details" style="display: none; flex-direction: column; gap: 0.8rem;">
+                                <!-- Node Name -->
+                                <div id="tactical-node-detail-name" style="font-size: 1rem; font-weight: 800; color: #fff; word-break: break-all; margin-bottom: 0.2rem; line-height: 1.2;">Selected Node</div>
+                                
+                                <!-- Metadata Grid -->
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.65rem; font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.25); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #64748b;">TYPE:</span>
+                                        <span id="tactical-node-detail-type" style="color: #3b82f6; font-weight: bold; background: rgba(59, 130, 246, 0.1); padding: 1px 6px; border-radius: 4px;">CODE</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #64748b;">COMMUNITY:</span>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <span id="tactical-node-detail-community-swatch" style="width: 8px; height: 8px; border-radius: 50%; display: inline-block;"></span>
+                                            <span id="tactical-node-detail-community" style="color: #fff; font-weight: bold;">-</span>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                        <span style="color: #64748b;">SOURCE PATH:</span>
+                                        <span id="tactical-node-detail-source" style="color: #cbd5e1; word-break: break-all; line-height: 1.3;">-</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #64748b;">DEGREE:</span>
+                                        <span id="tactical-node-detail-degree" style="color: #00ff9d; font-weight: bold;">0</span>
+                                    </div>
+                                </div>
+
+                                <!-- Neighbors Sub-section -->
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                    <span style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Neighbors</span>
+                                    <div id="tactical-node-neighbors-list" style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.15); padding: 0.5rem; border-radius: 8px;" class="graph-lab-scrollable"></div>
+                                </div>
+
+                                <!-- Collapsible Editor Trigger -->
+                                <button onclick="if(window.tacticalCanvas) window.tacticalCanvas.toggleEditorDrawer()" style="width: 100%; padding: 0.5rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); color: #cbd5e1; border-radius: 8px; font-size: 0.6rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255, 255, 255, 0.07)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.03)'">
+                                    <i class="fas fa-sliders-h"></i> DOCK COORDINATE EDITOR
+                                </button>
+
+                                <!-- Hidden Coordinate & Color Editor Drawer -->
+                                <div id="tactical-editor-drawer" style="display: none; flex-direction: column; gap: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                                    <div>
+                                        <div style="font-size: 0.5rem; color: #64748b; font-weight: 800; text-transform: uppercase;">Signature (ID)</div>
+                                        <div id="tactical-item-id" style="font-family: 'JetBrains Mono'; font-size: 0.55rem; color: #8b949e; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03); word-break: break-all; margin-top: 0.25rem;">...</div>
+                                    </div>
+                                    <div>
+                                        <label for="tactical-item-name" style="font-size: 0.5rem; color: #cbd5e1; font-weight: 800; text-transform: uppercase;">Atom Label</label>
+                                        <input type="text" id="tactical-item-name" oninput="updateTacticalNodeLabel(this.value)" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.5rem; border-radius: 6px; font-size: 0.7rem; outline: none; margin-top: 0.25rem; font-family: 'Inter';" onfocus="this.style.borderColor='#00ff9d'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                                    </div>
+                                    <div>
+                                        <label for="tactical-item-cluster" style="font-size: 0.55rem; color: #cbd5e1; font-weight: 800; text-transform: uppercase;">Galaxy Cluster</label>
+                                        <input type="text" id="tactical-item-cluster" oninput="updateTacticalNodeCluster(this.value)" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.5rem; border-radius: 6px; font-size: 0.7rem; outline: none; margin-top: 0.25rem; font-family: 'Inter';" onfocus="this.style.borderColor='#00ff9d'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.5rem; color: #cbd5e1; font-weight: 800; text-transform: uppercase; margin-bottom: 0.25rem;">Color Signature</div>
+                                        <div style="display: flex; align-items: center; gap: 0.6rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03);">
+                                            <input type="color" id="tactical-item-color" onchange="updateTacticalNodeColor(this.value)" style="border: none; background: transparent; width: 28px; height: 28px; cursor: pointer; border-radius: 4px;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <span id="tactical-item-color-hex" style="font-family: 'JetBrains Mono'; font-size: 0.6rem; color: #fff; font-weight: bold;">#00ff9d</span>
+                                                <span style="font-size: 0.45rem; color: #64748b;">HEX representation</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem;">
+                                        <button onclick="inspectFullNodeDetails()" style="width: 100%; padding: 0.6rem; background: rgba(0, 255, 157, 0.1); border: 1px solid #00ff9d; color: #00ff9d; border-radius: 6px; font-size: 0.6rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;" onmouseover="this.style.background='rgba(0, 255, 157, 0.2)'" onmouseout="this.style.background='rgba(0, 255, 157, 0.1)'">
+                                            <i class="fas fa-microscope"></i> DEEP INSPECT NODE
+                                        </button>
+                                        <button onclick="deleteTacticalSelectedNode()" style="width: 100%; padding: 0.6rem; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; border-radius: 6px; font-size: 0.6rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
+                                            <i class="fas fa-trash-alt"></i> PURGE ATOM MAP
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Shortest Path & Hub Highlight Panel -->
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem;">
+                            <div style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Topological Queries</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button id="btn-topo-godnodes" onclick="if(window.tacticalCanvas) window.tacticalCanvas.highlightGodNodes()" style="padding: 0.6rem; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); color: #fb923c; border-radius: 6px; font-size: 0.65rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.3rem;" title="Highlight high-degree central nodes">
+                                    <i class="fas fa-crown"></i> HUB NODES
+                                </button>
+                                <button id="btn-topo-pathfinder" onclick="if(window.tacticalCanvas) window.tacticalCanvas.startShortestPathMode()" style="padding: 0.6rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); color: #22d3ee; border-radius: 6px; font-size: 0.65rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.3rem;" title="Find shortest path between two nodes">
+                                    <i class="fas fa-route"></i> PATH FINDER
+                                </button>
+                            </div>
+                            <!-- ── SPRINT 1: New Analysis Buttons ─────────────────────────────── -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; margin-top: 0.2rem;">
+                                <button id="btn-sprint1-blast" onclick="window.toggleTacticalBlast(2)" style="padding: 0.5rem 0.3rem; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; border-radius: 6px; font-size: 0.58rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;" title="Blast Radius: Impact highlight N-hop from selected node">
+                                    <i class="fas fa-radiation" style="font-size: 0.75rem;"></i> BLAST
+                                </button>
+                                <button id="btn-sprint1-surprising" onclick="window.toggleTacticalSurprising()" style="padding: 0.5rem 0.3rem; background: rgba(236, 72, 153, 0.08); border: 1px solid rgba(236, 72, 153, 0.2); color: #ec4899; border-radius: 6px; font-size: 0.58rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;" title="Surprising Connections: highlight cross-community edges">
+                                    <i class="fas fa-link-slash" style="font-size: 0.75rem;"></i> SURPRISE
+                                </button>
+                                <button id="btn-sprint1-confidence" onclick="window.toggleTacticalConfidence()" style="padding: 0.5rem 0.3rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); color: #a855f7; border-radius: 6px; font-size: 0.58rem; font-weight: 800; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;" title="Confidence Mode: style edges by epistemic certainty">
+                                    <i class="fas fa-certificate" style="font-size: 0.75rem;"></i> CONF.
+                                </button>
+                            </div>
+                            <!-- ──────────────────────────────────────────────────────────────── -->
+                        </div>
+
+                        <!-- Communities List -->
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem;">
+                            <div style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Communities</div>
+                            <div id="tactical-communities-list" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 140px; overflow-y: auto;" class="graph-lab-scrollable"></div>
+                        </div>
+
+                    </div>
+                    
+                    <!-- Dynamic Status Footer -->
+                    <div style="margin-top: auto; border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 0.8rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: #64748b; display: flex; flex-direction: column; gap: 0.2rem; flex-shrink: 0; background: rgba(0,0,0,0.2);">
+                        <div id="tactical-status-text" style="text-align: center; font-weight: bold; color: #8b949e;">0 nodes - 0 edges</div>
+                        <div style="text-align: center; color: #10b981; font-size: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                            <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+                            Topological cache synced (100%)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. CENTER PANEL: Interactive Canvas with tabs and document inspector on the left sidebar bottom -->
+                <!-- Let's wrap the canvas with a split container that houses the tabbed document inspector at the bottom! -->
+                <div id="graph-lab-center" class="graph-lab-panel" style="flex: 1; border-right-width: 0; border-left-width: 0; background: #020617; position: relative; transition: all 0.3s ease;">
+                    
+                    <!-- Left Sidebar Toggle Button -->
+                    <div id="gl-left-toggle" onclick="toggleTacticalSidebar('left')" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(15,23,42,0.8); border: 1px solid rgba(0,255,157,0.3); border-left: none; border-radius: 0 8px 8px 0; padding: 1.5rem 0.2rem; cursor: pointer; z-index: 2100; color: #00ff9d; box-shadow: 2px 0 10px rgba(0,0,0,0.5); transition: all 0.2s;" onmouseover="this.style.background='rgba(30,41,59,0.9)'" onmouseout="this.style.background='rgba(15,23,42,0.8)'">
+                        <i class="fas fa-chevron-left" id="gl-left-icon"></i>
+                    </div>
+
+                    <!-- Right Sidebar Toggle Button -->
+                    <div id="gl-right-toggle" onclick="toggleTacticalSidebar('right')" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(15,23,42,0.8); border: 1px solid rgba(59,130,246,0.3); border-right: none; border-radius: 8px 0 0 8px; padding: 1.5rem 0.2rem; cursor: pointer; z-index: 2100; color: #3b82f6; box-shadow: -2px 0 10px rgba(0,0,0,0.5); transition: all 0.2s;" onmouseover="this.style.background='rgba(30,41,59,0.9)'" onmouseout="this.style.background='rgba(15,23,42,0.8)'">
+                        <i class="fas fa-chevron-right" id="gl-right-icon"></i>
+                    </div>
+
+                    <!-- Top Canvas Viewport Header Overlay -->
+                    <div style="position: absolute; top: 1.5rem; left: 2.5rem; display: flex; align-items: center; gap: 0.8rem; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(25px); border: 1px solid rgba(0, 255, 157, 0.3); border-radius: 12px; padding: 0.6rem 1rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 2000;">
+                        <div style="width: 8px; height: 8px; background: #00ff9d; border-radius: 50%; box-shadow: 0 0 8px #00ff9d; animation: pulse 2s infinite;"></div>
+                        <div>
+                            <span style="font-size: 0.65rem; color: #00ff9d; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;">ACTIVE VIEWPORT</span>
+                        </div>
+                    </div>
+
+                    <!-- Floating Tool Bar Panel (Top-Right Overlay) -->
+                    <div style="position: absolute; top: 1.5rem; right: 1.5rem; display: flex; align-items: center; gap: 0.5rem; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 100px; padding: 0.5rem; box-shadow: 0 15px 50px rgba(0,0,0,0.7); z-index: 2000;">
+                        <button id="tool-select" onclick="setTacticalTool('select')" style="background: rgba(0, 255, 157, 0.15); border: 1px solid #00ff9d; color: #00ff9d; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Select / Drag Atom">
+                            <i class="fas fa-mouse-pointer" style="font-size: 0.85rem;"></i>
+                        </button>
+                        <button id="tool-node" onclick="setTacticalTool('node')" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Add Custom Atom (Click on Canvas)">
+                            <i class="fas fa-plus" style="font-size: 0.85rem;"></i>
+                        </button>
+                        <button id="tool-edge" onclick="setTacticalTool('edge')" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Link Atoms (Drag from source to target)">
+                            <i class="fas fa-project-diagram" style="font-size: 0.85rem;"></i>
+                        </button>
+                        <button id="tool-cluster" onclick="setTacticalTool('cluster')" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Semantic Clustering (Select nodes to group)">
+                            <i class="fas fa-object-group" style="font-size: 0.85rem;"></i>
+                        </button>
+                        <div style="width: 1px; height: 24px; background: rgba(255, 255, 255, 0.15); margin: 0 0.2rem;"></div>
+                        <button id="btn-forces" onclick="toggleTacticalForces()" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #a855f7; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Toggle Force-Directed Physics">
+                            <i class="fas fa-atom" style="font-size: 0.85rem;"></i>
+                        </button>
+                        <button onclick="centerTacticalCamera()" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #3b82f6; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" title="Recenter Tactical Viewport">
+                            <i class="fas fa-crosshairs" style="font-size: 0.85rem;"></i>
+                        </button>
+                    </div>
+
+                    <!-- Split layout for Canvas (top) and tabbed Document Inspector (bottom) -->
+                    <div style="flex: 1.2; position: relative; width: 100%; min-height: 0;">
+                        <canvas id="tactical-canvas-element" style="display: block; width: 100%; height: 100%; cursor: grab;"></canvas>
+                        
+                        <!-- HUD Info overlay instructions (bottom-left) -->
+                        <div style="position: absolute; bottom: 1rem; left: 1rem; display: flex; align-items: center; gap: 0.5rem; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 0.4rem 0.7rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 2000; font-family: 'JetBrains Mono'; font-size: 0.55rem; color: #64748b;">
+                            <i class="fas fa-satellite-dish" style="color: #00ff9d;"></i> SELECTED ATOM: <span id="tactical-selected-lbl" style="color: #fff; font-weight: 800; margin-left: 0.2rem;">NESSUNO</span>
+                        </div>
+                    </div>
+
+                    <!-- 3. CODE & DOCUMENT INSPECTOR (Bottom Panel of center pane) -->
+                    <div id="graph-lab-inspector-wrapper" style="flex-shrink: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 15, 30, 0.95); box-shadow: inset 0 10px 30px rgba(0,0,0,0.6); transition: height 0.32s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; height: 280px;">
+                        <!-- Clickable header — always visible -->
+                        <div onclick="toggleDocInspector()" style="display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 0.8rem; cursor: pointer; user-select: none; border-bottom: 1px solid rgba(255,255,255,0.06); height: 37px; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.025)'" onmouseout="this.style.background='transparent'">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-code" style="color: #00ff9d; font-size: 0.7rem;"></i>
+                                <span style="font-size: 0.62rem; color: #cbd5e1; font-family: 'JetBrains Mono'; font-weight: bold; letter-spacing: 0.5px;">DOCUMENT &amp; SOURCE CODE INSPECTOR</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                <!-- Counts -->
+                                <div style="display: flex; gap: 0.6rem; font-size: 0.55rem; font-family: 'JetBrains Mono';">
+                                    <span style="color: #3b82f6;">CITATIONS: <span id="graph-lab-citation-count" style="font-weight: bold;">0</span></span>
+                                    <span style="color: #a855f7;">REFERENCES: <span id="graph-lab-reference-count" style="font-weight: bold;">0</span></span>
+                                </div>
+                                <!-- Chevron toggle -->
+                                <div id="doc-inspector-chevron" style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.2); border-radius: 4px; color: #00ff9d; font-size: 0.6rem; transition: transform 0.32s ease; flex-shrink: 0;">
+                                    <i class="fas fa-chevron-down"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Collapsible body -->
+                        <div id="graph-lab-inspector-body" style="display: flex; flex-direction: column; height: calc(280px - 37px); padding: 0.5rem 0.8rem 0.8rem; overflow: hidden;">
+                            <!-- Tab bar -->
+                            <div id="graph-lab-tabs-bar" class="graph-lab-tab-bar" style="margin-bottom: 0.4rem;">
+                                <!-- Dynamically added tabs here -->
+                                <div class="graph-lab-tab active" id="graph-lab-welcome-tab">
+                                    <i class="fas fa-info-circle"></i> Welcome
+                                </div>
+                            </div>
+
+                            <!-- Code Viewer Panel -->
+                            <div id="graph-lab-code-viewer-panel" style="flex: 1; display: flex; flex-direction: row; gap: 0.6rem; min-height: 0;">
+                                <!-- Code block -->
+                                <div id="graph-lab-code-viewer" class="graph-lab-code-container">
+                                    <div style="color: #64748b; text-align: center; padding: 2rem 0; font-style: italic;">
+                                        Select any node in the graph viewport to load its source text.
+                                    </div>
+                                </div>
+                                
+                                <!-- References pane -->
+                                <div style="width: 180px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; display: flex; flex-direction: column; padding: 0.5rem; flex-shrink: 0;">
+                                    <span style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase; margin-bottom: 0.3rem;">References Linker</span>
+                                    <div id="graph-lab-code-references-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;" class="graph-lab-scrollable">
+                                        <span style="font-size: 0.55rem; color: #475569; font-style: italic; text-align: center; margin-top: 1rem;">No links found</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. RIGHT SIDEBAR: RAG Oracle AI Chatbot -->
+                <div id="graph-lab-right" class="graph-lab-panel graph-lab-sidebar" style="border-left-width: 1px;">
+                    <!-- Panel Header -->
+                    <div class="graph-lab-panel-header">
+                        <div>
+                            <h3 class="graph-lab-panel-title">ORACLE RAG CHAT</h3>
+                            <span class="graph-lab-panel-subtitle">COGNITIVE ORACLE ENGINE</span>
+                        </div>
+                        <i class="fas fa-brain" style="color: #3b82f6; font-size: 0.8rem; text-shadow: 0 0 8px rgba(59, 130, 246, 0.4);"></i>
+                    </div>
+
+                    <!-- Oracle Chat history -->
+                    <div id="graph-lab-chat-log" class="oracle-chat-log" style="flex: 1; padding: 1rem; overflow-y: auto; min-width: 380px;">
+                        <!-- Initial message -->
+                        <div class="oracle-bubble assistant">
+                            <div style="font-weight: bold; color: #00ff9d; margin-bottom: 0.2rem;"><i class="fas fa-robot"></i> ORACULO NEURALE</div>
+                            Benvenuto nell'interfaccia <strong>Graph Lab Visual Intelligence</strong>.<br><br>
+                            Posso guidarti nell'analisi del Vault Cognitivo. Clicca sui nodi per aprirli nell'Inspector o chiedimi di analizzare le relazioni strutturali e i percorsi logici delle galassie.<br><br>
+                            <em>Suggerimento: Clicca su un link nel testo per zoomare sul rispettivo nodo!</em>
+                        </div>
+                    </div>
+
+                    <!-- Suggestions / Quick prompts -->
+                    <div style="padding: 0.4rem 1rem; display: flex; flex-wrap: wrap; gap: 0.3rem; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; background: rgba(0,0,0,0.1);">
+                        <button onclick="sendQuickOracleQuery('Mostra nodi centrali')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 0.25rem 0.5rem; color: #94a3b8; font-size: 0.58rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.color='#94a3b8';">Central Hubs</button>
+                        <button onclick="sendQuickOracleQuery('Quali galassie sono a distanza critica dalla nebula madre?')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 0.25rem 0.5rem; color: #94a3b8; font-size: 0.58rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.color='#94a3b8';">Distances Check</button>
+                        <button onclick="sendQuickOracleQuery('Quali sono le relazioni chiave in questo grafo?')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px; padding: 0.25rem 0.5rem; color: #94a3b8; font-size: 0.58rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.color='#94a3b8';">Key Relations</button>
+                    </div>
+
+                    <!-- Input Bar -->
+                    <div style="padding: 0.8rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 15, 30, 0.6); display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0;">
+                        <input type="text" id="graph-lab-oracle-input" placeholder="Chiedi all'Oracolo sul grafo..." style="flex: 1; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.55rem 0.8rem; border-radius: 8px; font-size: 0.72rem; outline: none;" onkeydown="if(event.key === 'Enter') sendOracleGraphQuery()">
+                        <button onclick="sendOracleGraphQuery()" style="background: rgba(0, 255, 157, 0.15); border: 1px solid rgba(0, 255, 157, 0.3); color: #00ff9d; border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0, 255, 157, 0.3)'" onmouseout="this.style.background='rgba(0, 255, 157, 0.15)'">
+                            <i class="fas fa-paper-plane" style="font-size: 0.75rem;"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- 🔬 NEURAL LAB SECTION -->
             <div id="lab-view" class="view-container" style="display: none; padding: 1.5rem; background: rgba(2, 6, 23, 0.95); overflow: hidden;">
@@ -2078,6 +3477,7 @@
                                         </button>
                                         <button onclick="copyHandshakeToken()" class="btn-id-action" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6; border-color: rgba(59, 130, 246, 0.3);">
                                             <i class="fas fa-share-alt"></i> COPY HANDSHAKE
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2890,7 +4290,7 @@
                     </div>
                 </div>
                 
-                <div id="wiki-main-grid" style="display: grid; grid-template-columns: 250px 220px 1fr 300px; gap: 1.5rem; min-height: 85vh; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
+                <div id="wiki-main-grid" style="display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; min-height: 85vh; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
                     <!-- [v9.0] Agent Merit Leaderboard -->
                     <div id="merit-leaderboard" class="merit-hud">
                         <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; margin-bottom: 12px; text-transform: uppercase;">🏆 Agent Merit Ranking</div>
@@ -2899,34 +4299,89 @@
                         </div>
                     </div>
                     <!-- Sidebar: Galassie & Versioni -->
-                    <div id="wiki-sidebar-container" style="position: relative; overflow: visible;">
-                        <div id="wiki-sidebar" style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.5rem; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; max-height: 85vh; backdrop-filter: blur(10px); transition: all 0.4s ease; transform-origin: left;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">Source of Truth</div>
-                                <button onclick="window.toggleWikiSidebar()" style="background: transparent; border: none; color: #64748b; cursor: pointer; font-size: 0.8rem;"><i class="fas fa-chevron-left"></i></button>
-                            </div>
-                            <div id="wiki-galaxies-list" style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 2rem;">
-                                <!-- Popolated by JS -->
+                    <div id="wiki-sidebar-container" style="position: relative; overflow: visible; display: flex; flex-direction: column;">
+                        <div id="wiki-sidebar" class="wiki-v3-sidebar">
+                            <div style="padding: 0 0.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <h2 style="color: #fff; font-size: 1.1rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; margin: 0; display: flex; align-items: center; gap: 10px;">
+                                        <i class="fas fa-cubes" style="color: #3b82f6;"></i> WIKI NEXUS
+                                    </h2>
+                                    <div class="wiki-v3-subtitle" style="font-size: 0.55rem; color: #3b82f6; font-weight: 800; letter-spacing: 1.5px; margin-top: 4px; text-transform: uppercase;">SOVEREIGN_SYSTEM_V3</div>
+                                </div>
+                                <div class="wiki-collapse-btn" onclick="window.toggleWikiSidebar()" style="width: 24px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: #cbd5e1;">
+                                    <i class="fas fa-chevron-left" style="font-size: 0.7rem;"></i>
+                                </div>
                             </div>
                             
-                            <div style="font-size: 0.6rem; color: #64748b; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">Versioning</div>
-                            <div id="wiki-history-list" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.55rem; color: #64748b;">
-                                Seleziona una pagina per lo storico.
-                            </div>
-
-                                <a href="/api/wiki/llms.txt" target="_blank" style="text-decoration: none; margin-bottom: 8px; display: block;">
-                                    <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid #a855f7; color: #a855f7; padding: 8px; border-radius: 6px; font-size: 0.55rem; text-align: center; font-weight: 800;">
-                                        <i class="fas fa-robot"></i> EXPORT LLMS.TXT
+                            <nav style="display: flex; flex-direction: column; gap: 4px;">
+                                <div class="wiki-nav-item active" data-view="dashboard" onclick="window.switchWikiView('dashboard')">
+                                    <i class="fas fa-th"></i> <span>Dashboard</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="agents" onclick="window.switchWikiView('agents')">
+                                    <i class="fas fa-user-astronaut"></i> <span>Agents</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="pure-wiki" onclick="window.switchWikiView('pure-wiki')">
+                                    <i class="fas fa-network-wired"></i> <span>Pure Wiki</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="kb" onclick="window.switchWikiView('kb')">
+                                    <i class="fas fa-database"></i> <span>Knowledge Base</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="reports" onclick="window.switchWikiView('reports')">
+                                    <i class="fas fa-file-contract"></i> <span>Reports</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="settings" onclick="window.switchWikiView('settings')">
+                                    <i class="fas fa-sliders-h"></i> <span>Settings</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="activity" onclick="window.switchWikiView('activity')">
+                                    <i class="fas fa-history"></i> <span>Activity</span>
+                                </div>
+                                <div class="wiki-nav-item" data-view="forensic" onclick="window.switchWikiView('forensic')">
+                                    <i class="fas fa-shield-alt"></i> <span>Forensic Audit</span>
+                                </div>
+                            </nav>
+                            
+                            <!-- 🧬 ACTIVE ORACLES IN SIDEBAR -->
+                            <div class="wiki-agent-list" style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                <div style="font-size: 0.6rem; color: #64748b; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.8rem; padding-left: 0.5rem;">ACTIVE ORACLE</div>
+                                
+                                <div class="wiki-agent-status-item" onclick="window.switchWikiView('agent-profile', 'Skywalker')">
+                                    <div style="display: flex; align-items: center;">
+                                        <span id="sidebar-skywalker-dot" class="status-dot status-active"></span>
+                                        <span style="color: #cbd5e1; font-weight: 700;">Skywalker</span>
                                     </div>
-                                </a>
-                                <button onclick="window.runSovereignAudit()" style="width: 100%; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981; padding: 8px; border-radius: 6px; font-size: 0.55rem; text-align: center; font-weight: 800; cursor: pointer;">
-                                    <i class="fas fa-shield-check"></i> AUDIT KB (LINTER)
-                                </button>
+                                    <span id="sidebar-skywalker-status" style="color: #64748b; font-size: 0.6rem; font-family: 'JetBrains Mono'; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">FORAGING</span>
+                                </div>
+                                
+                                <div class="wiki-agent-status-item" onclick="window.switchWikiView('agent-profile', 'Yoda')">
+                                    <div style="display: flex; align-items: center;">
+                                        <span id="sidebar-yoda-dot" class="status-dot status-active"></span>
+                                        <span style="color: #cbd5e1; font-weight: 700;">Yoda</span>
+                                    </div>
+                                    <span id="sidebar-yoda-status" style="color: #64748b; font-size: 0.6rem; font-family: 'JetBrains Mono'; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">CONSENSUS</span>
+                                </div>
+                                
+                                <div class="wiki-agent-status-item" onclick="window.switchWikiView('agent-profile', 'R2-D2')">
+                                    <div style="display: flex; align-items: center;">
+                                        <span id="sidebar-r2d2-dot" class="status-dot status-active"></span>
+                                        <span style="color: #cbd5e1; font-weight: 700;">R2-D2</span>
+                                    </div>
+                                    <span id="sidebar-r2d2-status" style="color: #64748b; font-size: 0.6rem; font-family: 'JetBrains Mono'; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">ORGANIZING</span>
+                                </div>
+                                
+                                <div class="wiki-agent-status-item" onclick="window.switchWikiView('agent-profile', 'Paperboy')">
+                                    <div style="display: flex; align-items: center;">
+                                        <span id="sidebar-paperboy-dot" class="status-dot status-active"></span>
+                                        <span style="color: #cbd5e1; font-weight: 700;">Paperboy</span>
+                                    </div>
+                                    <span id="sidebar-paperboy-status" style="color: #8b5cf6; font-size: 0.6rem; font-family: 'JetBrains Mono'; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);">BROADCAST</span>
+                                </div>
                             </div>
                         </div>
+                        
                         <!-- Collapsed State Button (Hidden by default) -->
-                        <button id="wiki-sidebar-expand-btn" onclick="window.toggleWikiSidebar()" style="display: none; position: absolute; left: 0; top: 20px; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #3b82f6; padding: 10px 8px; border-radius: 0 8px 8px 0; cursor: pointer; z-index: 100; transition: 0.3s; height: 60px;">
-                            <i class="fas fa-chevron-right"></i>
+                        <button id="wiki-sidebar-expand-btn" onclick="window.toggleWikiSidebar()" style="display: none; position: absolute; left: 0; top: 20px; background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #3b82f6; padding: 15px 10px; border-radius: 0 8px 8px 0; cursor: pointer; z-index: 100; transition: 0.3s; flex-direction: column; align-items: center; gap: 10px; backdrop-filter: blur(10px);">
+                            <span style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.7rem; font-weight: 900; letter-spacing: 2px; margin-top: 5px;">WIKI NEXUS</span>
+                            <i class="fas fa-chevron-right" style="margin-top: 10px;"></i>
                         </button>
                     </div>
                     
@@ -2951,11 +4406,403 @@
                             </div>
                         </div>
 
-                        <div id="wiki-portal-content" style="padding: 2.5rem; overflow-y: auto; flex: 1; font-family: 'Inter', sans-serif; scroll-behavior: smooth;">
-                            <div style="text-align: center; padding: 5rem; opacity: 0.3;">
-                                <i class="fas fa-brain" style="font-size: 4rem; margin-bottom: 2rem; display: block;"></i>
-                                <h2 style="letter-spacing: 5px;">SOVEREIGN KNOWLEDGE PORTAL</h2>
-                                <p>Inizializzazione NeuralWiki v9.0...</p>
+                        <div id="wiki-portal-content" style="padding: 1.5rem; overflow-y: auto; flex: 1; font-family: 'Inter', sans-serif; scroll-behavior: smooth; display: flex; flex-direction: column; gap: 1.5rem;">
+
+
+                            <!-- 1️⃣ Subview Dashboard -->
+                            <div id="wiki-subview-dashboard" style="display: none;">
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div class="wiki-widget-card" style="border-left: 3px solid #3b82f6;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Total Knowledge Nodes</div>
+                                        <div style="font-size: 1.4rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">42,940</div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="border-left: 3px solid #10b981;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Epistemic Freshness</div>
+                                        <div style="font-size: 1.4rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">99.8%</div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="border-left: 3px solid #a855f7;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Verification Rate</div>
+                                        <div style="font-size: 1.4rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">100%</div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="border-left: 3px solid #facc15;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Swarm Sync Status</div>
+                                        <div style="font-size: 1.4rem; font-weight: 900; color: #4ade80; font-family: 'JetBrains Mono'; margin-top: 5px;">ACTIVE</div>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1.8fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                                    <div class="wiki-widget-card" style="height: 300px; display: flex; flex-direction: column;">
+                                        <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>📈 Agentic Foraging Performance</span>
+                                            <span style="font-size: 0.55rem; color: #64748b;">(Skywalker vs Yoda)</span>
+                                        </div>
+                                        <div style="flex: 1; position: relative;">
+                                            <canvas id="wiki-perf-chart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="height: 300px; display: flex; flex-direction: column;">
+                                        <div style="font-size: 0.65rem; color: #a855f7; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">
+                                            🥧 Source Distribution
+                                        </div>
+                                        <div style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center;">
+                                            <canvas id="wiki-source-pie"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="wiki-widget-card">
+                                    <div style="font-size: 0.65rem; color: #cbd5e1; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">
+                                        🏺 Recent Epistemic Insights
+                                    </div>
+                                    <div style="overflow-x: auto;">
+                                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.7rem;">
+                                            <thead>
+                                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #8b949e;">
+                                                    <th style="padding: 10px;">TOPIC</th>
+                                                    <th style="padding: 10px;">SOURCE</th>
+                                                    <th style="padding: 10px;">TIMESTAMP</th>
+                                                    <th style="padding: 10px;">VERDICT / MANDATE</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="wiki-recent-insights-body">
+                                                <tr><td colspan="4" style="text-align: center; padding: 2rem; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Loading insights...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2️⃣ Subview Agent Profile -->
+                            <div id="wiki-subview-agent-profile" style="display: none;">
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+                                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                                        <div class="wiki-widget-card" style="text-align: center; padding: 2rem; border-top: 4px solid #3b82f6;">
+                                            <img id="view-agent-avatar" src="" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #3b82f6; box-shadow: 0 0 20px rgba(59,130,246,0.3); margin-bottom: 1rem; object-fit: cover;">
+                                            <h2 id="view-agent-name" style="color: #fff; margin: 0; font-size: 1.2rem; font-weight: 900; letter-spacing: -0.5px;">AGENTE</h2>
+                                            <div style="font-family: 'JetBrains Mono'; font-size: 0.6rem; color: #3b82f6; margin-top: 4px;">ID: <span id="view-agent-id">...</span></div>
+                                            <div id="view-agent-role" style="font-size: 0.65rem; background: rgba(59,130,246,0.15); color: #3b82f6; padding: 4px 10px; border-radius: 20px; font-weight: 800; display: inline-block; margin-top: 10px; text-transform: uppercase;">ROLE</div>
+                                        </div>
+                                        <div class="wiki-widget-card">
+                                            <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase; margin-bottom: 8px;">Mandate / Specialization</div>
+                                            <p id="view-agent-desc" style="font-size: 0.7rem; color: #cbd5e1; line-height: 1.6; margin: 0; font-style: italic;">Caricamento mandato agente...</p>
+                                        </div>
+                                        <div id="view-agent-metrics-container" style="display: flex; flex-direction: column; gap: 0.8rem;"></div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                                        <div class="wiki-widget-card" style="height: 250px; display: flex; flex-direction: column;">
+                                            <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">
+                                                📈 <span id="view-agent-chart-title">Attività Agente</span>
+                                            </div>
+                                            <div style="flex: 1; position: relative;">
+                                                <canvas id="view-agent-mem-chart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="wiki-widget-card" style="display: flex; flex-direction: column; flex: 1;">
+                                            <div style="font-size: 0.65rem; color: #ef4444; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                                <span>🚨 Live Operation Logs</span>
+                                                <span style="font-size: 0.55rem; color: #64748b; font-family: 'JetBrains Mono';">STATUS: MONITORED</span>
+                                            </div>
+                                            <div id="view-agent-logs-container" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.03); border-radius: 10px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3️⃣ Subview KB Reader / Explorer -->
+                            <div id="wiki-subview-kb" style="display: none;">
+                                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center;">
+                                    <div style="position: relative; width: 260px;">
+                                        <input type="text" id="kb-tree-filter" oninput="window.filterKBTree()" placeholder="Filtra documenti..." style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(59,130,246,0.2); color: white; padding: 0.6rem 1rem 0.6rem 2.2rem; border-radius: 8px; font-size: 0.7rem; outline: none;">
+                                        <i class="fas fa-search" style="position: absolute; left: 0.8rem; top: 0.8rem; color: #64748b; font-size: 0.7rem;"></i>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 260px 1fr; gap: 1.5rem; align-items: start; min-height: 600px;">
+                                    
+                                    <!-- Left Sidebar Tree Navigator -->
+                                    <div style="background: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 1rem; border: 1px solid rgba(255,255,255,0.05); height: 100%; overflow-y: auto; max-height: 700px;">
+                                        <div style="font-size: 0.6rem; color: #3b82f6; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">
+                                            <i class="fas fa-folder-tree"></i> DIRECTORY
+                                        </div>
+                                        <div id="wiki-kb-tree-container" style="display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem;">
+                                            <!-- Tree nodes injected via JS -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Article Content Pane -->
+                                    <div style="background: rgba(15, 23, 42, 0.2); border-radius: 12px; padding: 2rem; border: 1px solid rgba(255,255,255,0.03); min-height: 100%;">
+                                        <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-end;">
+                                            <div>
+                                                <div id="wiki-kb-namespace-badge" style="font-size: 0.6rem; color: #a855f7; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px;">/ Namespace</div>
+                                                <h1 id="wiki-kb-title" style="color: #fff; font-size: 1.8rem; font-weight: 900; margin: 0; letter-spacing: -1px;">Seleziona un documento</h1>
+                                            </div>
+                                            <div id="wiki-kb-action-buttons" style="display: none; gap: 10px;">
+                                                <button onclick="window.editCurrentKBArticle()" style="background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.6rem; font-weight: 800;"><i class="fas fa-edit"></i> EDIT</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="wiki-page-metadata" style="display: none; background: rgba(59, 130, 246, 0.03); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 12px; padding: 1.2rem; margin-bottom: 1.5rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                            <div>
+                                                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Epistemic Author</div>
+                                                <div id="wiki-kb-author" style="font-size: 0.75rem; color: #fff; font-weight: 800; margin-top: 2px;">Unknown Agent</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Consensus Verifier</div>
+                                                <div id="wiki-kb-verifier" style="font-size: 0.75rem; color: #10b981; font-weight: 800; margin-top: 2px;">Verificato Court</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Last Crystallization</div>
+                                                <div id="wiki-kb-updated" style="font-size: 0.75rem; color: #a855f7; font-weight: 800; margin-top: 2px;">General</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="wiki-kb-content-body" style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.8; font-family: 'Inter', sans-serif;">
+                                            <div style="text-align: center; opacity: 0.5; padding: 4rem 0;">
+                                                <i class="fas fa-book-open" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                                <div style="font-size: 0.8rem;">Esplora l'albero a sinistra per caricare un documento dal Vault.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4️⃣ Subview KB List (REMOVED - Merged into 3) -->
+                            <div id="wiki-subview-kb-list" style="display: none;"></div>
+
+                            <!-- 5️⃣ Subview Reports -->
+                            <div id="wiki-subview-reports" style="display: none;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                                    <div class="wiki-widget-card" style="height: 280px; display: flex; flex-direction: column;">
+                                        <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">📈 Foraging Time Analysis (Response Latency)</div>
+                                        <div style="flex: 1; position: relative;">
+                                            <canvas id="wiki-forage-time-chart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="height: 280px; display: flex; flex-direction: column;">
+                                        <div style="font-size: 0.65rem; color: #ef4444; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">📉 Failure Analysis (HTTP Fault Distribution)</div>
+                                        <div style="flex: 1; position: relative; display: flex; justify-content: center; align-items: center;">
+                                            <canvas id="wiki-failure-chart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="wiki-widget-card" style="height: 280px; display: flex; flex-direction: column;">
+                                    <div style="font-size: 0.65rem; color: #10b981; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">🧬 Synthesis Progress (Cumulative Node Growth)</div>
+                                    <div style="flex: 1; position: relative;">
+                                        <canvas id="wiki-synthesis-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 6️⃣ Subview Activity -->
+                            <div id="wiki-subview-activity" style="display: none;">
+                                <div class="wiki-widget-card">
+                                    <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem; display: flex; justify-content: space-between;">
+                                        <span>🌌 Knowledge Ledger Feed</span>
+                                        <span style="font-size: 0.55rem; color: #64748b; font-family: 'JetBrains Mono';">PERSISTENT INJECTOR</span>
+                                    </div>
+                                    <div id="wiki-activity-list" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; max-height: 600px; padding-right: 10px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- 7️⃣ Subview Agents Swarm -->
+                            <div id="wiki-subview-agents" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                    <div>
+                                        <h2 style="color: white; margin: 0; font-size: 1.1rem; font-weight: 900;">🧬 SWARM ORCHESTRA STATUS</h2>
+                                        <p style="color: #64748b; font-size: 0.65rem; text-transform: uppercase; margin-top: 4px; letter-spacing: 1px;">Click an agent to inspect active metrics and neural telemetry</p>
+                                    </div>
+                                    <button onclick="window.showAgentFactory()" class="btn-glow" style="padding: 8px 16px; font-size: 0.65rem; border-radius: 8px;">🧬 FORGE NEW AGENT</button>
+                                </div>
+                                <div id="wiki-agents-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;"></div>
+                            </div>
+
+                            <!-- 8️⃣ Subview Settings -->
+                            <div id="wiki-subview-settings" style="display: none;">
+                                <div class="wiki-widget-card" style="max-width: 600px; margin: 0 auto; border-top: 4px solid #a855f7;">
+                                    <div style="font-size: 0.75rem; color: #a855f7; font-weight: 900; text-transform: uppercase; margin-bottom: 1.5rem; letter-spacing: 1px;"><i class="fas fa-sliders-h"></i> Swarm Architecture Settings</div>
+                                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                                        <div>
+                                            <label for="wiki-settings-chief-model" style="display: block; font-size: 0.6rem; color: #8b949e; text-transform: uppercase; margin-bottom: 6px;">Chief Knowledge Architect Model</label>
+                                            <select id="wiki-settings-chief-model" class="swarm-select" style="width: 100%; background: #000; border: 1px solid rgba(168,85,247,0.3); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.75rem; outline: none; font-family: 'JetBrains Mono';"></select>
+                                        </div>
+                                        <div>
+                                            <label for="wiki-settings-audit-model" style="display: block; font-size: 0.6rem; color: #8b949e; text-transform: uppercase; margin-bottom: 6px;">Forensic Audit Consensual Model</label>
+                                            <select id="wiki-settings-audit-model" class="swarm-select" style="width: 100%; background: #000; border: 1px solid rgba(168,85,247,0.3); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.75rem; outline: none; font-family: 'JetBrains Mono';"></select>
+                                        </div>
+                                        <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                                            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                                <div>
+                                                    <div style="font-size: 0.75rem; color: #fff; font-weight: 800;">Z3 Constraint Verification Engine</div>
+                                                    <div style="font-size: 0.55rem; color: #64748b;">Enable formal verification of knowledge contradictions on page save</div>
+                                                </div>
+                                                <input type="checkbox" id="wiki-setting-z3" style="width: 18px; height: 18px; cursor: pointer;">
+                                            </label>
+                                            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                                <div>
+                                                    <div style="font-size: 0.75rem; color: #fff; font-weight: 800;">Epistemic DeepSearch Crawler</div>
+                                                    <div style="font-size: 0.55rem; color: #64748b;">Enforce extensive multi-layered foraging searches across outer ring DNS</div>
+                                                </div>
+                                                <input type="checkbox" id="wiki-setting-deepsearch" style="width: 18px; height: 18px; cursor: pointer;">
+                                            </label>
+                                        </div>
+                                        <button onclick="window.saveWikiSettings()" class="btn-glow" style="width: 100%; padding: 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 900; margin-top: 1rem;">SAVE SETTINGS CONFIGURATION</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 9️⃣ Subview Simulation -->
+                            <div id="wiki-subview-simulation" style="display: none;">
+                                <div id="oracle-page-1" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                                    <div style="text-align: center; max-width: 600px; margin: 0 auto 1rem;">
+                                        <h2 style="color: #facc15; font-size: 1.3rem; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 10px;"><i class="fas fa-brain"></i> ORACLE WHAT-IF SIMULATOR</h2>
+                                        <p style="color: #64748b; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 5px;">Trace strategic causal projections across the knowledge space</p>
+                                    </div>
+                                    <div class="wiki-widget-card" style="border-top: 4px solid #facc15;">
+                                        <div style="font-size: 0.6rem; color: #8b949e; text-transform: uppercase; margin-bottom: 12px; font-weight: 800;">Step 1: Set Causal Lens perspective</div>
+                                        <div style="display: flex; gap: 10px; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 5px;">
+                                            <button onclick="window.setOracleLens('musk')" class="lens-btn active" style="flex: 1; padding: 10px; font-size: 0.6rem; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1px solid rgba(250,204,21,0.3); background: rgba(250,204,21,0.05); color: #facc15; font-family: 'Outfit';">ELON MUSK PERSPECTIVE</button>
+                                            <button onclick="window.setOracleLens('macro')" class="lens-btn" style="flex: 1; padding: 10px; font-size: 0.6rem; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); background: transparent; color: #64748b; font-family: 'Outfit';">FED / MACRO ECONOMY</button>
+                                            <button onclick="window.setOracleLens('standard')" class="lens-btn" style="flex: 1; padding: 10px; font-size: 0.6rem; font-weight: 800; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); background: transparent; color: #64748b; font-family: 'Outfit';">STANDARD TECHNICAL</button>
+                                        </div>
+                                        <div style="font-size: 0.6rem; color: #8b949e; text-transform: uppercase; margin-bottom: 8px; font-weight: 800;">Step 2: Enter simulation event narrative</div>
+                                        <textarea id="oracle-simulation-input" placeholder="e.g. Cosa succederebbe se la Federal Reserve alzasse i tassi dello 0.5% a causa di un picco di inflazione?" style="width: 100%; height: 100px; background: rgba(0,0,0,0.3); border: 1px solid rgba(250,204,21,0.2); color: white; padding: 1rem; border-radius: 12px; font-family: 'Inter'; font-size: 0.75rem; outline: none; resize: none; margin-bottom: 1.5rem;"></textarea>
+                                        <div id="oracle-status-msg" style="display: none; background: rgba(250,204,21,0.05); border: 1px solid rgba(250,204,21,0.2); padding: 10px; border-radius: 8px; font-size: 0.65rem; color: #facc15; font-family: 'JetBrains Mono'; margin-bottom: 1.5rem; text-align: center;"></div>
+                                        <button id="oracle-run-btn" onclick="window.runSovereignSimulation()" style="width: 100%; padding: 15px; border-radius: 12px; font-size: 0.8rem; font-weight: 900; background: linear-gradient(135deg, #facc15, #f59e0b); border: none; color: #020617; cursor: pointer; box-shadow: 0 10px 30px rgba(250,204,21,0.2); text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; font-family: 'Outfit';">🚀 RUN CAUSAL SIMULATION</button>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                        <div class="wiki-widget-card epistemic-hud-item" style="border-left: 3px solid #3b82f6;">
+                                            <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Causal Divergence</div>
+                                            <div class="hud-value" style="font-size: 1.2rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">0.0%</div>
+                                        </div>
+                                        <div class="wiki-widget-card epistemic-hud-item" style="border-left: 3px solid #ef4444;">
+                                            <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Risk Convergence</div>
+                                            <div class="hud-value" style="font-size: 1.2rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">0.0%</div>
+                                        </div>
+                                        <div class="wiki-widget-card epistemic-hud-item" style="border-left: 3px solid #10b981;">
+                                            <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Stabilization Index</div>
+                                            <div class="hud-value" style="font-size: 1.2rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">100%</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="oracle-page-2" style="display: none; flex-direction: column; gap: 1.5rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <h2 style="color: #10b981; margin: 0; font-size: 1.1rem; font-weight: 900;">🔮 PROJECTION INSIGHTS & STRATEGIC PLAYBOOK</h2>
+                                            <p style="color: #64748b; font-size: 0.65rem; text-transform: uppercase; margin-top: 4px;">Dynamic causally affected nodes mapped by Supreme Consensus</p>
+                                        </div>
+                                        <button onclick="window.toggleOraclePage()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.65rem; font-weight: 800;"><i class="fas fa-arrow-left"></i> NUOVA EVENTO</button>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
+                                        <div class="wiki-widget-card" style="height: 300px; display: flex; flex-direction: column;">
+                                            <div style="font-size: 0.65rem; color: #facc15; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">📊 Monte Carlo Causal Projections</div>
+                                            <div style="flex: 1; position: relative;">
+                                                <canvas id="oracle-qmc-chart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div style="display: grid; grid-template-rows: 1fr 1fr; gap: 1rem;">
+                                            <div class="wiki-widget-card" style="height: 140px; display: flex; flex-direction: column;">
+                                                <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">🧬 Semantic Cluster Variance</div>
+                                                <div style="flex: 1; position: relative;">
+                                                    <canvas id="oracle-pca-chart"></canvas>
+                                                </div>
+                                            </div>
+                                            <div class="wiki-widget-card" style="height: 140px; display: flex; flex-direction: column;">
+                                                <div style="font-size: 0.65rem; color: #a855f7; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">🕸️ Multi-Layer Projected Variance</div>
+                                                <div style="flex: 1; position: relative;">
+                                                    <canvas id="oracle-parallel-chart"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="wiki-widget-card">
+                                        <div style="font-size: 0.65rem; color: #10b981; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">🏺 Executive Strategic Narrative</div>
+                                        <div id="oracle-narrative-box" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(16,185,129,0.1); border-radius: 10px; padding: 1.2rem; color: #cbd5e1; font-size: 0.75rem; line-height: 1.7;">
+                                            Seleziona e avvia una simulazione per generare il report della narrativa...
+                                        </div>
+                                    </div>
+                                    <div class="wiki-widget-card">
+                                        <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem;">📋 Recommended Operational Playbook</div>
+                                        <div style="overflow-x: auto;">
+                                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.7rem;">
+                                                <thead>
+                                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); color: #8b949e;">
+                                                        <th style="padding: 10px;">TIMELINE</th>
+                                                        <th style="padding: 10px;">PROJECTED TARGET CONFLUX</th>
+                                                        <th style="padding: 10px;">SWARM AGENT</th>
+                                                        <th style="padding: 10px;">PRIORITY</th>
+                                                        <th style="padding: 10px;">PROGRESS</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="oracle-playbook-body">
+                                                    <tr><td colspan="5" style="text-align:center; padding: 2rem; color: #64748b;">Nessun playbook generato. Esegui una simulazione.</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 🔟 Subview Forensic Cross-Audit -->
+                            <div id="wiki-subview-forensic" style="display: none;">
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div class="wiki-widget-card" style="text-align: center; border-top: 4px solid #10b981;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Integrity Score</div>
+                                        <div id="integrity-score-value" style="font-size: 1.8rem; font-weight: 900; color: #10b981; font-family: 'JetBrains Mono'; margin-top: 5px;">100%</div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="text-align: center;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Total Assertions Cross-Audited</div>
+                                        <div id="forensic-total-claims" style="font-size: 1.8rem; font-weight: 900; color: #fff; font-family: 'JetBrains Mono'; margin-top: 5px;">0</div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="text-align: center; border-top: 4px solid #ef4444;">
+                                        <div style="font-size: 0.55rem; color: #8b949e; text-transform: uppercase;">Anomalies / Contradictions</div>
+                                        <div id="forensic-total-anomalies" style="font-size: 1.8rem; font-weight: 900; color: #ef4444; font-family: 'JetBrains Mono'; margin-top: 5px;">0</div>
+                                    </div>
+                                </div>
+                                <div class="wiki-widget-card">
+                                    <div style="font-size: 0.65rem; color: #ef4444; font-weight: 900; text-transform: uppercase; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                                        <span>🛡️ Epistemic Cross-Contradiction Ledgers</span>
+                                        <span style="font-size: 0.55rem; color: #64748b; font-family: 'JetBrains Mono';">SCENARIO: AEGIS INTEGRITY SCAN</span>
+                                    </div>
+                                    <div id="forensic-contradictions-list" style="display: flex; flex-direction: column; gap: 1.5rem;"></div>
+                                </div>
+                            </div>
+
+                            <!-- 1️⃣1️⃣ Subview Pure Wiki IDE -->
+                            <div id="wiki-subview-pure-wiki" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                                    <div>
+                                        <h2 style="color: #60a5fa; margin: 0; font-size: 1.1rem; font-weight: 900;"><i class="fas fa-file-signature"></i> PURE WIKI DECENTRALIZED IDE</h2>
+                                        <p style="color: #64748b; font-size: 0.65rem; text-transform: uppercase; margin-top: 4px; letter-spacing: 1px;">Decentralized peer-to-peer secure editor & graph visualizer</p>
+                                    </div>
+                                    <div id="pure-wiki-save-status" style="font-size: 0.65rem; font-family: 'JetBrains Mono'; color: #cbd5e1;"></div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 240px 1.5fr 1fr; gap: 1rem; min-height: 550px;">
+                                    <div class="wiki-widget-card" style="display: flex; flex-direction: column; padding: 12px; gap: 10px;">
+                                        <div style="font-size: 0.55rem; color: #60a5fa; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>📂 DECENTRALIZED TREE</span>
+                                            <button onclick="window.pureWikiCreateNewFolder()" style="background: transparent; border: none; color: #10b981; cursor: pointer; font-size: 0.65rem;" title="Nuova Cartella"><i class="fas fa-folder-plus"></i></button>
+                                        </div>
+                                        <div id="pure-wiki-tree-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; max-height: 450px;"></div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="display: flex; flex-direction: column; padding: 12px; gap: 10px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                                            <div style="display: flex; gap: 4px; background: rgba(0,0,0,0.2); padding: 2px; border-radius: 6px;">
+                                                <button id="pure-wiki-tab-markdown" onclick="window.pureWikiSetTab('markdown')" class="active" style="border: none; border-radius: 4px; font-size: 0.6rem; font-weight: 800; cursor: pointer; padding: 5px 12px; font-family: 'Outfit';">MARKDOWN</button>
+                                                <button id="pure-wiki-tab-preview" onclick="window.pureWikiSetTab('preview')" style="border: none; border-radius: 4px; font-size: 0.6rem; font-weight: 800; cursor: pointer; padding: 5px 12px; background: transparent; color: #64748b; font-family: 'Outfit';">PREVIEW</button>
+                                            </div>
+                                            <button onclick="window.pureWikiSaveActivePage()" style="background: rgba(16,185,129,0.1); border: 1px solid #10b981; color: #10b981; padding: 5px 14px; border-radius: 6px; font-size: 0.6rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px;"><i class="fas fa-save"></i> SALVA</button>
+                                        </div>
+                                        <div style="flex: 1; display: flex; flex-direction: column; min-height: 400px; position: relative;">
+                                            <textarea id="pure-wiki-markdown-editor" oninput="window.pureWikiHandleContentChange()" style="flex: 1; width: 100%; height: 100%; background: #020617; border: 1px solid rgba(255,255,255,0.03); border-radius: 8px; color: #fff; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; line-height: 1.6; outline: none; resize: none; min-height: 380px;"></textarea>
+                                            <div id="pure-wiki-preview-panel" style="display: none; flex: 1; width: 100%; height: 100%; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.03); border-radius: 8px; padding: 1.2rem; min-height: 380px;"></div>
+                                        </div>
+                                    </div>
+                                    <div class="wiki-widget-card" style="display: flex; flex-direction: column; padding: 12px; gap: 10px;">
+                                        <div style="font-size: 0.55rem; color: #60a5fa; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">
+                                            🕸️ CAUSAL CONFLUX GRAPH
+                                        </div>
+                                        <div style="flex: 1; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); overflow: hidden; position: relative; min-height: 400px;">
+                                            <canvas id="pure-wiki-graph-canvas" style="display: block; width: 100%; height: 100%; cursor: grab;"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -2963,32 +4810,6 @@
                         <div id="wiki-disclosure-panel" style="display:none; position:absolute; background:rgba(15,23,42,0.95); border:1px solid rgba(59,130,246,0.4); border-radius:16px; box-shadow:0 15px 40px rgba(0,0,0,0.6); z-index:100; backdrop-filter:blur(15px); pointer-events:all;"></div>
                     </div>
 
-                    <!-- Right Sidebar: Epistemic Insights (v9.0) -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.2rem; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); flex: 1; display: flex; flex-direction: column;">
-                            <div style="font-size: 0.6rem; color: #3b82f6; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">Causal Graph</div>
-                            <div id="wiki-mini-graph" style="flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid rgba(255,255,255,0.02);">
-                                <!-- Cytoscape Mini-Graph -->
-                                <div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: #64748b;">
-                                    GRAPH_READY_V9
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.2rem; border: 1px solid rgba(168, 85, 247, 0.2); backdrop-filter: blur(10px);">
-                            <div style="font-size: 0.6rem; color: #a855f7; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">Cognitive Path</div>
-                            <div id="wiki-learning-path" style="display: flex; flex-direction: column; gap: 0.8rem;">
-                                <div style="font-size: 0.55rem; color: #64748b;">Nessun percorso attivo.</div>
-                            </div>
-                        </div>
-
-                        <div style="background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 1.2rem; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px);">
-                            <div style="font-size: 0.6rem; color: #4ade80; font-weight: 900; letter-spacing: 2px; margin-bottom: 1rem; text-transform: uppercase;">Provenance</div>
-                            <div id="wiki-provenance-list" style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 300px; overflow-y: auto;">
-                                <div style="font-size: 0.55rem; color: #64748b; font-style: italic;">Seleziona un argomento per mappare le fonti.</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -3003,15 +4824,31 @@
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 400px; gap: 2rem;">
-                    <!-- Simulatore Attivo -->
-                    <div style="background: rgba(0,0,0,0.4); border-radius: 20px; padding: 2rem; border: 1px solid rgba(250,204,21,0.2); min-height: 70vh;">
-                        <div style="margin-bottom: 2rem;">
-                            <div style="font-size: 0.7rem; color: #facc15; font-weight: 800; letter-spacing: 2px;">MAPPA D'IMPATTO CAUSALE</div>
+                    <!-- Simulatore Attivo / History -->
+                    <div style="background: rgba(0,0,0,0.4); border-radius: 20px; padding: 2rem; border: 1px solid rgba(250,204,21,0.2); min-height: 70vh; display: flex; flex-direction: column;">
+                        
+                        <!-- TABS -->
+                        <div style="display: flex; gap: 0.5rem; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 1.5rem; flex-shrink: 0;">
+                            <button id="tab-sim-new" onclick="window.switchSimTab('new')" style="flex: 1; background: rgba(250, 204, 21, 0.15); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.3); padding: 0.6rem; border-radius: 8px; font-size: 0.6rem; font-weight: 800; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                <i class="fas fa-project-diagram"></i> MAPPA & RISULTATI
+                            </button>
+                            <button id="tab-sim-history" onclick="window.switchSimTab('history')" style="flex: 1; background: transparent; color: #8b949e; border: 1px solid transparent; padding: 0.6rem; border-radius: 8px; font-size: 0.6rem; font-weight: 800; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                <i class="fas fa-history"></i> STORICO SIMULAZIONI
+                            </button>
+                        </div>
+
+                        <!-- NEW SIMULATION RESULTS PANEL -->
+                        <div id="sim-panel-new" style="display: flex; flex-direction: column; flex: 1; animation: fadeIn 0.3s;">
+                            <div style="margin-bottom: 2rem;">
+                                <div style="font-size: 0.7rem; color: #facc15; font-weight: 800; letter-spacing: 2px;">MAPPA D'IMPATTO CAUSALE</div>
                             <div id="simulation-graph-container" style="width: 100%; height: 500px; margin-top: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed rgba(250,204,21,0.1);">
                                 <!-- Cytoscape Simulation Graph -->
                             </div>
                         </div>
                         
+                        <!-- Narrative Container -->
+                        <div id="simulation-narrative-container" style="margin-bottom: 2rem;"></div>
+
                         <div id="simulation-results-table" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
                             <!-- Impact cards -->
                         </div>
@@ -3026,88 +4863,131 @@
                                 <canvas id="simulation-timeline-chart"></canvas>
                             </div>
                         </div>
+                        </div>
+
+                        <!-- HISTORY PANEL (Moved from right) -->
+                        <div id="sim-panel-history" style="display: none; gap: 1.5rem; animation: fadeIn 0.3s; height: 100%; flex: 1;">
+                            <div class="glass-card" style="flex: 1; padding: 1.5rem; border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.05); display: flex; flex-direction: column; overflow: hidden;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(59,130,246,0.2); padding-bottom: 10px; flex-shrink: 0;">
+                                    <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-history"></i> SIMULATION HISTORY
+                                    </div>
+                                    <button onclick="window.clearSimHistoryLocal()" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; border-radius: 4px; padding: 4px 10px; font-size: 0.5rem; cursor: pointer; font-weight: 800; transition: 0.2s;">
+                                        <i class="fas fa-trash"></i> CLEAR ALL
+                                    </button>
+                                </div>
+                                
+                                <div style="margin-bottom: 1rem; flex-shrink: 0;">
+                                    <input type="text" id="whatif-history-search" placeholder="Cerca nello storico..." onkeyup="window.loadSimulationHistory()"
+                                        style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(59, 130, 246, 0.3); padding: 8px 12px; border-radius: 8px; color: #fff; font-size: 0.65rem; outline: none;">
+                                </div>
+
+                                <div id="sim-history-list" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; flex: 1; padding-right: 5px;">
+                                    <div style="color: #8b949e; font-size: 0.65rem; text-align: center; padding: 2rem;">
+                                        Nessuna simulazione recente trovata.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- DETAILS PANEL -->
+                            <div class="glass-card" style="width: 350px; padding: 1.5rem; border-color: rgba(168, 85, 247, 0.3); background: rgba(168, 85, 247, 0.05); display: flex; flex-direction: column; overflow-y: auto;">
+                                <div style="font-size: 0.65rem; color: #a855f7; font-weight: 900; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(168, 85, 247, 0.2); padding-bottom: 10px;">
+                                    <i class="fas fa-microscope"></i> DETTAGLIO SIMULAZIONE
+                                </div>
+                                <div id="whatif-selected-details" style="display: flex; flex-direction: column; gap: 1rem;">
+                                    <div style="color: #8b949e; font-size: 0.65rem; text-align: center; padding: 2rem; font-style: italic;">
+                                        Seleziona una simulazione dallo storico per vederne i dettagli analitici e i verdetti.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                     
                     <!-- Pannello di Controllo -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <!-- [v8.4] UNIFIED DECISION INTELLIGENCE COMMAND CENTER -->
-                        <div class="glass-card" style="padding: 1.5rem; border-color: rgba(250, 204, 21, 0.4); background: rgba(250, 204, 21, 0.05);">
-                            <div style="font-size: 0.65rem; color: #facc15; font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-terminal"></i> DECISION INTELLIGENCE (Sovereign NL What-If)
-                                <button onclick="window.showWhatIfWizard()" style="margin-left: auto; background: rgba(251, 191, 36, 0.1); border: 1px solid #facc15; color: #facc15; border-radius: 4px; padding: 2px 8px; font-size: 0.5rem; cursor: pointer; font-weight: 800;">
-                                    <i class="fas fa-magic"></i> WIZARD
-                                </button>
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem; position: relative;">
+                        <!-- COMMAND CENTER FORM ALWAYS VISIBLE -->
+                        <div style="display: flex; flex-direction: column; gap: 1.5rem; animation: fadeIn 0.3s;">
+                            <!-- [v8.4] UNIFIED DECISION INTELLIGENCE COMMAND CENTER -->
+                            <div class="glass-card" style="padding: 1.5rem; border-color: rgba(250, 204, 21, 0.4); background: rgba(250, 204, 21, 0.05);">
+                                <div style="font-size: 0.65rem; color: #facc15; font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-terminal"></i> DECISION INTELLIGENCE (Sovereign NL What-If)
+                                    <button onclick="window.showWhatIfWizard()" style="margin-left: auto; background: rgba(251, 191, 36, 0.1); border: 1px solid #facc15; color: #facc15; border-radius: 4px; padding: 2px 8px; font-size: 0.5rem; cursor: pointer; font-weight: 800;">
+                                        <i class="fas fa-magic"></i> WIZARD
+                                    </button>
+                                </div>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                    <div>
+                                        <label for="nl-sim-prompt" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">1. DESCRIZIONE DELLO SCENARIO (Linguaggio Naturale)</label>
+                                        <textarea id="nl-sim-prompt" placeholder="Es: 'Valuta l'impatto di un attacco cyber sulle infrastrutture energetiche e come reagirebbero i mercati...'" 
+                                            style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.2); border-radius: 12px; color: #fff; font-size: 0.7rem; padding: 10px; font-family: 'Inter', sans-serif; resize: none;"></textarea>
+                                    </div>
+                                    
+                                    <div>
+                                        <label for="sim-lens" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">2. LENTE ARCHETIPALE (Scegli la prospettiva di simulazione - multiple con CMD/CTRL)</label>
+                                        <select id="sim-lens" multiple style="width: 100%; height: 120px; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.3); color: #facc15; padding: 0.6rem; border-radius: 8px; font-size: 0.7rem; font-family: 'JetBrains Mono'; outline: none;">
+                                            <option value="musk" selected>🚀 MUSK reasoning (First Principles)</option>
+                                            <option value="bezos">📦 BEZOS strategy (Long-term / Flywheel)</option>
+                                            <option value="trump">🦅 TRUMP disruption (Disruption / Winning)</option>
+                                            <option value="standard">🔍 STANDARD analysis (Objective)</option>
+                                            <option value="compliance">📜 COMPLIANCE / REGULATORY (Legal/GDPR)</option>
+                                            <option value="bottleneck">🚧 BOTTLENECK / RESOURCE (PM Friction)</option>
+                                            <option value="competitive_dominance">💥 COMPETITIVE DOMINANCE (Adversarial)</option>
+                                            <option value="cascading_failure">⛓️ CASCADING FAILURE (Domino Effect)</option>
+                                            <option value="black_swan">🦢 BLACK SWAN (High Impact / Low Prob)</option>
+                                            <option value="legal">⚖️ LEGAL EAGLE (Compliance/Risk)</option>
+                                            <option value="auditor">🛡️ THE AUDITOR (Governance/Policy)</option>
+                                            <option value="competitor">⚔️ THE COMPETITOR (Adversarial/Risk)</option>
+                                            <option value="guardian">🌍 THE GUARDIAN (Ethics/Safeguard)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="sim-mode" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">3. MODALITÀ DI CALCOLO</label>
+                                        <select id="sim-mode" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.3); color: #fff; padding: 0.6rem; border-radius: 8px; font-size: 0.7rem; outline: none;">
+                                            <option value="FAST" selected>⚡ FAST (100 iterazioni - Istantaneo)</option>
+                                            <option value="DEEP">🔮 DEEP (2000 iterazioni - Alta Precisione)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(59, 130, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span style="font-size: 0.6rem; color: #3b82f6; font-weight: 900;">COW TWIN MODE (v9.0)</span>
+                                            <span style="font-size: 0.45rem; color: #94a3b8;">Simulazione differenziale a impatto zero.</span>
+                                        </div>
+                                        <label class="ios-switch">
+                                            <input type="checkbox" id="cow-twin-toggle" checked>
+                                            <span class="ios-slider"></span>
+                                        </label>
+                                    </div>
+
+                                    <div>
+                                        <label for="sim-horizon" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">4. ORIZZONTE TEMPORALE (Temporal Scrubber)</label>
+                                        <input type="range" id="sim-horizon" min="0" max="2" step="1" value="0" 
+                                            style="width: 100%; accent-color: #facc15; background: rgba(0,0,0,0.4); height: 4px; border-radius: 2px; outline: none; -webkit-appearance: none;">
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.5rem; color: #8b949e; margin-top: 5px;">
+                                            <span>IMMEDIATO</span>
+                                            <span>MEDIO TERMINE (6m)</span>
+                                            <span>LUNGO TERMINE (12m+)</span>
+                                        </div>
+                                    </div>
+
+                                    <button id="btn-run-nl-sim" onclick="runNaturalLanguageSimulation()" 
+                                        style="width: 100%; padding: 1rem; background: linear-gradient(135deg, #facc15, #f59e0b); border: none; border-radius: 12px; color: #000; font-weight: 900; font-size: 0.75rem; cursor: pointer; box-shadow: 0 4px 20px rgba(250,204,21,0.3); display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s;">
+                                        <i id="btn-run-nl-sim-icon" class="fas fa-bolt"></i> <span id="btn-run-nl-sim-text">ESEGUI SIMULAZIONE SOVRANA</span>
+                                    </button>
+                                </div>
                             </div>
                             
-                            <div style="display: flex; flex-direction: column; gap: 1rem;">
-                                <div>
-                                    <label for="nl-sim-prompt" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">1. DESCRIZIONE DELLO SCENARIO (Linguaggio Naturale)</label>
-                                    <textarea id="nl-sim-prompt" placeholder="Es: 'Valuta l'impatto di un attacco cyber sulle infrastrutture energetiche e come reagirebbero i mercati...'" 
-                                        style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.2); border-radius: 12px; color: #fff; font-size: 0.7rem; padding: 10px; font-family: 'Inter', sans-serif; resize: none;"></textarea>
+                            <div class="glass-card" style="padding: 1.5rem; flex: 1; border-color: rgba(59,130,246,0.3);">
+                                <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; margin-bottom: 1rem;">RIEPILOGO PROBABILISTICO</div>
+                                <div id="sim-stats" style="font-size: 0.7rem; color: #94a3b8; display: flex; flex-direction: column; gap: 10px;">
+                                    <div>Nodi Influenzati: <span id="sim-affected-count" style="color: #fff;">0</span></div>
+                                    <div>Rischio di Instabilità: <span id="sim-risk-score" style="color: #ef4444;">0%</span></div>
+                                    <div>Confidenza Modello: <span id="sim-confidence" style="color: #4ade80;">0%</span></div>
                                 </div>
-                                
-                                <div>
-                                    <label for="sim-lens" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">2. LENTE ARCHETIPALE (Scegli la prospettiva di simulazione - multiple con CMD/CTRL)</label>
-                                    <select id="sim-lens" multiple style="width: 100%; height: 120px; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.3); color: #facc15; padding: 0.6rem; border-radius: 8px; font-size: 0.7rem; font-family: 'JetBrains Mono'; outline: none;">
-                                        <option value="musk" selected>🚀 MUSK reasoning (First Principles)</option>
-                                        <option value="bezos">📦 BEZOS strategy (Long-term / Flywheel)</option>
-                                        <option value="trump">🦅 TRUMP disruption (Disruption / Winning)</option>
-                                        <option value="standard">🔍 STANDARD analysis (Objective)</option>
-                                        <option value="compliance">📜 COMPLIANCE / REGULATORY (Legal/GDPR)</option>
-                                        <option value="bottleneck">🚧 BOTTLENECK / RESOURCE (PM Friction)</option>
-                                        <option value="competitive_dominance">💥 COMPETITIVE DOMINANCE (Adversarial)</option>
-                                        <option value="cascading_failure">⛓️ CASCADING FAILURE (Domino Effect)</option>
-                                        <option value="black_swan">🦢 BLACK SWAN (High Impact / Low Prob)</option>
-                                        <option value="legal">⚖️ LEGAL EAGLE (Compliance/Risk)</option>
-                                        <option value="auditor">🛡️ THE AUDITOR (Governance/Policy)</option>
-                                        <option value="competitor">⚔️ THE COMPETITOR (Adversarial/Risk)</option>
-                                        <option value="guardian">🌍 THE GUARDIAN (Ethics/Safeguard)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="sim-mode" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">3. MODALITÀ DI CALCOLO</label>
-                                    <select id="sim-mode" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(250,204,21,0.3); color: #fff; padding: 0.6rem; border-radius: 8px; font-size: 0.7rem; outline: none;">
-                                        <option value="FAST" selected>⚡ FAST (100 iterazioni - Istantaneo)</option>
-                                        <option value="DEEP">🔮 DEEP (2000 iterazioni - Alta Precisione)</option>
-                                    </select>
-                                </div>
-                                
-                                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(59, 130, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
-                                    <div style="display: flex; flex-direction: column;">
-                                        <span style="font-size: 0.6rem; color: #3b82f6; font-weight: 900;">COW TWIN MODE (v9.0)</span>
-                                        <span style="font-size: 0.45rem; color: #94a3b8;">Simulazione differenziale a impatto zero.</span>
-                                    </div>
-                                    <label class="ios-switch">
-                                        <input type="checkbox" id="cow-twin-toggle" checked>
-                                        <span class="ios-slider"></span>
-                                    </label>
-                                </div>
-
-                                <div>
-                                    <label for="sim-horizon" style="font-size: 0.55rem; color: #8b949e; display: block; margin-bottom: 8px;">4. ORIZZONTE TEMPORALE (Temporal Scrubber)</label>
-                                    <input type="range" id="sim-horizon" min="0" max="2" step="1" value="0" 
-                                        style="width: 100%; accent-color: #facc15; background: rgba(0,0,0,0.4); height: 4px; border-radius: 2px; outline: none; -webkit-appearance: none;">
-                                    <div style="display: flex; justify-content: space-between; font-size: 0.5rem; color: #8b949e; margin-top: 5px;">
-                                        <span>IMMEDIATO</span>
-                                        <span>MEDIO TERMINE (6m)</span>
-                                        <span>LUNGO TERMINE (12m+)</span>
-                                    </div>
-                                </div>
-
-                                <button id="btn-run-nl-sim" onclick="runNaturalLanguageSimulation()" 
-                                    style="width: 100%; padding: 1rem; background: linear-gradient(135deg, #facc15, #f59e0b); border: none; border-radius: 12px; color: #000; font-weight: 900; font-size: 0.75rem; cursor: pointer; box-shadow: 0 4px 20px rgba(250,204,21,0.3); display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s;">
-                                    <i id="btn-run-nl-sim-icon" class="fas fa-bolt"></i> <span id="btn-run-nl-sim-text">ESEGUI SIMULAZIONE SOVRANA</span>
-                                </button>
                             </div>
                         </div>
-                        
-                        <div class="glass-card" style="padding: 1.5rem; flex: 1; border-color: rgba(59,130,246,0.3);">
-                            <div style="font-size: 0.65rem; color: #3b82f6; font-weight: 900; margin-bottom: 1rem;">RIEPILOGO PROBABILISTICO</div>
-                            <div id="sim-stats" style="font-size: 0.7rem; color: #94a3b8; display: flex; flex-direction: column; gap: 10px;">
-                                <div>Nodi Influenzati: <span id="sim-affected-count" style="color: #fff;">0</span></div>
-                                <div>Rischio di Instabilità: <span id="sim-risk-score" style="color: #ef4444;">0%</span></div>
-                                <div>Confidenza Modello: <span id="sim-confidence" style="color: #4ade80;">0%</span></div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -3346,9 +5226,59 @@
         </div>
     </div>
 
-    <style>
-        @keyframes aura-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
-    </style>
+     <style>
+         @keyframes aura-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+         
+         /* 🏺 Premium Sovereign Wiki Styling Tokens */
+         .wiki-nav-item {
+             font-family: 'Inter', sans-serif;
+             font-size: 0.65rem;
+             letter-spacing: 0.5px;
+             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+             border: 1px solid transparent !important;
+             white-space: nowrap;
+         }
+         .wiki-nav-item:hover {
+             background: rgba(59, 130, 246, 0.08) !important;
+             color: #fff !important;
+             transform: translateY(-1px);
+         }
+         .wiki-nav-item.active {
+             background: rgba(59, 130, 246, 0.16) !important;
+             color: #3b82f6 !important;
+             border: 1px solid rgba(59, 130, 246, 0.3) !important;
+             box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+         }
+         
+         .wiki-widget-card {
+             background: rgba(15, 23, 42, 0.35);
+             border: 1px solid rgba(255, 255, 255, 0.05);
+             border-radius: 16px;
+             padding: 1.25rem;
+             backdrop-filter: blur(15px);
+             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+         }
+         .wiki-widget-card:hover {
+             border-color: rgba(59, 130, 246, 0.2);
+             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+             transform: translateY(-2px);
+         }
+         
+         /* Monte Carlo Lens Buttons */
+         .lens-btn {
+             transition: all 0.25s ease;
+         }
+         .lens-btn:hover {
+             background: rgba(255, 255, 255, 0.05) !important;
+             color: #fff !important;
+         }
+         .lens-btn.active {
+             background: rgba(250, 204, 21, 0.15) !important;
+             border-color: rgba(250, 204, 21, 0.4) !important;
+             color: #facc15 !important;
+             box-shadow: 0 0 15px rgba(250, 204, 21, 0.15);
+         }
+     </style>
     <!-- AGENT CONSOLE MODAL -->
     <div id="agent-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); z-index:10000; align-items:center; justify-content:center;">
         <div class="glass-card" style="width: 500px; max-height: 80%; display: flex; flex-direction: column; border: 1px solid #a855f7;">
@@ -3539,6 +5469,9 @@
     <script src="/static/js/v51_features.js"></script>
     <script src="/static/js/v60_features.js"></script>
     <script src="/static/js/v80_features.js"></script>
+    <script src="/static/js/v95_wiki_nexus.js"></script>
+    <script src="/static/js/v97_oracle_engine.js"></script>
+    <script src="/static/js/v10_tactical_canvas.js"></script>
     <script src="/static/js/wasm_bridge.js"></script>
 
     <!-- 🌐 AURA PERSISTENT LAYER (Modals & Scripts isolated from Grid) -->

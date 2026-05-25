@@ -86,9 +86,14 @@ class TelegramSovereignLink:
     async def query_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.is_authorized(update): return
         
-        query_text = " ".join(context.args)
+        query_text = ""
+        if context.args:
+            query_text = " ".join(context.args)
+        elif update.message and update.message.text:
+            query_text = update.message.text.replace("/query", "").strip()
+            
         if not query_text:
-            await update.message.reply_text("💡 Scrivi la tua domanda dopo il comando. Es: `/query intelligenza artificiale`", parse_mode='Markdown')
+            await update.message.reply_text("💡 Scrivi la tua domanda dopo il comando. Es: `/query intelligenza artificiale` o chiedi direttamente.", parse_mode='Markdown')
             return
         
         processing_msg = await update.message.reply_text("🔍 *Interrogazione Nebula in corso...*", parse_mode='Markdown')
@@ -224,27 +229,33 @@ class TelegramSovereignLink:
 
     def run(self):
         """Avvia il bot in un loop asincrono dedicato."""
-        self._is_running = True
-        self.app = Application.builder().token(self.token).build()
-        
-        # Gestore Errori per evitare inondazioni nel terminale
-        self.app.add_error_handler(self.error_handler)
-        
-        # Comandi
-        self.app.add_handler(CommandHandler("start", self.start_cmd))
-        self.app.add_handler(CommandHandler("status", self.status_cmd))
-        self.app.add_handler(CommandHandler("query", self.query_cmd))
-        self.app.add_handler(CommandHandler("agents", self.agents_cmd))
-        self.app.add_handler(CommandHandler("evolution", self.evolution_cmd))
-        
         try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            self._is_running = True
+            self.app = Application.builder().token(self.token).build()
+            
+            # Gestore Errori per evitare inondazioni nel terminale
+            self.app.add_error_handler(self.error_handler)
+            
+            self.app.add_handler(CommandHandler("start", self.start_cmd))
+            self.app.add_handler(CommandHandler("status", self.status_cmd))
+            self.app.add_handler(CommandHandler("query", self.query_cmd))
+            self.app.add_handler(CommandHandler("agents", self.agents_cmd))
+            self.app.add_handler(CommandHandler("evolution", self.evolution_cmd))
+            
+            # Handle normal text messages as queries
+            self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.query_cmd))
+            
+            print("🤖 [Telegram] Polling Loop Started Successfully.", flush=True)
             self.app.run_polling(drop_pending_updates=True, stop_signals=False)
         except Exception as e:
             if "nodename nor servname provided" in str(e) or "ConnectError" in str(e):
-                print("❌ [Telegram] Connessione Fallita: Host non raggiungibile.")
-                print("💡 Verifica la tua connessione internet o i DNS. Il bot funzionerà in modalità OFFLINE (Disconnesso).")
+                print("❌ [Telegram] Connessione Fallita: Host non raggiungibile.", flush=True)
             else:
-                print(f"❌ [Telegram] Errore critico durante il polling: {e}")
+                print(f"❌ [Telegram] Errore critico in TelegramBotThread: {e}", flush=True)
             self._is_running = False
 
     def stop(self):
@@ -256,23 +267,21 @@ class TelegramSovereignLink:
             import time
             try:
                 # v20+ richiede gestione asincrona. Usiamo un approccio che evita conflitti di loop.
-                async def _async_stop():
-                    if self.app.updater and self.app.updater.running:
-                        await self.app.updater.stop()
-                    await self.app.stop()
-                    await self.app.shutdown()
+                def _run_in_new_thread():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    
+                    async def _async_stop():
+                        if self.app.updater and self.app.updater.running:
+                            await self.app.updater.stop()
+                        await self.app.stop()
+                        await self.app.shutdown()
+                    
+                    new_loop.run_until_complete(_async_stop())
+                    new_loop.close()
+                    
+                threading.Thread(target=_run_in_new_thread).start()
                 
-                try:
-                    # Se siamo già in un loop (raro in questo thread, ma possibile)
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        threading.Thread(target=lambda: asyncio.run(_async_stop())).start()
-                    else:
-                        loop.run_until_complete(_async_stop())
-                except RuntimeError:
-                    # Nessun loop nel thread corrente (caso normale per thread daemon)
-                    asyncio.run(_async_stop())
-
                 time.sleep(1.5)
                 print("✅ [Telegram] Link disconnesso correttamente.")
             except Exception as e:

@@ -47,24 +47,61 @@ class CommunityEngine:
                     if node.vector is not None:
                         nodes_with_vectors.append(nid)
 
-            # --- STADIO 1: Connected Components (Graph-based) ---
+            # --- STADIO 1: Topological Clustering (Leiden Alg / Connected Components) ---
             visited = set()
             graph_communities = []
-            for start_node in all_ids:
-                if start_node not in visited and start_node in adj:
-                    cluster = []
-                    queue = [start_node]
-                    visited.add(start_node)
-                    while queue:
-                        curr = queue.pop(0)
-                        cluster.append(curr)
-                        for neighbor in adj.get(curr, []):
-                            # [FIX] neighbor in all_ids invece di neighbor in adj per non spezzare il grafo
-                            if neighbor not in visited and neighbor in all_ids:
-                                visited.add(neighbor)
-                                queue.append(neighbor)
-                    if len(cluster) >= 3: # Minimo 3 nodi per una galassia strutturale
-                        graph_communities.append(cluster)
+            
+            # Tentativo con Leiden + igraph (Sprint 2)
+            try:
+                import igraph as ig
+                import leidenalg
+                
+                nodes_in_graph = set(adj.keys())
+                for targets in adj.values():
+                    nodes_in_graph.update([t for t in targets if t in all_ids])
+                    
+                if nodes_in_graph:
+                    node_to_idx = {nid: i for i, nid in enumerate(nodes_in_graph)}
+                    idx_to_node = {i: nid for nid, i in node_to_idx.items()}
+                    
+                    g = ig.Graph(n=len(node_to_idx), directed=False)
+                    edges = []
+                    for src, targets in adj.items():
+                        for tgt in targets:
+                            if tgt in node_to_idx and src in node_to_idx:
+                                edges.append((node_to_idx[src], node_to_idx[tgt]))
+                    g.add_edges(edges)
+                    
+                    # Rimuoviamo archi multipli e self-loops per sicurezza
+                    g.simplify(multiple=True, loops=True)
+                    
+                    if g.vcount() > 0:
+                        partition = leidenalg.find_partition(g, leidenalg.ModularityVertexPartition)
+                        for sublist in partition:
+                            cluster = [idx_to_node[idx] for idx in sublist]
+                            for nid in cluster:
+                                visited.add(nid)
+                            if len(cluster) >= 3: # Minimo 3 nodi per una galassia strutturale
+                                graph_communities.append(cluster)
+                        
+                        self.logger.info(f"🕸️ [H-RAG] Leiden topologico completato: {len(graph_communities)} communities.")
+                        
+            except ImportError:
+                self.logger.warning("⚠️ [H-RAG] leidenalg/igraph non trovati. Fallback a Connected Components.")
+                for start_node in all_ids:
+                    if start_node not in visited and start_node in adj:
+                        cluster = []
+                        queue = [start_node]
+                        visited.add(start_node)
+                        while queue:
+                            curr = queue.pop(0)
+                            cluster.append(curr)
+                            for neighbor in adj.get(curr, []):
+                                if neighbor not in visited and neighbor in all_ids:
+                                    visited.add(neighbor)
+                                    queue.append(neighbor)
+                        if len(cluster) >= 3:
+                            graph_communities.append(cluster)
 
             # --- STADIO 2: Semantic Clustering (K-Means Fallback) ---
             # Identifichiamo nodi orfani o cluster troppo piccoli
@@ -161,9 +198,9 @@ class CommunityEngine:
         [v8.4] Robust Fallback: Se l'LLM fallisce, genera titoli basati su parole chiave.
         """
         # Recuperiamo comunità senza riassunto
-        pending = self.engine._prefilter.execute(
+        pending = self.engine._prefilter.fetchall(
             "SELECT id FROM neural_communities WHERE summary IS NULL"
-        ).fetchall()
+        )
 
         if not pending: return
         
@@ -233,11 +270,17 @@ class CommunityEngine:
                         try:
                             # Pulizia JSON avanzata
                             clean_json = response.strip()
+                            if not clean_json:
+                                raise ValueError("Empty LLM response")
+                                
                             if "```json" in clean_json:
                                 clean_json = clean_json.split("```json")[1].split("```")[0].strip()
                             elif "{" in clean_json:
                                 clean_json = clean_json[clean_json.find("{"):clean_json.rfind("}")+1]
                             
+                            if not clean_json:
+                                raise ValueError("No JSON block found in response")
+                                
                             try:
                                 data = json.loads(clean_json)
                             except json.JSONDecodeError:
@@ -304,10 +347,10 @@ class CommunityEngine:
             pattern = f"%{query}%"
             # In DuckDB, per cercare in JSON castiamo a VARCHAR o usiamo funzioni specifiche.
             # Qui usiamo il cast per semplicità e compatibilità.
-            comm_res = self.engine._prefilter.execute(
+            comm_res = self.engine._prefilter.fetchall(
                 search_query, 
                 (pattern, pattern, pattern, pattern, limit)
-            ).fetchall()
+            )
             
             results = []
             for cid, title, summary, count in comm_res:

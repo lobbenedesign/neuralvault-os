@@ -122,6 +122,8 @@ class VaultNode:
     text:           str   = ""
     vector:         np.ndarray | None = None
     sparse_vector:  dict[int, float] | None = None
+    title_vector:   np.ndarray | None = None # [v9.7] Multi-Vector
+    code_vector:    np.ndarray | None = None # [v9.7] Multi-Vector
 
     # ── Metadati utente ──────────────────────────────────────
     metadata:       dict[str, Any] = field(default_factory=dict)
@@ -195,6 +197,8 @@ class VaultNode:
             "version":               self.version,
             "text":                  self.text,
             "vector":                self.vector.tolist() if self.vector is not None else None,
+            "title_vector":          self.title_vector.tolist() if self.title_vector is not None else None,
+            "code_vector":           self.code_vector.tolist() if self.code_vector is not None else None,
             "metadata":              self.metadata,
             "edges":                 [
                 {
@@ -252,6 +256,11 @@ class VaultNode:
             node.vector = vector
         elif "vector" in data and data["vector"] is not None:
             node.vector = np.array(data["vector"], dtype=np.float32)
+
+        if "title_vector" in data and data["title_vector"] is not None:
+            node.title_vector = np.array(data["title_vector"], dtype=np.float32)
+        if "code_vector" in data and data["code_vector"] is not None:
+            node.code_vector = np.array(data["code_vector"], dtype=np.float32)
 
         return node
 
